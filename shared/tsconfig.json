@@ -1,0 +1,33 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "composite": true,
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "skipLibCheck": true,
+    "noEmit": false
+  },
+  "include": [
+    "src/**/*",
+    "src/index.ts",
+    "src/types/index.ts", 
+    "src/crypto/index.ts",
+    "src/utils/index.ts"
+  ],
+  "exclude": ["node_modules", "dist", "rust-lib", "**/*.test.*", "**/*.spec.*"],
+  "files": [
+    "src/index.ts",
+    "src/types/index.ts",
+    "src/crypto/index.ts", 
+    "src/utils/index.ts"
+  ]
+}

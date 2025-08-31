@@ -1,0 +1,39 @@
+{
+  "name": "@flow-desk/search-native",
+  "version": "0.1.0",
+  "description": "Native Rust search engine bindings for Flow Desk",
+  "main": "native/index.js",
+  "scripts": {
+    "build": "npm run build:rust && npm run build:bindings",
+    "build:rust": "cd rust-lib && cargo build --release --features napi",
+    "build:bindings": "node scripts/generate-bindings.js",
+    "test": "jest",
+    "clean": "rimraf target native/*.node"
+  },
+  "napi": {
+    "name": "flowdesk-search",
+    "triples": {
+      "defaults": true,
+      "additional": [
+        "x86_64-unknown-linux-musl",
+        "aarch64-unknown-linux-gnu",
+        "aarch64-unknown-linux-musl",
+        "aarch64-apple-darwin",
+        "aarch64-pc-windows-msvc"
+      ]
+    }
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.0",
+    "@types/node": "^20.11.0",
+    "jest": "^29.7.0",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.3.3"
+  },
+  "files": [
+    "native",
+    "index.js",
+    "index.d.ts"
+  ],
+  "license": "MIT"
+}

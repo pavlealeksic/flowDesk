@@ -1,0 +1,244 @@
+{
+  "id": "com.flowdesk.microsoft-teams",
+  "name": "Microsoft Teams",
+  "version": "1.0.0",
+  "description": "Complete Microsoft Teams integration with real-time messaging, channel management, meetings, OAuth2, search, and automation triggers",
+  "author": "Flow Desk Team",
+  "authorEmail": "plugins@flowdesk.com",
+  "homepage": "https://flowdesk.com/plugins/microsoft-teams",
+  "repository": "https://github.com/flowdesk/plugins/microsoft-teams",
+  "documentation": "https://docs.flowdesk.com/plugins/microsoft-teams",
+  "license": "MIT",
+  "type": "panel",
+  "category": "communication",
+  "tags": ["microsoft", "teams", "chat", "collaboration", "meetings", "channels", "oauth", "realtime"],
+  "icon": "https://upload.wikimedia.org/wikipedia/commons/c/c9/Microsoft_Office_Teams_%282018%E2%80%93present%29.svg",
+  "screenshots": [
+    "https://flowdesk.com/assets/plugins/microsoft-teams/screenshot-1.png",
+    "https://flowdesk.com/assets/plugins/microsoft-teams/screenshot-2.png",
+    "https://flowdesk.com/assets/plugins/microsoft-teams/screenshot-3.png"
+  ],
+  "minFlowDeskVersion": "0.1.0",
+  "maxFlowDeskVersion": "2.0.0",
+  "platforms": ["desktop", "mobile"],
+  "permissions": [
+    "network",
+    "notifications",
+    "ui:panels",
+    "ui:commands",
+    "ui:notifications",
+    "ui:dialogs",
+    "events:listen",
+    "events:emit",
+    "automation",
+    "search:index",
+    "search:query",
+    "keychain",
+    "system:shell"
+  ],
+  "scopes": [
+    "user:read",
+    "user:write",
+    "workspace:read",
+    "notifications:read",
+    "notifications:write",
+    "automation:read",
+    "automation:write",
+    "search:read",
+    "search:write"
+  ],
+  "entrypoints": [
+    {
+      "type": "main",
+      "file": "src/index.js"
+    },
+    {
+      "type": "panel",
+      "file": "src/panel.html"
+    },
+    {
+      "type": "background",
+      "file": "src/background.js"
+    },
+    {
+      "type": "automation",
+      "file": "src/automation.js"
+    }
+  ],
+  "configSchema": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "enableNotifications": {
+          "type": "boolean",
+          "title": "Enable Notifications",
+          "description": "Show desktop notifications for new messages and meeting invites",
+          "default": true
+        },
+        "notificationTypes": {
+          "type": "array",
+          "title": "Notification Types",
+          "description": "Types of notifications to show",
+          "items": {
+            "type": "string",
+            "enum": ["mentions", "direct-messages", "channel-messages", "meeting-invites", "meeting-started"]
+          },
+          "default": ["mentions", "direct-messages", "meeting-invites"]
+        },
+        "autoJoinMeetings": {
+          "type": "boolean",
+          "title": "Auto-join Meetings",
+          "description": "Automatically join meetings when they start",
+          "default": false
+        },
+        "syncChannels": {
+          "type": "array",
+          "title": "Sync Channels",
+          "description": "Channels to sync for search and notifications",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "syncHistoryDays": {
+          "type": "number",
+          "title": "Sync History (days)",
+          "description": "How many days of history to sync for search",
+          "minimum": 1,
+          "maximum": 365,
+          "default": 30
+        },
+        "enablePresence": {
+          "type": "boolean",
+          "title": "Enable Presence Sync",
+          "description": "Sync your presence status with calendar and other apps",
+          "default": true
+        },
+        "customStatus": {
+          "type": "object",
+          "title": "Custom Status Settings",
+          "properties": {
+            "syncWithCalendar": {
+              "type": "boolean",
+              "title": "Sync with Calendar",
+              "description": "Update Teams status based on calendar events",
+              "default": true
+            },
+            "busyMessage": {
+              "type": "string",
+              "title": "Busy Message",
+              "description": "Status message when in a meeting",
+              "default": "In a meeting"
+            },
+            "awayAfterMinutes": {
+              "type": "number",
+              "title": "Away After (minutes)",
+              "description": "Set status to away after inactive time",
+              "minimum": 5,
+              "maximum": 60,
+              "default": 15
+            }
+          }
+        },
+        "meetingSettings": {
+          "type": "object",
+          "title": "Meeting Settings",
+          "properties": {
+            "defaultCamera": {
+              "type": "boolean",
+              "title": "Camera On by Default",
+              "description": "Turn on camera when joining meetings",
+              "default": false
+            },
+            "defaultMicrophone": {
+              "type": "boolean",
+              "title": "Microphone On by Default", 
+              "description": "Unmute microphone when joining meetings",
+              "default": false
+            },
+            "showMeetingPreview": {
+              "type": "boolean",
+              "title": "Show Meeting Preview",
+              "description": "Show meeting preview before joining",
+              "default": true
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "uiSchema": {
+      "notificationTypes": {
+        "ui:widget": "checkboxes"
+      },
+      "syncChannels": {
+        "ui:widget": "select",
+        "ui:options": {
+          "multiple": true
+        }
+      },
+      "syncHistoryDays": {
+        "ui:widget": "range"
+      }
+    },
+    "defaults": {
+      "enableNotifications": true,
+      "notificationTypes": ["mentions", "direct-messages", "meeting-invites"],
+      "autoJoinMeetings": false,
+      "syncChannels": [],
+      "syncHistoryDays": 30,
+      "enablePresence": true,
+      "customStatus": {
+        "syncWithCalendar": true,
+        "busyMessage": "In a meeting",
+        "awayAfterMinutes": 15
+      },
+      "meetingSettings": {
+        "defaultCamera": false,
+        "defaultMicrophone": false,
+        "showMeetingPreview": true
+      }
+    }
+  },
+  "dependencies": [],
+  "capabilities": {
+    "search": true,
+    "notifications": true,
+    "automations": true,
+    "oauth": true,
+    "webhooks": true,
+    "filePreviews": true,
+    "quickActions": true,
+    "contextualData": true,
+    "realTime": true,
+    "offline": false
+  },
+  "marketplace": {
+    "published": true,
+    "pricing": {
+      "model": "freemium",
+      "freeTierLimits": {
+        "searchHistory": 7,
+        "automations": 3,
+        "teams": 2
+      }
+    },
+    "regions": ["US", "EU", "APAC"],
+    "ageRating": "everyone",
+    "contentRating": ["general"],
+    "privacyPolicy": "https://flowdesk.com/plugins/microsoft-teams/privacy",
+    "termsOfService": "https://flowdesk.com/plugins/microsoft-teams/terms",
+    "support": {
+      "email": "teams-plugin@flowdesk.com",
+      "url": "https://support.flowdesk.com/plugins/microsoft-teams"
+    }
+  },
+  "build": {
+    "buildTime": "2024-01-26T14:30:00Z",
+    "environment": "production",
+    "commit": "v1.0.0-teams-complete",
+    "bundleSize": 4194304,
+    "buildTools": ["webpack", "typescript", "eslint", "prettier"],
+    "csp": "default-src 'self'; connect-src 'self' https://graph.microsoft.com https://login.microsoftonline.com https://*.teams.microsoft.com https://teams.microsoft.com wss://*.teams.microsoft.com; img-src 'self' data: https://*.sharepoint.com https://*.office.com; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com;"
+  }
+}

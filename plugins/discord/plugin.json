@@ -1,0 +1,257 @@
+{
+  "id": "com.flowdesk.discord",
+  "name": "Discord",
+  "version": "1.0.0",
+  "description": "Complete Discord integration with server management, DMs, voice channels, bot interactions, real-time updates, and automation",
+  "author": "Flow Desk Team",
+  "authorEmail": "plugins@flowdesk.com",
+  "homepage": "https://flowdesk.com/plugins/discord",
+  "repository": "https://github.com/flowdesk/plugins/discord",
+  "documentation": "https://docs.flowdesk.com/plugins/discord",
+  "license": "MIT",
+  "type": "panel",
+  "category": "communication",
+  "tags": ["discord", "gaming", "chat", "servers", "voice", "communities", "bot", "realtime"],
+  "icon": "https://assets-global.website-files.com/6257adef93867e50d84d30e2/636e0a69f118df70ad7828d4_icon_clyde_blurple_RGB.svg",
+  "screenshots": [
+    "https://flowdesk.com/assets/plugins/discord/screenshot-1.png",
+    "https://flowdesk.com/assets/plugins/discord/screenshot-2.png",
+    "https://flowdesk.com/assets/plugins/discord/screenshot-3.png"
+  ],
+  "minFlowDeskVersion": "0.1.0",
+  "maxFlowDeskVersion": "2.0.0",
+  "platforms": ["desktop", "mobile"],
+  "permissions": [
+    "network",
+    "notifications",
+    "ui:panels",
+    "ui:commands",
+    "ui:notifications",
+    "ui:dialogs",
+    "events:listen",
+    "events:emit",
+    "automation",
+    "search:index",
+    "search:query",
+    "keychain",
+    "system:shell"
+  ],
+  "scopes": [
+    "user:read",
+    "user:write",
+    "workspace:read",
+    "notifications:read",
+    "notifications:write",
+    "automation:read",
+    "automation:write",
+    "search:read",
+    "search:write"
+  ],
+  "entrypoints": [
+    {
+      "type": "main",
+      "file": "src/index.js"
+    },
+    {
+      "type": "panel",
+      "file": "src/panel.html"
+    },
+    {
+      "type": "background",
+      "file": "src/background.js"
+    },
+    {
+      "type": "automation",
+      "file": "src/automation.js"
+    }
+  ],
+  "configSchema": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "enableNotifications": {
+          "type": "boolean",
+          "title": "Enable Notifications",
+          "description": "Show desktop notifications for Discord messages and events",
+          "default": true
+        },
+        "notificationTypes": {
+          "type": "array",
+          "title": "Notification Types",
+          "description": "Types of notifications to show",
+          "items": {
+            "type": "string",
+            "enum": ["mentions", "direct-messages", "server-messages", "voice-events", "friend-requests"]
+          },
+          "default": ["mentions", "direct-messages", "voice-events"]
+        },
+        "monitoredServers": {
+          "type": "array",
+          "title": "Monitored Servers",
+          "description": "Discord servers to actively monitor",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "syncHistoryDays": {
+          "type": "number",
+          "title": "Sync History (days)",
+          "description": "How many days of message history to sync for search",
+          "minimum": 1,
+          "maximum": 90,
+          "default": 14
+        },
+        "enableRichPresence": {
+          "type": "boolean",
+          "title": "Enable Rich Presence",
+          "description": "Show Flow Desk activity in Discord",
+          "default": true
+        },
+        "autoJoinVoice": {
+          "type": "boolean",
+          "title": "Auto-join Voice Channels",
+          "description": "Automatically join voice channels when invited",
+          "default": false
+        },
+        "soundSettings": {
+          "type": "object",
+          "title": "Sound Settings",
+          "properties": {
+            "enableSounds": {
+              "type": "boolean",
+              "title": "Enable Notification Sounds",
+              "description": "Play sound for Discord notifications",
+              "default": true
+            },
+            "messageSound": {
+              "type": "string",
+              "title": "Message Sound",
+              "description": "Sound to play for new messages",
+              "default": "discord_notification"
+            },
+            "voiceSound": {
+              "type": "string",
+              "title": "Voice Event Sound",
+              "description": "Sound to play for voice events",
+              "default": "discord_voice"
+            }
+          }
+        },
+        "privacySettings": {
+          "type": "object",
+          "title": "Privacy Settings",
+          "properties": {
+            "indexPrivateMessages": {
+              "type": "boolean",
+              "title": "Index Private Messages",
+              "description": "Include DMs in search index",
+              "default": false
+            },
+            "shareOnlineStatus": {
+              "type": "boolean",
+              "title": "Share Online Status",
+              "description": "Let Discord see your Flow Desk online status",
+              "default": true
+            }
+          }
+        },
+        "botSettings": {
+          "type": "object",
+          "title": "Bot Integration",
+          "properties": {
+            "enableBotCommands": {
+              "type": "boolean",
+              "title": "Enable Bot Commands",
+              "description": "Allow executing Discord bot commands from Flow Desk",
+              "default": true
+            },
+            "botCommandPrefix": {
+              "type": "string",
+              "title": "Bot Command Prefix",
+              "description": "Prefix for bot commands",
+              "default": "!"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "uiSchema": {
+      "notificationTypes": {
+        "ui:widget": "checkboxes"
+      },
+      "monitoredServers": {
+        "ui:widget": "select",
+        "ui:options": {
+          "multiple": true
+        }
+      },
+      "syncHistoryDays": {
+        "ui:widget": "range"
+      }
+    },
+    "defaults": {
+      "enableNotifications": true,
+      "notificationTypes": ["mentions", "direct-messages", "voice-events"],
+      "monitoredServers": [],
+      "syncHistoryDays": 14,
+      "enableRichPresence": true,
+      "autoJoinVoice": false,
+      "soundSettings": {
+        "enableSounds": true,
+        "messageSound": "discord_notification",
+        "voiceSound": "discord_voice"
+      },
+      "privacySettings": {
+        "indexPrivateMessages": false,
+        "shareOnlineStatus": true
+      },
+      "botSettings": {
+        "enableBotCommands": true,
+        "botCommandPrefix": "!"
+      }
+    }
+  },
+  "dependencies": [],
+  "capabilities": {
+    "search": true,
+    "notifications": true,
+    "automations": true,
+    "oauth": true,
+    "webhooks": true,
+    "filePreviews": true,
+    "quickActions": true,
+    "contextualData": true,
+    "realTime": true,
+    "offline": true
+  },
+  "marketplace": {
+    "published": true,
+    "pricing": {
+      "model": "freemium",
+      "freeTierLimits": {
+        "searchHistory": 7,
+        "automations": 3,
+        "servers": 5
+      }
+    },
+    "regions": ["US", "EU", "APAC"],
+    "ageRating": "teen",
+    "contentRating": ["gaming", "social"],
+    "privacyPolicy": "https://flowdesk.com/plugins/discord/privacy",
+    "termsOfService": "https://flowdesk.com/plugins/discord/terms",
+    "support": {
+      "email": "discord-plugin@flowdesk.com",
+      "url": "https://support.flowdesk.com/plugins/discord"
+    }
+  },
+  "build": {
+    "buildTime": "2024-01-26T14:30:00Z",
+    "environment": "production",
+    "commit": "v1.0.0-discord-complete",
+    "bundleSize": 3932160,
+    "buildTools": ["webpack", "typescript", "eslint", "prettier"],
+    "csp": "default-src 'self'; connect-src 'self' https://discord.com https://gateway.discord.gg wss://gateway.discord.gg https://cdn.discordapp.com https://media.discordapp.net; img-src 'self' data: https://cdn.discordapp.com https://media.discordapp.net; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com;"
+  }
+}

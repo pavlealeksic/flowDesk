@@ -1,0 +1,35 @@
+"use strict";
+/**
+ * Flow Desk Shared Library
+ *
+ * Shared services, types, and utilities for Flow Desk applications
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.VERSION = void 0;
+exports.init = init;
+// Re-export everything from sub-modules
+__exportStar(require("./types"), exports);
+__exportStar(require("./crypto"), exports);
+__exportStar(require("./utils"), exports);
+// Version information
+exports.VERSION = '0.1.0';
+// Library initialization
+function init() {
+    // Initialization logic if needed
+    console.log(`Flow Desk Shared Library v${exports.VERSION} initialized`);
+}
+//# sourceMappingURL=index.js.map

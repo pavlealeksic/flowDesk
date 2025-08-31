@@ -1,0 +1,20 @@
+{
+  "id": "com.flowdesk.signal",
+  "name": "Signal",
+  "version": "1.0.0",
+  "description": "Secure Signal messaging integration with end-to-end encryption and privacy focus",
+  "author": "Flow Desk Team",
+  "type": "panel",
+  "category": "communication",
+  "tags": ["signal", "privacy", "encryption", "secure", "messaging"],
+  "icon": "https://signal.org/assets/images/header/signal-logo.svg",
+  "platforms": ["desktop"],
+  "permissions": ["network", "notifications", "ui:panels", "search:index"],
+  "entrypoints": [
+    {"type": "main", "file": "src/index.js"},
+    {"type": "panel", "file": "src/panel.html"}
+  ],
+  "capabilities": {"search": true, "notifications": true, "realTime": true, "offline": true},
+  "marketplace": {"published": true, "pricing": {"model": "free"}},
+  "build": {"buildTime": "2024-01-26T14:30:00Z", "environment": "production"}
+}

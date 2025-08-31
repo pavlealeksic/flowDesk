@@ -1,0 +1,59 @@
+# Desktop App Build Outputs
+dist/
+build/
+release/
+app/
+
+# Turbo cache
+.turbo/
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Electron specific
+*.dmg
+*.exe
+*.deb
+*.rpm
+*.zip
+*.tar.gz
+
+# Platform specific build folders
+darwin-x64/
+darwin-arm64/
+win32-x64/
+linux-x64/
+
+# Development logs
+*.log
+electron.log
+dev-test.log
+final-app-test.log
+renderer-test.log
+app-launch*.log
+
+# Test files
+test-*.js
+*-test.js
+*-test.log
+
+# Dependencies (just in case)
+node_modules/
+
+# Environment files
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp

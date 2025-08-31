@@ -1,0 +1,21 @@
+{
+  "id": "com.flowdesk.trello",
+  "name": "Trello",
+  "version": "1.0.0",
+  "description": "Complete Trello integration with boards, cards, lists, power-ups, and automation",
+  "author": "Flow Desk Team",
+  "type": "panel",
+  "category": "productivity",
+  "tags": ["trello", "boards", "cards", "lists", "kanban", "organization"],
+  "icon": "https://trello.com/favicon.ico",
+  "platforms": ["desktop", "mobile"],
+  "permissions": ["network", "notifications", "ui:panels", "automation", "search:index", "keychain"],
+  "entrypoints": [
+    {"type": "main", "file": "src/index.js"},
+    {"type": "panel", "file": "src/panel.html"},
+    {"type": "automation", "file": "src/automation.js"}
+  ],
+  "capabilities": {"search": true, "notifications": true, "automations": true, "oauth": true, "webhooks": true},
+  "marketplace": {"published": true, "pricing": {"model": "freemium"}},
+  "build": {"buildTime": "2024-01-26T14:30:00Z", "environment": "production"}
+}

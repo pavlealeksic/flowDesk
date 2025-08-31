@@ -1,0 +1,78 @@
+{
+  "name": "flow-desk",
+  "version": "0.1.0",
+  "description": "Privacy-first, cross-platform work OS with Mail + Calendar and plugin ecosystem",
+  "private": true,
+  "workspaces": [
+    "mobile-app",
+    "desktop-app", 
+    "server",
+    "shared"
+  ],
+  "scripts": {
+    "build": "npm run build:rust && turbo run build",
+    "build:rust": "cd shared/rust-lib && cargo build --release",
+    "build:mobile": "turbo run build --filter=@flow-desk/mobile-app",
+    "build:desktop": "turbo run build --filter=@flow-desk/desktop-app",
+    "build:server": "turbo run build --filter=@flow-desk/server",
+    "build:shared": "turbo run build --filter=@flow-desk/shared",
+    "dev": "turbo run dev",
+    "dev:mobile": "turbo run dev --filter=@flow-desk/mobile-app",
+    "dev:desktop": "turbo run dev --filter=@flow-desk/desktop-app",
+    "dev:server": "turbo run dev --filter=@flow-desk/server",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,rs}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,rs}\"",
+    "type-check": "turbo run type-check",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "reset": "npm run clean && npm install",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "turbo run build && changeset publish",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.10",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react": "^7.37.3",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.3.0",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/flow-desk.git"
+  },
+  "keywords": [
+    "workspace",
+    "productivity", 
+    "mail",
+    "calendar",
+    "privacy",
+    "cross-platform",
+    "electron",
+    "react-native",
+    "nextjs",
+    "rust"
+  ],
+  "license": "MIT",
+  "packageManager": "npm@10.2.4",
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,json,md}": ["prettier --write"],
+    "*.{ts,tsx,js,jsx}": ["eslint --fix"]
+  }
+}

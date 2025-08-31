@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slack Plugin Panel</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://slack.com https://*.slack.com; img-src 'self' data: https://*.slack.com; style-src 'self' 'unsafe-inline';">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--background);
+            color: var(--foreground);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-header {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            background-color: var(--card);
+            display: flex;
+            align-items: center;
+            justify-content: between;
+            gap: 12px;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--muted);
+            transition: background-color 0.2s;
+        }
+
+        .status-indicator.connected {
+            background-color: #22c55e;
+        }
+
+        .status-indicator.connecting {
+            background-color: #f59e0b;
+            animation: pulse 1.5s infinite;
+        }
+
+        .status-indicator.error {
+            background-color: #ef4444;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .panel-title {
+            font-size: 14px;
+            font-weight: 600;
+            flex: 1;
+        }
+
+        .panel-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--background);
+            color: var(--foreground);
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: var(--accent);
+        }
+
+        .btn.primary {
+            background: var(--primary);
+            color: var(--primary-foreground);
+            border-color: var(--primary);
+        }
+
+        .btn.primary:hover {
+            opacity: 0.9;
+        }
+
+        .panel-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .content-section {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .section-title {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--muted-foreground);
+            margin-bottom: 12px;
+        }
+
+        .workspace-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .workspace-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: var(--primary);
+            color: var(--primary-foreground);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .workspace-details h3 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .workspace-details p {
+            font-size: 12px;
+            color: var(--muted-foreground);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .stat-item {
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--card);
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--muted-foreground);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .recent-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 16px 16px;
+        }
+
+        .message-item {
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            background: var(--card);
+        }
+
+        .message-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .message-author {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .message-time {
+            font-size: 11px;
+            color: var(--muted-foreground);
+        }
+
+        .message-text {
+            font-size: 13px;
+            line-height: 1.4;
+            color: var(--foreground);
+        }
+
+        .message-channel {
+            font-size: 11px;
+            color: var(--muted-foreground);
+            margin-top: 6px;
+        }
+
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 32px;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--foreground);
+        }
+
+        .empty-state p {
+            font-size: 14px;
+            color: var(--muted-foreground);
+            margin-bottom: 16px;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 32px;
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--muted);
+            border-top: 2px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="panel-header">
+        <div class="status-indicator" id="statusIndicator"></div>
+        <div class="panel-title">Slack</div>
+        <div class="panel-actions">
+            <button class="btn" id="refreshBtn" onclick="refreshData()">Refresh</button>
+            <button class="btn" id="settingsBtn" onclick="openSettings()">Settings</button>
+        </div>
+    </div>
+
+    <div class="panel-content" id="panelContent">
+        <div class="loading">
+            <div class="spinner"></div>
+        </div>
+    </div>
+
+    <script>
+        // Plugin panel state
+        let connectionStatus = 'disconnected';
+        let workspaceInfo = null;
+        let recentMessages = [];
+
+        // Initialize panel
+        async function initializePanel() {
+            FlowDeskAPI.logger.info('Initializing Slack panel');
+            
+            try {
+                // Get initial data
+                await refreshData();
+                
+                // Set up periodic refresh
+                setInterval(refreshData, 30000); // Refresh every 30 seconds
+                
+                // Listen for plugin events
+                FlowDeskAPI.events.on('slack:message-received', onMessageReceived);
+                FlowDeskAPI.events.on('slack:status-changed', onStatusChanged);
+                
+            } catch (error) {
+                FlowDeskAPI.logger.error('Failed to initialize panel', error);
+                showError('Failed to initialize Slack panel');
+            }
+        }
+
+        // Refresh panel data
+        async function refreshData() {
+            try {
+                // Get connection status
+                connectionStatus = await getConnectionStatus();
+                updateStatusIndicator();
+
+                if (connectionStatus === 'connected') {
+                    // Get workspace info and recent messages
+                    workspaceInfo = await getWorkspaceInfo();
+                    recentMessages = await getRecentMessages();
+                    renderConnectedView();
+                } else if (connectionStatus === 'disconnected') {
+                    renderDisconnectedView();
+                } else if (connectionStatus === 'error') {
+                    renderErrorView();
+                }
+                
+            } catch (error) {
+                FlowDeskAPI.logger.error('Failed to refresh data', error);
+                renderErrorView();
+            }
+        }
+
+        // Get connection status from main plugin
+        async function getConnectionStatus() {
+            // In a real implementation, this would communicate with the main plugin
+            const config = await FlowDeskAPI.storage.get('config') || {};
+            
+            if (!config.workspaceUrl) {
+                return 'disconnected';
+            }
+            
+            // Simulate connection status
+            return Math.random() > 0.2 ? 'connected' : 'error';
+        }
+
+        // Get workspace information
+        async function getWorkspaceInfo() {
+            const config = await FlowDeskAPI.storage.get('config') || {};
+            
+            return {
+                name: config.workspaceUrl ? config.workspaceUrl.split('.')[0] : 'Unknown',
+                url: config.workspaceUrl,
+                userCount: 42,
+                channelCount: 18
+            };
+        }
+
+        // Get recent messages
+        async function getRecentMessages() {
+            // Mock recent messages
+            return [
+                {
+                    id: 'msg1',
+                    author: 'Alice Johnson',
+                    text: 'Hey team, the new feature is ready for review!',
+                    channel: '#development',
+                    timestamp: new Date(Date.now() - 15 * 60000)
+                },
+                {
+                    id: 'msg2',
+                    author: 'Bob Smith',
+                    text: 'Great work on the presentation today 👏',
+                    channel: '#general',
+                    timestamp: new Date(Date.now() - 32 * 60000)
+                },
+                {
+                    id: 'msg3',
+                    author: 'Carol Davis',
+                    text: 'Can we schedule a quick sync for tomorrow?',
+                    channel: 'Direct Message',
+                    timestamp: new Date(Date.now() - 67 * 60000)
+                }
+            ];
+        }
+
+        // Update status indicator
+        function updateStatusIndicator() {
+            const indicator = document.getElementById('statusIndicator');
+            indicator.className = `status-indicator ${connectionStatus}`;
+        }
+
+        // Render connected view
+        function renderConnectedView() {
+            const content = document.getElementById('panelContent');
+            
+            content.innerHTML = `
+                <div class="content-section">
+                    <div class="section-title">Workspace</div>
+                    <div class="workspace-info">
+                        <div class="workspace-avatar">${workspaceInfo.name.charAt(0).toUpperCase()}</div>
+                        <div class="workspace-details">
+                            <h3>${workspaceInfo.name}</h3>
+                            <p>${workspaceInfo.url}</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <div class="stat-value">${workspaceInfo.userCount}</div>
+                            <div class="stat-label">Members</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${workspaceInfo.channelCount}</div>
+                            <div class="stat-label">Channels</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="recent-messages">
+                    <div class="section-title">Recent Messages</div>
+                    ${recentMessages.map(message => `
+                        <div class="message-item">
+                            <div class="message-header">
+                                <span class="message-author">${message.author}</span>
+                                <span class="message-time">${formatTime(message.timestamp)}</span>
+                            </div>
+                            <div class="message-text">${message.text}</div>
+                            <div class="message-channel">${message.channel}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        // Render disconnected view
+        function renderDisconnectedView() {
+            const content = document.getElementById('panelContent');
+            
+            content.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">🔗</div>
+                    <h3>Not Connected</h3>
+                    <p>Configure your Slack workspace to get started.</p>
+                    <button class="btn primary" onclick="openSettings()">Configure Slack</button>
+                </div>
+            `;
+        }
+
+        // Render error view
+        function renderErrorView() {
+            const content = document.getElementById('panelContent');
+            
+            content.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">⚠️</div>
+                    <h3>Connection Error</h3>
+                    <p>Unable to connect to your Slack workspace.</p>
+                    <button class="btn primary" onclick="refreshData()">Try Again</button>
+                </div>
+            `;
+        }
+
+        // Show error message
+        function showError(message) {
+            const content = document.getElementById('panelContent');
+            
+            content.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">❌</div>
+                    <h3>Error</h3>
+                    <p>${message}</p>
+                    <button class="btn primary" onclick="refreshData()">Retry</button>
+                </div>
+            `;
+        }
+
+        // Format timestamp for display
+        function formatTime(date) {
+            const now = new Date();
+            const diff = now - date;
+            
+            if (diff < 60000) { // Less than 1 minute
+                return 'Just now';
+            } else if (diff < 3600000) { // Less than 1 hour
+                const minutes = Math.floor(diff / 60000);
+                return `${minutes}m ago`;
+            } else if (diff < 86400000) { // Less than 1 day
+                const hours = Math.floor(diff / 3600000);
+                return `${hours}h ago`;
+            } else {
+                return date.toLocaleDateString();
+            }
+        }
+
+        // Open settings dialog
+        async function openSettings() {
+            try {
+                const config = await FlowDeskAPI.storage.get('config') || {};
+                
+                const result = await FlowDeskAPI.ui.showDialog({
+                    title: 'Slack Settings',
+                    size: 'medium',
+                    content: `
+                        <div style="padding: 16px;">
+                            <div style="margin-bottom: 16px;">
+                                <label style="display: block; margin-bottom: 4px; font-weight: 600;">Workspace URL</label>
+                                <input type="text" id="workspaceUrl" value="${config.workspaceUrl || ''}" 
+                                       placeholder="myteam.slack.com" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;">
+                            </div>
+                            
+                            <div style="margin-bottom: 16px;">
+                                <label style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="checkbox" id="enableNotifications" ${config.enableNotifications ? 'checked' : ''}>
+                                    <span>Enable desktop notifications</span>
+                                </label>
+                            </div>
+                            
+                            <div style="margin-bottom: 16px;">
+                                <label style="display: block; margin-bottom: 4px; font-weight: 600;">Sync Interval (seconds)</label>
+                                <input type="range" id="syncInterval" min="10" max="300" value="${config.syncInterval || 30}"
+                                       style="width: 100%;">
+                                <div style="text-align: center; margin-top: 4px; font-size: 12px; color: var(--muted-foreground);">
+                                    <span id="syncIntervalValue">${config.syncInterval || 30}</span> seconds
+                                </div>
+                            </div>
+                        </div>
+                    `,
+                    buttons: [
+                        { label: 'Cancel', value: null },
+                        { label: 'Save Settings', value: 'save', variant: 'primary' }
+                    ]
+                });
+                
+                if (result === 'save') {
+                    // In a real implementation, you'd get the form values
+                    // For demo purposes, we'll use sample values
+                    const newConfig = {
+                        workspaceUrl: 'demo.slack.com',
+                        enableNotifications: true,
+                        syncInterval: 30
+                    };
+                    
+                    await FlowDeskAPI.storage.set('config', newConfig);
+                    
+                    FlowDeskAPI.ui.showNotification({
+                        title: 'Settings Saved',
+                        body: 'Slack configuration has been updated.'
+                    });
+                    
+                    // Refresh to apply new settings
+                    setTimeout(refreshData, 1000);
+                }
+                
+            } catch (error) {
+                FlowDeskAPI.logger.error('Failed to open settings', error);
+                FlowDeskAPI.ui.showNotification({
+                    title: 'Error',
+                    body: 'Failed to open settings dialog.'
+                });
+            }
+        }
+
+        // Handle new message events
+        function onMessageReceived(message) {
+            FlowDeskAPI.logger.debug('New message received', message);
+            
+            // Add to recent messages
+            recentMessages.unshift(message);
+            
+            // Keep only the most recent 10 messages
+            if (recentMessages.length > 10) {
+                recentMessages = recentMessages.slice(0, 10);
+            }
+            
+            // Re-render if connected
+            if (connectionStatus === 'connected') {
+                renderConnectedView();
+            }
+        }
+
+        // Handle status change events
+        function onStatusChanged(status) {
+            FlowDeskAPI.logger.debug('Status changed', status);
+            connectionStatus = status.state;
+            updateStatusIndicator();
+        }
+
+        // Initialize panel when DOM is ready
+        document.addEventListener('DOMContentLoaded', initializePanel);
+
+        // Update sync interval display
+        document.addEventListener('input', (e) => {
+            if (e.target.id === 'syncInterval') {
+                document.getElementById('syncIntervalValue').textContent = e.target.value;
+            }
+        });
+
+        FlowDeskAPI.logger.info('Slack panel script loaded');
+    </script>
+</body>
+</html>

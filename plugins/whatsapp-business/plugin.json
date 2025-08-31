@@ -1,0 +1,20 @@
+{
+  "id": "com.flowdesk.whatsapp-business",
+  "name": "WhatsApp Business",
+  "version": "1.0.0",
+  "description": "Complete WhatsApp Business integration with messaging, automation, and customer management",
+  "author": "Flow Desk Team",
+  "type": "panel",
+  "category": "communication",
+  "tags": ["whatsapp", "business", "messaging", "automation", "customers"],
+  "icon": "https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg",
+  "platforms": ["desktop", "mobile"],
+  "permissions": ["network", "notifications", "ui:panels", "automation", "search:index"],
+  "entrypoints": [
+    {"type": "main", "file": "src/index.js"},
+    {"type": "panel", "file": "src/panel.html"}
+  ],
+  "capabilities": {"search": true, "notifications": true, "automations": true, "realTime": true},
+  "marketplace": {"published": true, "pricing": {"model": "freemium"}},
+  "build": {"buildTime": "2024-01-26T14:30:00Z", "environment": "production"}
+}

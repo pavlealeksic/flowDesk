@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Microsoft Teams - Flow Desk</title>
+    <style>
+        :root {
+            --teams-purple: #6264a7;
+            --teams-blue: #4b53bc;
+            --teams-light-bg: #f3f2f1;
+            --teams-dark-bg: #201f1e;
+            --teams-text: #323130;
+            --teams-light-text: #605e5c;
+            --border-color: #edebe9;
+            --hover-bg: #f3f2f1;
+            --online-green: #6bb700;
+            --busy-red: #c4314b;
+            --away-yellow: #ffaa44;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: white;
+            color: var(--teams-text);
+            overflow: hidden;
+        }
+
+        .teams-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .teams-header {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            background: var(--teams-purple);
+            color: white;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .teams-logo {
+            width: 24px;
+            height: 24px;
+            margin-right: 12px;
+        }
+
+        .teams-title {
+            font-size: 16px;
+            font-weight: 600;
+            flex: 1;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--online-green);
+        }
+
+        .status-indicator.disconnected {
+            background: #d13438;
+        }
+
+        .teams-nav {
+            display: flex;
+            background: var(--teams-light-bg);
+            border-bottom: 1px solid var(--border-color);
+            overflow-x: auto;
+        }
+
+        .nav-tab {
+            padding: 10px 16px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            color: var(--teams-light-text);
+            border-bottom: 2px solid transparent;
+            white-space: nowrap;
+            transition: all 0.2s ease;
+        }
+
+        .nav-tab:hover {
+            background: var(--hover-bg);
+            color: var(--teams-text);
+        }
+
+        .nav-tab.active {
+            color: var(--teams-purple);
+            border-bottom-color: var(--teams-purple);
+            background: white;
+        }
+
+        .teams-content {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .tab-content {
+            flex: 1;
+            overflow-y: auto;
+            display: none;
+            padding: 16px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Authentication View */
+        .auth-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            padding: 32px;
+        }
+
+        .auth-logo {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 24px;
+            opacity: 0.7;
+        }
+
+        .auth-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--teams-text);
+        }
+
+        .auth-description {
+            color: var(--teams-light-text);
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        .auth-button {
+            background: var(--teams-purple);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .auth-button:hover {
+            background: var(--teams-blue);
+        }
+
+        .auth-button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+
+        /* Teams & Channels List */
+        .teams-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .team-item {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .team-item:hover {
+            background: var(--hover-bg);
+            border-color: var(--teams-purple);
+        }
+
+        .team-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .team-name {
+            font-weight: 600;
+            color: var(--teams-text);
+        }
+
+        .team-badge {
+            background: var(--teams-purple);
+            color: white;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+
+        .team-description {
+            color: var(--teams-light-text);
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .team-channels {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .channel-tag {
+            background: var(--teams-light-bg);
+            color: var(--teams-text);
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        /* Chat List */
+        .chat-list {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .chat-item:hover {
+            background: var(--hover-bg);
+        }
+
+        .chat-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--teams-purple);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .chat-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .chat-name {
+            font-weight: 600;
+            color: var(--teams-text);
+            margin-bottom: 2px;
+        }
+
+        .chat-preview {
+            color: var(--teams-light-text);
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .chat-meta {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+        }
+
+        .chat-time {
+            font-size: 11px;
+            color: var(--teams-light-text);
+        }
+
+        .chat-badge {
+            background: var(--teams-purple);
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            min-width: 16px;
+            text-align: center;
+        }
+
+        /* Presence Status */
+        .presence-container {
+            padding: 16px;
+            background: var(--teams-light-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-bottom: 16px;
+        }
+
+        .presence-header {
+            display: flex;
+            align-items: center;
+            justify-content: between;
+            margin-bottom: 12px;
+        }
+
+        .presence-title {
+            font-weight: 600;
+            flex: 1;
+        }
+
+        .presence-current {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .presence-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--online-green);
+        }
+
+        .presence-dot.busy {
+            background: var(--busy-red);
+        }
+
+        .presence-dot.away {
+            background: var(--away-yellow);
+        }
+
+        .presence-text {
+            font-size: 14px;
+            color: var(--teams-text);
+        }
+
+        .presence-controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .presence-btn {
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .presence-btn:hover {
+            background: var(--hover-bg);
+            border-color: var(--teams-purple);
+        }
+
+        .presence-btn.active {
+            background: var(--teams-purple);
+            color: white;
+            border-color: var(--teams-purple);
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+
+        .action-btn {
+            padding: 8px 16px;
+            background: var(--teams-purple);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: background 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .action-btn:hover {
+            background: var(--teams-blue);
+        }
+
+        .action-btn.secondary {
+            background: white;
+            color: var(--teams-purple);
+            border: 1px solid var(--teams-purple);
+        }
+
+        .action-btn.secondary:hover {
+            background: var(--teams-light-bg);
+        }
+
+        /* Search Results */
+        .search-container {
+            margin-bottom: 16px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 14px;
+            background: white;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--teams-purple);
+        }
+
+        .search-results {
+            margin-top: 8px;
+        }
+
+        .search-result {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-bottom: 4px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .search-result:hover {
+            background: var(--hover-bg);
+        }
+
+        .search-result-title {
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .search-result-meta {
+            font-size: 12px;
+            color: var(--teams-light-text);
+        }
+
+        /* Loading States */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 32px;
+            color: var(--teams-light-text);
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--border-color);
+            border-top: 2px solid var(--teams-purple);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 12px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 480px) {
+            .teams-nav {
+                font-size: 12px;
+            }
+            
+            .nav-tab {
+                padding: 8px 12px;
+            }
+            
+            .quick-actions {
+                flex-direction: column;
+            }
+            
+            .action-btn {
+                justify-content: center;
+            }
+        }
+
+        /* Dark Mode Support */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --teams-light-bg: #252423;
+                --teams-dark-bg: #201f1e;
+                --teams-text: #ffffff;
+                --teams-light-text: #c8c6c4;
+                --border-color: #3b3a39;
+                --hover-bg: #292827;
+            }
+
+            body {
+                background: var(--teams-dark-bg);
+                color: var(--teams-text);
+            }
+
+            .tab-content.active {
+                background: var(--teams-dark-bg);
+            }
+
+            .team-item,
+            .presence-container,
+            .search-input,
+            .search-result,
+            .presence-btn {
+                background: var(--teams-dark-bg);
+                border-color: var(--border-color);
+                color: var(--teams-text);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="teams-container">
+        <!-- Header -->
+        <div class="teams-header">
+            <svg class="teams-logo" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M21.25 12.15v7.6A1.25 1.25 0 0120 21H3.75A1.25 1.25 0 012.5 19.75v-7.6h18.75zM21.25 4.25A1.25 1.25 0 0122.5 5.5v5.15H2.5V5.5A1.25 1.25 0 013.75 4.25h17.5z"/>
+            </svg>
+            <div class="teams-title">Microsoft Teams</div>
+            <div class="connection-status">
+                <div class="status-indicator" id="connectionIndicator"></div>
+                <span id="connectionText">Connecting...</span>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="teams-nav">
+            <button class="nav-tab active" data-tab="teams">Teams</button>
+            <button class="nav-tab" data-tab="chats">Chats</button>
+            <button class="nav-tab" data-tab="presence">Presence</button>
+            <button class="nav-tab" data-tab="search">Search</button>
+        </div>
+
+        <!-- Main Content -->
+        <div class="teams-content">
+            <!-- Authentication View -->
+            <div class="tab-content" id="auth-tab">
+                <div class="auth-container">
+                    <svg class="auth-logo" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M21.25 12.15v7.6A1.25 1.25 0 0120 21H3.75A1.25 1.25 0 012.5 19.75v-7.6h18.75zM21.25 4.25A1.25 1.25 0 0122.5 5.5v5.15H2.5V5.5A1.25 1.25 0 013.75 4.25h17.5z"/>
+                    </svg>
+                    <h2 class="auth-title">Connect to Microsoft Teams</h2>
+                    <p class="auth-description">
+                        Sign in to your Microsoft account to access your Teams, channels, chats, and meetings.
+                    </p>
+                    <button class="auth-button" id="connectBtn" onclick="connectToTeams()">
+                        <span>Connect to Teams</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Teams Tab -->
+            <div class="tab-content active" id="teams-tab">
+                <div class="quick-actions">
+                    <button class="action-btn" onclick="refreshTeams()">
+                        <span>↻</span>
+                        <span>Refresh</span>
+                    </button>
+                    <button class="action-btn secondary" onclick="createMeeting()">
+                        <span>+</span>
+                        <span>New Meeting</span>
+                    </button>
+                </div>
+                
+                <div id="teamsLoading" class="loading">
+                    <div class="spinner"></div>
+                    <span>Loading teams...</span>
+                </div>
+                
+                <div id="teamsList" class="teams-list" style="display: none;"></div>
+            </div>
+
+            <!-- Chats Tab -->
+            <div class="tab-content" id="chats-tab">
+                <div class="quick-actions">
+                    <button class="action-btn" onclick="refreshChats()">
+                        <span>↻</span>
+                        <span>Refresh</span>
+                    </button>
+                    <button class="action-btn secondary" onclick="newChat()">
+                        <span>💬</span>
+                        <span>New Chat</span>
+                    </button>
+                </div>
+                
+                <div id="chatsLoading" class="loading">
+                    <div class="spinner"></div>
+                    <span>Loading chats...</span>
+                </div>
+                
+                <div id="chatsList" class="chat-list" style="display: none;"></div>
+            </div>
+
+            <!-- Presence Tab -->
+            <div class="tab-content" id="presence-tab">
+                <div class="presence-container">
+                    <div class="presence-header">
+                        <div class="presence-title">Your Status</div>
+                    </div>
+                    
+                    <div class="presence-current">
+                        <div class="presence-dot" id="presenceDot"></div>
+                        <div class="presence-text" id="presenceText">Available</div>
+                    </div>
+                    
+                    <div class="presence-controls">
+                        <button class="presence-btn active" data-status="Available" onclick="updatePresence('Available', 'Available')">Available</button>
+                        <button class="presence-btn" data-status="Busy" onclick="updatePresence('Busy', 'Busy')">Busy</button>
+                        <button class="presence-btn" data-status="DoNotDisturb" onclick="updatePresence('DoNotDisturb', 'Do not disturb')">Do Not Disturb</button>
+                        <button class="presence-btn" data-status="Away" onclick="updatePresence('Away', 'Away')">Away</button>
+                    </div>
+                </div>
+                
+                <div class="quick-actions">
+                    <button class="action-btn" onclick="setCustomStatus()">
+                        <span>✏️</span>
+                        <span>Custom Message</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search Tab -->
+            <div class="tab-content" id="search-tab">
+                <div class="search-container">
+                    <input type="text" class="search-input" id="searchInput" placeholder="Search Teams content..." onkeypress="handleSearchKeypress(event)">
+                </div>
+                
+                <div id="searchLoading" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <span>Searching...</span>
+                </div>
+                
+                <div id="searchResults" class="search-results"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let isConnected = false;
+        let currentUser = null;
+        let teams = [];
+        let chats = [];
+        let currentPresence = null;
+
+        // Initialize the panel
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initializePanel();
+            setupEventListeners();
+        });
+
+        // Tab switching
+        document.querySelectorAll('.nav-tab').forEach(tab => {
+            tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+        });
+
+        function switchTab(tabId) {
+            // Update nav tabs
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.tab === tabId);
+            });
+
+            // Update content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.toggle('active', content.id === `${tabId}-tab`);
+            });
+
+            // Load tab-specific content
+            switch (tabId) {
+                case 'teams':
+                    if (isConnected && teams.length === 0) {
+                        loadTeams();
+                    }
+                    break;
+                case 'chats':
+                    if (isConnected && chats.length === 0) {
+                        loadChats();
+                    }
+                    break;
+                case 'presence':
+                    if (isConnected && !currentPresence) {
+                        loadPresence();
+                    }
+                    break;
+            }
+        }
+
+        // Initialize panel
+        async function initializePanel() {
+            try {
+                // Check connection status
+                const status = await window.plugin.getStatus();
+                updateConnectionStatus(status.connected);
+                
+                if (status.connected) {
+                    isConnected = true;
+                    await loadInitialData();
+                } else {
+                    showAuthView();
+                }
+            } catch (error) {
+                console.error('Failed to initialize panel:', error);
+                updateConnectionStatus(false);
+            }
+        }
+
+        // Connection management
+        async function connectToTeams() {
+            const btn = document.getElementById('connectBtn');
+            btn.disabled = true;
+            btn.textContent = 'Connecting...';
+
+            try {
+                await window.plugin.authenticate();
+                isConnected = true;
+                updateConnectionStatus(true);
+                await loadInitialData();
+                switchTab('teams');
+            } catch (error) {
+                console.error('Connection failed:', error);
+                alert(`Failed to connect: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Connect to Teams';
+            }
+        }
+
+        function updateConnectionStatus(connected) {
+            const indicator = document.getElementById('connectionIndicator');
+            const text = document.getElementById('connectionText');
+            
+            if (connected) {
+                indicator.classList.remove('disconnected');
+                text.textContent = 'Connected';
+            } else {
+                indicator.classList.add('disconnected');
+                text.textContent = 'Disconnected';
+            }
+            
+            // Show/hide auth view
+            const authTab = document.getElementById('auth-tab');
+            if (connected) {
+                authTab.style.display = 'none';
+            } else {
+                authTab.style.display = 'block';
+            }
+        }
+
+        function showAuthView() {
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById('auth-tab').classList.add('active');
+        }
+
+        // Data loading
+        async function loadInitialData() {
+            await Promise.all([
+                loadTeams(),
+                loadChats(),
+                loadPresence()
+            ]);
+        }
+
+        async function loadTeams() {
+            const loading = document.getElementById('teamsLoading');
+            const list = document.getElementById('teamsList');
+            
+            loading.style.display = 'flex';
+            list.style.display = 'none';
+
+            try {
+                teams = await window.plugin.getTeams();
+                renderTeams(teams);
+                
+                loading.style.display = 'none';
+                list.style.display = 'block';
+            } catch (error) {
+                console.error('Failed to load teams:', error);
+                loading.innerHTML = `<div class="error">Failed to load teams: ${error.message}</div>`;
+            }
+        }
+
+        async function loadChats() {
+            const loading = document.getElementById('chatsLoading');
+            const list = document.getElementById('chatsList');
+            
+            loading.style.display = 'flex';
+            list.style.display = 'none';
+
+            try {
+                chats = await window.plugin.getChats();
+                renderChats(chats);
+                
+                loading.style.display = 'none';
+                list.style.display = 'block';
+            } catch (error) {
+                console.error('Failed to load chats:', error);
+                loading.innerHTML = `<div class="error">Failed to load chats: ${error.message}</div>`;
+            }
+        }
+
+        async function loadPresence() {
+            try {
+                currentPresence = await window.plugin.getUserPresence();
+                updatePresenceDisplay(currentPresence);
+            } catch (error) {
+                console.error('Failed to load presence:', error);
+            }
+        }
+
+        // Rendering
+        function renderTeams(teams) {
+            const container = document.getElementById('teamsList');
+            
+            if (teams.length === 0) {
+                container.innerHTML = '<div class="no-results">No teams found</div>';
+                return;
+            }
+
+            container.innerHTML = teams.map(team => `
+                <div class="team-item" onclick="viewTeam('${team.id}')">
+                    <div class="team-header">
+                        <div class="team-name">${escapeHtml(team.displayName)}</div>
+                        <div class="team-badge">${team.visibility || 'Private'}</div>
+                    </div>
+                    ${team.description ? `<div class="team-description">${escapeHtml(team.description)}</div>` : ''}
+                    <div class="team-channels" id="channels-${team.id}">
+                        <div class="channel-tag">Loading channels...</div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Load channels for each team
+            teams.forEach(async team => {
+                try {
+                    const channels = await window.plugin.getChannels(team.id);
+                    const channelsContainer = document.getElementById(`channels-${team.id}`);
+                    
+                    if (channels.length > 0) {
+                        channelsContainer.innerHTML = channels.slice(0, 5).map(channel => `
+                            <div class="channel-tag" onclick="viewChannel('${team.id}', '${channel.id}')">${escapeHtml(channel.displayName)}</div>
+                        `).join('');
+                        
+                        if (channels.length > 5) {
+                            channelsContainer.innerHTML += `<div class="channel-tag">+${channels.length - 5} more</div>`;
+                        }
+                    } else {
+                        channelsContainer.innerHTML = '<div class="channel-tag">No channels</div>';
+                    }
+                } catch (error) {
+                    console.error(`Failed to load channels for team ${team.id}:`, error);
+                    const channelsContainer = document.getElementById(`channels-${team.id}`);
+                    channelsContainer.innerHTML = '<div class="channel-tag">Error loading channels</div>';
+                }
+            });
+        }
+
+        function renderChats(chats) {
+            const container = document.getElementById('chatsList');
+            
+            if (chats.length === 0) {
+                container.innerHTML = '<div class="no-results">No chats found</div>';
+                return;
+            }
+
+            container.innerHTML = chats.map(chat => {
+                const displayName = chat.topic || chat.members?.map(m => m.displayName).join(', ') || 'Unknown Chat';
+                const avatar = getInitials(displayName);
+                const lastMessage = chat.lastMessagePreview?.body?.content || 'No messages';
+                const lastTime = chat.lastUpdatedDateTime ? new Date(chat.lastUpdatedDateTime).toLocaleString() : '';
+
+                return `
+                    <div class="chat-item" onclick="viewChat('${chat.id}')">
+                        <div class="chat-avatar">${avatar}</div>
+                        <div class="chat-info">
+                            <div class="chat-name">${escapeHtml(displayName)}</div>
+                            <div class="chat-preview">${escapeHtml(lastMessage.substring(0, 50))}${lastMessage.length > 50 ? '...' : ''}</div>
+                        </div>
+                        <div class="chat-meta">
+                            <div class="chat-time">${lastTime}</div>
+                            ${chat.unreadMessageCount ? `<div class="chat-badge">${chat.unreadMessageCount}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updatePresenceDisplay(presence) {
+            const dot = document.getElementById('presenceDot');
+            const text = document.getElementById('presenceText');
+            
+            dot.className = 'presence-dot';
+            
+            switch (presence.availability) {
+                case 'Available':
+                    text.textContent = 'Available';
+                    break;
+                case 'Busy':
+                case 'BusyIdle':
+                    dot.classList.add('busy');
+                    text.textContent = 'Busy';
+                    break;
+                case 'DoNotDisturb':
+                    dot.classList.add('busy');
+                    text.textContent = 'Do not disturb';
+                    break;
+                case 'Away':
+                case 'BeRightBack':
+                    dot.classList.add('away');
+                    text.textContent = 'Away';
+                    break;
+                default:
+                    text.textContent = presence.availability || 'Unknown';
+            }
+
+            // Update presence buttons
+            document.querySelectorAll('.presence-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.status === presence.availability);
+            });
+        }
+
+        // Actions
+        async function refreshTeams() {
+            teams = [];
+            await loadTeams();
+        }
+
+        async function refreshChats() {
+            chats = [];
+            await loadChats();
+        }
+
+        async function createMeeting() {
+            // This would open a dialog to create a new meeting
+            window.plugin.executeCommand('teams.create-meeting');
+        }
+
+        async function newChat() {
+            // This would open a dialog to start a new chat
+            alert('New chat functionality would be implemented here');
+        }
+
+        async function updatePresence(availability, activity) {
+            try {
+                await window.plugin.updatePresence(availability, activity);
+                await loadPresence();
+            } catch (error) {
+                console.error('Failed to update presence:', error);
+                alert(`Failed to update presence: ${error.message}`);
+            }
+        }
+
+        async function setCustomStatus() {
+            const message = prompt('Enter custom status message:');
+            if (message) {
+                try {
+                    const currentAvailability = currentPresence?.availability || 'Available';
+                    await window.plugin.updatePresence(currentAvailability, 'Custom', message);
+                    await loadPresence();
+                } catch (error) {
+                    console.error('Failed to set custom status:', error);
+                    alert(`Failed to set custom status: ${error.message}`);
+                }
+            }
+        }
+
+        function viewTeam(teamId) {
+            // This would open a detailed view of the team
+            console.log('View team:', teamId);
+        }
+
+        function viewChannel(teamId, channelId) {
+            // This would open the channel view
+            console.log('View channel:', teamId, channelId);
+        }
+
+        function viewChat(chatId) {
+            // This would open the chat view
+            console.log('View chat:', chatId);
+        }
+
+        // Search functionality
+        async function handleSearchKeypress(event) {
+            if (event.key === 'Enter') {
+                await performSearch();
+            }
+        }
+
+        async function performSearch() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) return;
+
+            const loading = document.getElementById('searchLoading');
+            const results = document.getElementById('searchResults');
+            
+            loading.style.display = 'flex';
+            results.innerHTML = '';
+
+            try {
+                const searchResults = await window.plugin.search(query);
+                renderSearchResults(searchResults);
+            } catch (error) {
+                console.error('Search failed:', error);
+                results.innerHTML = `<div class="error">Search failed: ${error.message}</div>`;
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        function renderSearchResults(results) {
+            const container = document.getElementById('searchResults');
+            
+            if (results.length === 0) {
+                container.innerHTML = '<div class="no-results">No results found</div>';
+                return;
+            }
+
+            container.innerHTML = results.map(result => `
+                <div class="search-result" onclick="openSearchResult('${result.id}', '${result.contentType}')">
+                    <div class="search-result-title">${escapeHtml(result.title)}</div>
+                    <div class="search-result-description">${escapeHtml(result.description)}</div>
+                    <div class="search-result-meta">
+                        ${result.contentType} • ${new Date(result.timestamp).toLocaleString()} • Score: ${Math.round(result.score * 100)}%
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function openSearchResult(id, type) {
+            // This would open the specific result based on its type
+            console.log('Open search result:', id, type);
+        }
+
+        // Event listeners
+        function setupEventListeners() {
+            // Listen for plugin events
+            if (window.plugin && window.plugin.events) {
+                window.plugin.events.on('teams-message-received', (data) => {
+                    // Handle new message notification
+                    console.log('New message received:', data);
+                });
+
+                window.plugin.events.on('teams-presence-changed', (data) => {
+                    // Handle presence change
+                    console.log('Presence changed:', data);
+                    currentPresence = data.data;
+                    updatePresenceDisplay(currentPresence);
+                });
+            }
+        }
+
+        // Utility functions
+        function escapeHtml(text) {
+            if (!text) return '';
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        function getInitials(name) {
+            if (!name) return '?';
+            return name.split(' ')
+                .map(part => part.charAt(0).toUpperCase())
+                .slice(0, 2)
+                .join('');
+        }
+    </script>
+</body>
+</html>

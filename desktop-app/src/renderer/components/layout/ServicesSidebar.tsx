@@ -1,0 +1,301 @@
+/**
+ * Services Sidebar Component
+ * 
+ * Secondary sidebar showing services for the selected workspace
+ */
+
+import React, { useState, useEffect } from 'react';
+import { 
+  Button, 
+  cn, 
+  Plus, 
+  MoreVertical,
+  Edit,
+  Trash2,
+  Settings,
+  UserPlus,
+  Download
+} from '../ui';
+
+interface Service {
+  id: string;
+  name: string;
+  type: string;
+  url: string;
+  iconUrl?: string;
+  isEnabled: boolean;
+}
+
+interface ServicesSidebarProps {
+  workspaceId?: string;
+  workspaceName?: string;
+  services: Service[];
+  activeServiceId?: string;
+  onServiceSelect: (serviceId: string) => void;
+  onAddService: () => void;
+  onEditService?: (serviceId: string) => void;
+  onDeleteService?: (serviceId: string) => void;
+  onEditWorkspace?: (workspaceId: string) => void;
+  onWorkspaceSettings?: (workspaceId: string) => void;
+  className?: string;
+}
+
+export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
+  workspaceId,
+  workspaceName = 'Workspace',
+  services,
+  activeServiceId,
+  onServiceSelect,
+  onAddService,
+  onEditService,
+  onDeleteService,
+  onEditWorkspace,
+  onWorkspaceSettings,
+  className
+}) => {
+  const [contextMenuService, setContextMenuService] = useState<string | null>(null);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+  const [showWorkspaceActions, setShowWorkspaceActions] = useState(false);
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setContextMenuService(null);
+      setShowWorkspaceActions(false);
+    };
+    
+    if (contextMenuService || showWorkspaceActions) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [contextMenuService, showWorkspaceActions]);
+  const getServiceIcon = (type: string) => {
+    const iconMap: Record<string, string> = {
+      slack: '/src/renderer/assets/service-icons/slack.svg',
+      notion: '/src/renderer/assets/service-icons/notion.png',
+      github: '/src/renderer/assets/service-icons/github.svg',
+      jira: '/src/renderer/assets/service-icons/jira.png',
+      teams: '/src/renderer/assets/service-icons/teams.svg',
+      discord: '/src/renderer/assets/service-icons/discord.svg',
+      trello: '/src/renderer/assets/service-icons/trello.png',
+      asana: '/src/renderer/assets/service-icons/asana.svg',
+      linear: '/src/renderer/assets/service-icons/linear.ico',
+      clickup: '/src/renderer/assets/service-icons/clickup.png',
+      monday: '/src/renderer/assets/service-icons/monday.png',
+      gitlab: '/src/renderer/assets/service-icons/gitlab.svg',
+      bitbucket: '/src/renderer/assets/service-icons/bitbucket.png',
+      googledrive: '/src/renderer/assets/service-icons/googledrive.png',
+      onedrive: '/src/renderer/assets/service-icons/onedrive.png',
+      dropbox: '/src/renderer/assets/service-icons/dropbox.png',
+      figma: '/src/renderer/assets/service-icons/figma.svg',
+      miro: '/src/renderer/assets/service-icons/miro.ico',
+      salesforce: '/src/renderer/assets/service-icons/salesforce.png',
+      hubspot: '/src/renderer/assets/service-icons/hubspot.ico',
+      zendesk: '/src/renderer/assets/service-icons/zendesk.png',
+      intercom: '/src/renderer/assets/service-icons/intercom.png'
+    };
+    return iconMap[type] || '/src/renderer/assets/service-icons/default.svg';
+  };
+
+  if (!workspaceId) {
+    return (
+      <div className={cn('w-64 bg-muted/30 border-r border-border flex flex-col', className)}>
+        <div className="p-4 text-center text-muted-foreground">
+          <div className="text-4xl mb-2">🏢</div>
+          <p className="text-sm">Select a workspace to view services</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn('w-64 bg-muted/30 border-r border-border flex flex-col', className)}>
+      {/* Workspace Header */}
+      <div className="p-4 border-b border-border">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="font-semibold text-sm text-foreground">{workspaceName}</h2>
+          
+          {/* Workspace Actions Dropdown */}
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowWorkspaceActions(!showWorkspaceActions);
+              }}
+            >
+              <MoreVertical className="h-3 w-3" />
+            </Button>
+            
+            {/* Workspace Actions Menu */}
+            {showWorkspaceActions && (
+              <div className="absolute top-full right-0 mt-1 z-50 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[140px]">
+                <button
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center space-x-2"
+                  onClick={() => {
+                    if (workspaceId && onEditWorkspace) {
+                      onEditWorkspace(workspaceId);
+                    }
+                    setShowWorkspaceActions(false);
+                  }}
+                >
+                  <Edit className="h-3 w-3" />
+                  <span>Edit Workspace</span>
+                </button>
+                <button
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center space-x-2"
+                  onClick={() => {
+                    if (workspaceId && onWorkspaceSettings) {
+                      onWorkspaceSettings(workspaceId);
+                    }
+                    setShowWorkspaceActions(false);
+                  }}
+                >
+                  <Settings className="h-3 w-3" />
+                  <span>Settings</span>
+                </button>
+                <button
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center space-x-2"
+                  onClick={() => {
+                    console.log('Invite users to workspace:', workspaceId);
+                    setShowWorkspaceActions(false);
+                  }}
+                >
+                  <UserPlus className="h-3 w-3" />
+                  <span>Invite Users</span>
+                </button>
+                <button
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center space-x-2"
+                  onClick={() => {
+                    console.log('Export workspace:', workspaceId);
+                    setShowWorkspaceActions(false);
+                  }}
+                >
+                  <Download className="h-3 w-3" />
+                  <span>Export</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">{services.length} services</p>
+      </div>
+
+      {/* Services List */}
+      <div className="flex-1 overflow-y-auto">
+        {services.length === 0 ? (
+          <div className="p-4 text-center">
+            <div className="text-2xl mb-2">📱</div>
+            <p className="text-sm text-muted-foreground mb-4">No services added yet</p>
+            <Button
+              size="sm"
+              onClick={onAddService}
+              className="w-full"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Service
+            </Button>
+          </div>
+        ) : (
+          <div className="p-2 space-y-1">
+            {services.map((service) => (
+              <div key={service.id} className="relative">
+                <Button
+                  variant={activeServiceId === service.id ? 'primary' : 'ghost'}
+                  className={cn(
+                    'w-full justify-start h-10 px-3',
+                    'hover:bg-accent hover:text-accent-foreground',
+                    activeServiceId === service.id && 'bg-primary text-primary-foreground'
+                  )}
+                  onClick={() => onServiceSelect(service.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setContextMenuPosition({ x: e.clientX, y: e.clientY });
+                    setContextMenuService(service.id);
+                  }}
+                  disabled={!service.isEnabled}
+                >
+                <img 
+                  src={getServiceIcon(service.type)} 
+                  alt={service.name}
+                  className="w-4 h-4 mr-3 object-contain"
+                  onError={(e) => {
+                    // Fallback to first letter if icon fails
+                    const target = e.currentTarget;
+                    target.style.display = 'none';
+                    const parent = target.parentElement;
+                    if (parent) {
+                      const fallback = document.createElement('div');
+                      fallback.className = 'w-4 h-4 mr-3 bg-primary/20 rounded flex items-center justify-center text-xs font-bold';
+                      fallback.textContent = service.name[0].toUpperCase();
+                      parent.insertBefore(fallback, target.nextSibling);
+                    }
+                  }}
+                />
+                <span className="text-sm font-medium truncate">{service.name}</span>
+                {!service.isEnabled && (
+                  <span className="ml-auto w-2 h-2 bg-gray-400 rounded-full" />
+                )}
+                </Button>
+                
+                {/* Service Context Menu */}
+                {contextMenuService === service.id && (
+                  <div 
+                    className="fixed bg-card border border-border rounded-lg shadow-lg py-1 min-w-[120px]"
+                    style={{ 
+                      left: `${contextMenuPosition.x}px`, 
+                      top: `${contextMenuPosition.y}px`, 
+                      zIndex: 1000 
+                    }}
+                  >
+                    <button
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center space-x-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditService?.(service.id);
+                        setContextMenuService(null);
+                      }}
+                    >
+                      <Edit className="h-3 w-3" />
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-destructive/10 text-destructive flex items-center space-x-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteService?.(service.id);
+                        setContextMenuService(null);
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Add Service Button */}
+      {services.length > 0 && (
+        <div className="p-4 border-t border-border">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onAddService}
+            className="w-full"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Service
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ServicesSidebar;

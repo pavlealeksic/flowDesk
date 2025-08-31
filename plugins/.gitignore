@@ -1,0 +1,42 @@
+# Plugin Build Outputs
+dist/
+build/
+lib/
+
+# Dependencies
+node_modules/
+
+# Compiled plugins
+*.plugin
+*.bundle.js
+
+# Plugin package files
+*.zip
+*.tar.gz
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary plugin files
+*.tmp
+*.temp
+
+# Plugin testing
+test-plugins/
+temp-plugins/
+
+# Plugin marketplace downloads
+downloads/
+cache/

@@ -1,0 +1,150 @@
+{
+  "id": "com.flowdesk.slack",
+  "name": "Slack",
+  "version": "1.2.0",
+  "description": "Connect your Slack workspace for seamless team communication and collaboration",
+  "author": "Flow Desk Team",
+  "authorEmail": "plugins@flowdesk.com",
+  "homepage": "https://flowdesk.com/plugins/slack",
+  "repository": "https://github.com/flowdesk/plugins/slack",
+  "documentation": "https://docs.flowdesk.com/plugins/slack",
+  "license": "MIT",
+  "type": "panel",
+  "category": "communication",
+  "tags": ["slack", "chat", "team", "communication", "collaboration"],
+  "icon": "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/slack/slack-original.svg",
+  "screenshots": [
+    "https://flowdesk.com/assets/plugins/slack/screenshot-1.png",
+    "https://flowdesk.com/assets/plugins/slack/screenshot-2.png"
+  ],
+  "minFlowDeskVersion": "0.1.0",
+  "maxFlowDeskVersion": "1.0.0",
+  "platforms": ["desktop", "mobile"],
+  "permissions": [
+    "network",
+    "notifications",
+    "ui:panels",
+    "ui:commands",
+    "ui:notifications",
+    "events:listen",
+    "events:emit",
+    "automation"
+  ],
+  "scopes": [
+    "user:read",
+    "notifications:write",
+    "automation:write"
+  ],
+  "entrypoints": [
+    {
+      "type": "main",
+      "file": "index.js"
+    },
+    {
+      "type": "panel",
+      "file": "panel.html"
+    },
+    {
+      "type": "background",
+      "file": "background.js"
+    }
+  ],
+  "configSchema": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "workspaceUrl": {
+          "type": "string",
+          "title": "Slack Workspace URL",
+          "description": "Your Slack workspace URL (e.g., myteam.slack.com)"
+        },
+        "enableNotifications": {
+          "type": "boolean",
+          "title": "Enable Notifications",
+          "description": "Show desktop notifications for new messages",
+          "default": true
+        },
+        "notificationTypes": {
+          "type": "array",
+          "title": "Notification Types",
+          "description": "Types of notifications to show",
+          "items": {
+            "type": "string",
+            "enum": ["mentions", "direct-messages", "all-messages", "important-only"]
+          },
+          "default": ["mentions", "direct-messages"]
+        },
+        "syncInterval": {
+          "type": "number",
+          "title": "Sync Interval (seconds)",
+          "description": "How often to sync with Slack",
+          "minimum": 10,
+          "maximum": 300,
+          "default": 30
+        },
+        "showOnlineStatus": {
+          "type": "boolean",
+          "title": "Show Online Status",
+          "description": "Display your online status in the sidebar",
+          "default": true
+        }
+      },
+      "required": ["workspaceUrl"],
+      "additionalProperties": false
+    },
+    "uiSchema": {
+      "workspaceUrl": {
+        "ui:placeholder": "myteam.slack.com",
+        "ui:help": "Enter your Slack workspace URL without 'https://' prefix"
+      },
+      "notificationTypes": {
+        "ui:widget": "checkboxes"
+      },
+      "syncInterval": {
+        "ui:widget": "range"
+      }
+    },
+    "defaults": {
+      "enableNotifications": true,
+      "notificationTypes": ["mentions", "direct-messages"],
+      "syncInterval": 30,
+      "showOnlineStatus": true
+    }
+  },
+  "dependencies": [],
+  "capabilities": {
+    "search": true,
+    "notifications": true,
+    "automations": true,
+    "oauth": true,
+    "webhooks": false,
+    "filePreviews": false,
+    "quickActions": true,
+    "contextualData": true,
+    "realTime": true,
+    "offline": false
+  },
+  "marketplace": {
+    "published": true,
+    "pricing": {
+      "model": "free"
+    },
+    "regions": ["US", "EU", "APAC"],
+    "ageRating": "everyone",
+    "contentRating": ["general"],
+    "privacyPolicy": "https://flowdesk.com/plugins/slack/privacy",
+    "termsOfService": "https://flowdesk.com/plugins/slack/terms",
+    "support": {
+      "email": "slack-plugin@flowdesk.com",
+      "url": "https://support.flowdesk.com/plugins/slack"
+    }
+  },
+  "build": {
+    "buildTime": "2024-01-25T10:30:00Z",
+    "environment": "production",
+    "commit": "a1b2c3d4e5f6",
+    "bundleSize": 2048576,
+    "buildTools": ["webpack", "typescript", "eslint"],
+    "csp": "default-src 'self'; connect-src 'self' https://slack.com https://*.slack.com; img-src 'self' data: https://*.slack.com; style-src 'self' 'unsafe-inline';"
+  }
+}

@@ -1,0 +1,68 @@
+# Shared Library Build Outputs
+dist/
+build/
+lib/
+esm/
+cjs/
+
+# Rust build outputs
+rust-lib/target/
+**/target/
+**/*.rs.bk
+Cargo.lock
+
+# Turbo cache
+.turbo/
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# TypeScript declaration maps
+*.d.ts.map
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files (if any config files)
+.env
+.env.local
+
+# Package manager files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Temporary files
+*.tmp
+*.temp
+
+# WASM build outputs (if applicable)
+*.wasm
+pkg/
+
+# Python (if any Python bindings)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Testing
+test-results/
+test-output/

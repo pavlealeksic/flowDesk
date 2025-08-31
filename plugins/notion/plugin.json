@@ -1,0 +1,239 @@
+{
+  "id": "com.flowdesk.notion",
+  "name": "Notion",
+  "version": "2.0.0",
+  "description": "Complete Notion integration with real-time sync, search, database operations, and automation triggers",
+  "author": "Flow Desk Team",
+  "authorEmail": "plugins@flowdesk.com",
+  "homepage": "https://flowdesk.com/plugins/notion",
+  "repository": "https://github.com/flowdesk/plugins/notion",
+  "documentation": "https://docs.flowdesk.com/plugins/notion",
+  "license": "MIT",
+  "type": "panel",
+  "category": "productivity",
+  "tags": ["notion", "notes", "database", "productivity", "collaboration", "sync"],
+  "icon": "https://www.notion.so/images/logo-ios.png",
+  "screenshots": [
+    "https://flowdesk.com/assets/plugins/notion/screenshot-1.png",
+    "https://flowdesk.com/assets/plugins/notion/screenshot-2.png",
+    "https://flowdesk.com/assets/plugins/notion/screenshot-3.png"
+  ],
+  "minFlowDeskVersion": "0.1.0",
+  "maxFlowDeskVersion": "2.0.0",
+  "platforms": ["desktop", "mobile"],
+  "permissions": [
+    "network",
+    "notifications",
+    "ui:panels",
+    "ui:commands",
+    "ui:notifications",
+    "ui:dialogs",
+    "events:listen",
+    "events:emit",
+    "automation",
+    "search:index",
+    "search:query",
+    "keychain",
+    "files:read",
+    "files:write"
+  ],
+  "scopes": [
+    "user:read",
+    "workspace:read",
+    "workspace:write", 
+    "notifications:read",
+    "notifications:write",
+    "automation:read",
+    "automation:write",
+    "search:read",
+    "search:write",
+    "files:read",
+    "files:write"
+  ],
+  "entrypoints": [
+    {
+      "type": "main",
+      "file": "src/index.js"
+    },
+    {
+      "type": "panel",
+      "file": "src/panel.html"
+    },
+    {
+      "type": "background",
+      "file": "src/background.js"
+    },
+    {
+      "type": "automation",
+      "file": "src/automation.js"
+    }
+  ],
+  "configSchema": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "enableNotifications": {
+          "type": "boolean",
+          "title": "Enable Notifications",
+          "description": "Show desktop notifications for page updates and comments",
+          "default": true
+        },
+        "notificationTypes": {
+          "type": "array",
+          "title": "Notification Types",
+          "description": "Types of notifications to show",
+          "items": {
+            "type": "string",
+            "enum": ["page-updates", "comments", "mentions", "database-changes", "reminders"]
+          },
+          "default": ["comments", "mentions", "reminders"]
+        },
+        "syncInterval": {
+          "type": "number",
+          "title": "Sync Interval (minutes)",
+          "description": "How often to sync with Notion",
+          "minimum": 1,
+          "maximum": 60,
+          "default": 5
+        },
+        "indexContent": {
+          "type": "boolean",
+          "title": "Index Content for Search",
+          "description": "Index page content for unified search",
+          "default": true
+        },
+        "maxSearchResults": {
+          "type": "number",
+          "title": "Max Search Results",
+          "description": "Maximum number of search results to return",
+          "minimum": 10,
+          "maximum": 100,
+          "default": 50
+        },
+        "autoSyncDatabases": {
+          "type": "boolean",
+          "title": "Auto-sync Databases",
+          "description": "Automatically sync database changes",
+          "default": true
+        },
+        "watchedDatabases": {
+          "type": "array",
+          "title": "Watched Databases",
+          "description": "Database IDs to monitor for changes",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "defaultTemplate": {
+          "type": "string",
+          "title": "Default Page Template",
+          "description": "Template to use for new pages",
+          "enum": ["blank", "daily-notes", "meeting-notes", "task-list", "project"],
+          "default": "blank"
+        },
+        "quickCapture": {
+          "type": "object",
+          "title": "Quick Capture Settings",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "title": "Enable Quick Capture",
+              "description": "Enable quick note capture",
+              "default": true
+            },
+            "targetPage": {
+              "type": "string",
+              "title": "Target Page ID",
+              "description": "Page to append quick notes to"
+            },
+            "includeTimestamp": {
+              "type": "boolean",
+              "title": "Include Timestamp",
+              "default": true
+            },
+            "includeSource": {
+              "type": "boolean",
+              "title": "Include Source Info",
+              "description": "Include information about where the note was captured from",
+              "default": true
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "uiSchema": {
+      "notificationTypes": {
+        "ui:widget": "checkboxes"
+      },
+      "syncInterval": {
+        "ui:widget": "range"
+      },
+      "maxSearchResults": {
+        "ui:widget": "range"
+      },
+      "watchedDatabases": {
+        "ui:widget": "tags"
+      }
+    },
+    "defaults": {
+      "enableNotifications": true,
+      "notificationTypes": ["comments", "mentions", "reminders"],
+      "syncInterval": 5,
+      "indexContent": true,
+      "maxSearchResults": 50,
+      "autoSyncDatabases": true,
+      "watchedDatabases": [],
+      "defaultTemplate": "blank",
+      "quickCapture": {
+        "enabled": true,
+        "targetPage": "",
+        "includeTimestamp": true,
+        "includeSource": true
+      }
+    }
+  },
+  "dependencies": [],
+  "capabilities": {
+    "search": true,
+    "notifications": true,
+    "automations": true,
+    "oauth": true,
+    "webhooks": false,
+    "filePreviews": true,
+    "quickActions": true,
+    "contextualData": true,
+    "realTime": true,
+    "offline": true
+  },
+  "marketplace": {
+    "published": true,
+    "pricing": {
+      "model": "freemium",
+      "freeTierLimits": {
+        "searchHistory": 30,
+        "automations": 5,
+        "syncedPages": 100,
+        "watchedDatabases": 2
+      }
+    },
+    "regions": ["US", "EU", "APAC"],
+    "ageRating": "everyone",
+    "contentRating": ["general"],
+    "privacyPolicy": "https://flowdesk.com/plugins/notion/privacy",
+    "termsOfService": "https://flowdesk.com/plugins/notion/terms",
+    "support": {
+      "email": "notion-plugin@flowdesk.com",
+      "url": "https://support.flowdesk.com/plugins/notion"
+    }
+  },
+  "build": {
+    "buildTime": "2024-01-26T15:30:00Z",
+    "environment": "production",
+    "commit": "v2.0.0-notion-complete",
+    "bundleSize": 4194304,
+    "buildTools": ["webpack", "typescript", "eslint", "prettier"],
+    "csp": "default-src 'self'; connect-src 'self' https://api.notion.com https://notion.so; img-src 'self' data: https://*.notion.so https://s3.us-west-2.amazonaws.com; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com;"
+  }
+}

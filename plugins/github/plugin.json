@@ -1,0 +1,278 @@
+{
+  "id": "com.flowdesk.github",
+  "name": "GitHub",
+  "version": "2.0.0",
+  "description": "Complete GitHub integration with real-time updates, webhook handling, code review, and automation triggers",
+  "author": "Flow Desk Team",
+  "authorEmail": "plugins@flowdesk.com",
+  "homepage": "https://flowdesk.com/plugins/github",
+  "repository": "https://github.com/flowdesk/plugins/github",
+  "documentation": "https://docs.flowdesk.com/plugins/github",
+  "license": "MIT",
+  "type": "panel",
+  "category": "development",
+  "tags": ["github", "git", "development", "code-review", "repositories", "issues", "pull-requests"],
+  "icon": "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png",
+  "screenshots": [
+    "https://flowdesk.com/assets/plugins/github/screenshot-1.png",
+    "https://flowdesk.com/assets/plugins/github/screenshot-2.png",
+    "https://flowdesk.com/assets/plugins/github/screenshot-3.png"
+  ],
+  "minFlowDeskVersion": "0.1.0",
+  "maxFlowDeskVersion": "2.0.0",
+  "platforms": ["desktop", "mobile"],
+  "permissions": [
+    "network",
+    "notifications",
+    "ui:panels",
+    "ui:commands",
+    "ui:notifications",
+    "ui:dialogs",
+    "events:listen",
+    "events:emit",
+    "automation",
+    "search:index",
+    "search:query",
+    "keychain",
+    "webhooks"
+  ],
+  "scopes": [
+    "user:read",
+    "workspace:read",
+    "notifications:read",
+    "notifications:write",
+    "automation:read",
+    "automation:write",
+    "search:read",
+    "search:write"
+  ],
+  "entrypoints": [
+    {
+      "type": "main",
+      "file": "src/index.js"
+    },
+    {
+      "type": "panel",
+      "file": "src/panel.html"
+    },
+    {
+      "type": "background",
+      "file": "src/background.js"
+    },
+    {
+      "type": "automation",
+      "file": "src/automation.js"
+    }
+  ],
+  "configSchema": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "enableNotifications": {
+          "type": "boolean",
+          "title": "Enable Notifications",
+          "description": "Show desktop notifications for GitHub activities",
+          "default": true
+        },
+        "notificationTypes": {
+          "type": "array",
+          "title": "Notification Types",
+          "description": "Types of notifications to show",
+          "items": {
+            "type": "string",
+            "enum": ["pull-requests", "issues", "mentions", "reviews", "releases", "security", "discussions", "actions"]
+          },
+          "default": ["pull-requests", "issues", "mentions", "reviews"]
+        },
+        "watchedRepositories": {
+          "type": "array",
+          "title": "Watched Repositories",
+          "description": "Repositories to monitor for activities (owner/repo format)",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "syncInterval": {
+          "type": "number",
+          "title": "Sync Interval (minutes)",
+          "description": "How often to sync with GitHub",
+          "minimum": 1,
+          "maximum": 60,
+          "default": 5
+        },
+        "indexContent": {
+          "type": "boolean",
+          "title": "Index Content for Search",
+          "description": "Index issues, PRs, and code for unified search",
+          "default": true
+        },
+        "enableWebhooks": {
+          "type": "boolean",
+          "title": "Enable Webhooks",
+          "description": "Enable real-time updates via webhooks",
+          "default": true
+        },
+        "webhookSecret": {
+          "type": "string",
+          "title": "Webhook Secret",
+          "description": "Secret for webhook validation (auto-generated if empty)"
+        },
+        "prChecks": {
+          "type": "object",
+          "title": "PR Review Settings",
+          "properties": {
+            "autoAssignReview": {
+              "type": "boolean",
+              "title": "Auto-assign for Review",
+              "description": "Automatically assign yourself to PRs in watched repos",
+              "default": false
+            },
+            "reviewNotifications": {
+              "type": "boolean",
+              "title": "Review Notifications",
+              "description": "Get notified when you're requested to review",
+              "default": true
+            },
+            "statusChecks": {
+              "type": "boolean",
+              "title": "Status Check Notifications",
+              "description": "Get notified about CI/CD status changes",
+              "default": true
+            }
+          }
+        },
+        "issueFilters": {
+          "type": "object",
+          "title": "Issue Filters",
+          "properties": {
+            "assignedToMe": {
+              "type": "boolean",
+              "title": "Issues Assigned to Me",
+              "default": true
+            },
+            "createdByMe": {
+              "type": "boolean",
+              "title": "Issues Created by Me",
+              "default": true
+            },
+            "mentioned": {
+              "type": "boolean",
+              "title": "Issues Mentioning Me",
+              "default": true
+            },
+            "participating": {
+              "type": "boolean",
+              "title": "Issues I'm Participating In",
+              "default": false
+            }
+          }
+        },
+        "quickActions": {
+          "type": "object",
+          "title": "Quick Actions",
+          "properties": {
+            "createIssue": {
+              "type": "boolean",
+              "title": "Enable Quick Issue Creation",
+              "default": true
+            },
+            "createGist": {
+              "type": "boolean",
+              "title": "Enable Quick Gist Creation",
+              "default": true
+            },
+            "searchCode": {
+              "type": "boolean",
+              "title": "Enable Code Search",
+              "default": true
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "uiSchema": {
+      "notificationTypes": {
+        "ui:widget": "checkboxes"
+      },
+      "watchedRepositories": {
+        "ui:widget": "tags",
+        "ui:placeholder": "owner/repo"
+      },
+      "syncInterval": {
+        "ui:widget": "range"
+      },
+      "webhookSecret": {
+        "ui:widget": "password"
+      }
+    },
+    "defaults": {
+      "enableNotifications": true,
+      "notificationTypes": ["pull-requests", "issues", "mentions", "reviews"],
+      "watchedRepositories": [],
+      "syncInterval": 5,
+      "indexContent": true,
+      "enableWebhooks": true,
+      "webhookSecret": "",
+      "prChecks": {
+        "autoAssignReview": false,
+        "reviewNotifications": true,
+        "statusChecks": true
+      },
+      "issueFilters": {
+        "assignedToMe": true,
+        "createdByMe": true,
+        "mentioned": true,
+        "participating": false
+      },
+      "quickActions": {
+        "createIssue": true,
+        "createGist": true,
+        "searchCode": true
+      }
+    }
+  },
+  "dependencies": [],
+  "capabilities": {
+    "search": true,
+    "notifications": true,
+    "automations": true,
+    "oauth": true,
+    "webhooks": true,
+    "filePreviews": true,
+    "quickActions": true,
+    "contextualData": true,
+    "realTime": true,
+    "offline": true
+  },
+  "marketplace": {
+    "published": true,
+    "pricing": {
+      "model": "freemium",
+      "freeTierLimits": {
+        "watchedRepos": 5,
+        "webhooks": 2,
+        "automations": 3,
+        "searchHistory": 30
+      }
+    },
+    "regions": ["US", "EU", "APAC"],
+    "ageRating": "everyone",
+    "contentRating": ["general"],
+    "privacyPolicy": "https://flowdesk.com/plugins/github/privacy",
+    "termsOfService": "https://flowdesk.com/plugins/github/terms",
+    "support": {
+      "email": "github-plugin@flowdesk.com",
+      "url": "https://support.flowdesk.com/plugins/github"
+    }
+  },
+  "build": {
+    "buildTime": "2024-01-26T16:30:00Z",
+    "environment": "production",
+    "commit": "v2.0.0-github-complete",
+    "bundleSize": 5242880,
+    "buildTools": ["webpack", "typescript", "eslint", "prettier"],
+    "csp": "default-src 'self'; connect-src 'self' https://api.github.com https://github.com https://avatars.githubusercontent.com https://raw.githubusercontent.com; img-src 'self' data: https://avatars.githubusercontent.com https://github.githubassets.com; style-src 'self' 'unsafe-inline';"
+  }
+}

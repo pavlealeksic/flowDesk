@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slack Panel</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #f8f9fa;
+            color: #1a1a1a;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .panel-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .panel-header {
+            background: #ffffff;
+            border-bottom: 1px solid #e1e5e9;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 50px;
+        }
+
+        .workspace-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .workspace-dropdown {
+            background: #f8f9fa;
+            border: 1px solid #d1d9e0;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #28a745;
+        }
+
+        .status-indicator.connecting {
+            background: #ffc107;
+        }
+
+        .status-indicator.error {
+            background: #dc3545;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #0056b3;
+        }
+
+        .btn.secondary {
+            background: #6c757d;
+        }
+
+        .btn.secondary:hover {
+            background: #545b62;
+        }
+
+        .panel-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 240px;
+            background: #ffffff;
+            border-right: 1px solid #e1e5e9;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-section {
+            border-bottom: 1px solid #e1e5e9;
+        }
+
+        .sidebar-header {
+            padding: 12px 16px;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #6c757d;
+            letter-spacing: 0.5px;
+        }
+
+        .sidebar-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 14px;
+        }
+
+        .sidebar-item:hover {
+            background: #f8f9fa;
+        }
+
+        .sidebar-item.active {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .sidebar-item .icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .unread-badge {
+            background: #dc3545;
+            color: white;
+            border-radius: 10px;
+            padding: 2px 6px;
+            font-size: 11px;
+            margin-left: auto;
+            min-width: 18px;
+            text-align: center;
+        }
+
+        .mention-badge {
+            background: #28a745;
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #ffffff;
+        }
+
+        .content-header {
+            padding: 16px;
+            border-bottom: 1px solid #e1e5e9;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .channel-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .channel-name {
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .channel-members {
+            color: #6c757d;
+            font-size: 12px;
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            background: #ffffff;
+        }
+
+        .message {
+            display: flex;
+            margin-bottom: 16px;
+            padding: 8px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .message:hover {
+            background: #f8f9fa;
+        }
+
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            margin-right: 12px;
+            background: #6c757d;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .message-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .message-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .message-user {
+            font-weight: 600;
+            font-size: 14px;
+            color: #1a1a1a;
+        }
+
+        .message-time {
+            font-size: 12px;
+            color: #6c757d;
+        }
+
+        .message-text {
+            font-size: 14px;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+
+        .message-reactions {
+            display: flex;
+            gap: 4px;
+            margin-top: 8px;
+        }
+
+        .reaction {
+            background: #f8f9fa;
+            border: 1px solid #e1e5e9;
+            border-radius: 12px;
+            padding: 2px 6px;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .reaction:hover {
+            background: #e3f2fd;
+        }
+
+        .compose-area {
+            padding: 16px;
+            border-top: 1px solid #e1e5e9;
+            background: #ffffff;
+        }
+
+        .compose-input {
+            width: 100%;
+            border: 1px solid #d1d9e0;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 14px;
+            resize: none;
+            min-height: 44px;
+            max-height: 120px;
+            font-family: inherit;
+        }
+
+        .compose-input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+        }
+
+        .compose-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+        }
+
+        .compose-tools {
+            display: flex;
+            gap: 8px;
+        }
+
+        .tool-btn {
+            background: none;
+            border: none;
+            padding: 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #6c757d;
+            transition: all 0.2s;
+        }
+
+        .tool-btn:hover {
+            background: #f8f9fa;
+            color: #1a1a1a;
+        }
+
+        .send-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .send-btn:hover {
+            background: #0056b3;
+        }
+
+        .send-btn:disabled {
+            background: #e1e5e9;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #6c757d;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            text-align: center;
+            color: #6c757d;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 8px;
+            color: #1a1a1a;
+        }
+
+        .search-box {
+            padding: 12px;
+            border-bottom: 1px solid #e1e5e9;
+        }
+
+        .search-input {
+            width: 100%;
+            border: 1px solid #d1d9e0;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 14px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+
+        .typing-indicator {
+            padding: 8px 16px;
+            font-size: 12px;
+            color: #6c757d;
+            font-style: italic;
+        }
+
+        .thread-indicator {
+            font-size: 12px;
+            color: #007bff;
+            margin-top: 4px;
+            cursor: pointer;
+        }
+
+        .thread-indicator:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 200px;
+            }
+            
+            .panel-header {
+                padding: 8px 12px;
+            }
+            
+            .message-avatar {
+                width: 32px;
+                height: 32px;
+            }
+        }
+
+        .dark-theme {
+            background: #1a1a1a;
+            color: #ffffff;
+        }
+
+        .dark-theme .panel-header,
+        .dark-theme .sidebar,
+        .dark-theme .main-content {
+            background: #2d3748;
+            border-color: #4a5568;
+        }
+
+        .dark-theme .sidebar-item:hover {
+            background: #4a5568;
+        }
+
+        .dark-theme .sidebar-item.active {
+            background: #3182ce;
+        }
+
+        .dark-theme .message:hover {
+            background: #4a5568;
+        }
+
+        .dark-theme .compose-input {
+            background: #2d3748;
+            color: #ffffff;
+            border-color: #4a5568;
+        }
+
+        .dark-theme .reaction {
+            background: #4a5568;
+            border-color: #4a5568;
+        }
+    </style>
+</head>
+<body>
+    <div class="panel-container">
+        <div class="panel-header">
+            <div class="workspace-selector">
+                <div class="status-indicator" id="status-indicator"></div>
+                <select class="workspace-dropdown" id="workspace-dropdown">
+                    <option value="">Select Workspace</option>
+                </select>
+            </div>
+            <div class="header-actions">
+                <button class="btn secondary" id="settings-btn" title="Settings">⚙️</button>
+                <button class="btn" id="connect-btn">Connect</button>
+            </div>
+        </div>
+
+        <div class="panel-content">
+            <div class="sidebar">
+                <div class="search-box">
+                    <input type="text" class="search-input" id="channel-search" placeholder="Search channels...">
+                </div>
+                
+                <div class="sidebar-section">
+                    <div class="sidebar-header">Channels</div>
+                    <div class="sidebar-list" id="channels-list">
+                        <!-- Channels will be populated here -->
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="sidebar-header">Direct Messages</div>
+                    <div class="sidebar-list" id="dms-list">
+                        <!-- DMs will be populated here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="main-content">
+                <div id="welcome-screen" class="empty-state">
+                    <h3>Welcome to Slack</h3>
+                    <p>Connect your workspace to get started</p>
+                    <button class="btn" onclick="connectWorkspace()">Connect Workspace</button>
+                </div>
+
+                <div id="chat-view" style="display: none;">
+                    <div class="content-header">
+                        <div class="channel-info">
+                            <div class="channel-name" id="channel-name">#general</div>
+                            <div class="channel-members" id="channel-members">0 members</div>
+                        </div>
+                        <div class="header-actions">
+                            <button class="tool-btn" id="thread-btn" title="Show threads">🧵</button>
+                            <button class="tool-btn" id="info-btn" title="Channel info">ℹ️</button>
+                        </div>
+                    </div>
+
+                    <div class="messages-container" id="messages-container">
+                        <div class="loading" id="messages-loading">
+                            Loading messages...
+                        </div>
+                    </div>
+
+                    <div class="typing-indicator" id="typing-indicator" style="display: none;"></div>
+
+                    <div class="compose-area">
+                        <textarea class="compose-input" id="message-input" placeholder="Type a message..." rows="1"></textarea>
+                        <div class="compose-actions">
+                            <div class="compose-tools">
+                                <button class="tool-btn" title="Attach file">📎</button>
+                                <button class="tool-btn" title="Emoji">😊</button>
+                                <button class="tool-btn" title="Mention">@</button>
+                            </div>
+                            <button class="send-btn" id="send-btn" disabled>
+                                Send ↗️
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class SlackPanel {
+            constructor() {
+                this.api = window.slackPlugin;
+                this.currentChannel = null;
+                this.currentWorkspace = null;
+                this.messages = new Map();
+                this.isLoading = false;
+                
+                this.initializePanel();
+                this.setupEventListeners();
+                this.startPeriodicUpdate();
+            }
+
+            async initializePanel() {
+                if (this.api && this.api.isAuthenticated()) {
+                    await this.loadWorkspaces();
+                    await this.loadChannels();
+                    this.showChatView();
+                } else {
+                    this.showWelcomeScreen();
+                }
+            }
+
+            setupEventListeners() {
+                // Connect button
+                document.getElementById('connect-btn').addEventListener('click', () => {
+                    this.connectWorkspace();
+                });
+
+                // Workspace dropdown
+                document.getElementById('workspace-dropdown').addEventListener('change', (e) => {
+                    this.switchWorkspace(e.target.value);
+                });
+
+                // Message input
+                const messageInput = document.getElementById('message-input');
+                messageInput.addEventListener('input', (e) => {
+                    this.adjustTextareaHeight(e.target);
+                    this.updateSendButton();
+                });
+
+                messageInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+
+                // Send button
+                document.getElementById('send-btn').addEventListener('click', () => {
+                    this.sendMessage();
+                });
+
+                // Channel search
+                document.getElementById('channel-search').addEventListener('input', (e) => {
+                    this.filterChannels(e.target.value);
+                });
+
+                // Listen for plugin events
+                if (window.pluginAPI) {
+                    window.pluginAPI.events.on('slack:authenticated', () => {
+                        this.onAuthenticated();
+                    });
+
+                    window.pluginAPI.events.on('slack:new_message', (data) => {
+                        this.onNewMessage(data);
+                    });
+
+                    window.pluginAPI.events.on('slack:typing_changed', (data) => {
+                        this.onTypingChanged(data);
+                    });
+
+                    window.pluginAPI.events.on('slack:unread_changed', (data) => {
+                        this.updateChannelUnreadCount(data.channelId, data.count);
+                    });
+                }
+            }
+
+            async connectWorkspace() {
+                try {
+                    this.updateConnectionStatus('connecting');
+                    
+                    if (this.api) {
+                        const success = await this.api.authenticate();
+                        if (success) {
+                            await this.onAuthenticated();
+                        } else {
+                            this.updateConnectionStatus('error');
+                        }
+                    } else {
+                        console.error('Slack plugin API not available');
+                        this.updateConnectionStatus('error');
+                    }
+                } catch (error) {
+                    console.error('Failed to connect workspace:', error);
+                    this.updateConnectionStatus('error');
+                }
+            }
+
+            async onAuthenticated() {
+                this.updateConnectionStatus('connected');
+                await this.loadWorkspaces();
+                await this.loadChannels();
+                this.showChatView();
+            }
+
+            updateConnectionStatus(status) {
+                const indicator = document.getElementById('status-indicator');
+                indicator.className = `status-indicator ${status}`;
+                
+                const connectBtn = document.getElementById('connect-btn');
+                switch (status) {
+                    case 'connecting':
+                        connectBtn.textContent = 'Connecting...';
+                        connectBtn.disabled = true;
+                        break;
+                    case 'connected':
+                        connectBtn.textContent = 'Connected';
+                        connectBtn.disabled = false;
+                        break;
+                    case 'error':
+                        connectBtn.textContent = 'Retry';
+                        connectBtn.disabled = false;
+                        break;
+                    default:
+                        connectBtn.textContent = 'Connect';
+                        connectBtn.disabled = false;
+                }
+            }
+
+            async loadWorkspaces() {
+                if (!this.api) return;
+                
+                try {
+                    const workspaces = this.api.getWorkspaces();
+                    const dropdown = document.getElementById('workspace-dropdown');
+                    
+                    dropdown.innerHTML = '<option value="">Select Workspace</option>';
+                    
+                    workspaces.forEach(workspace => {
+                        const option = document.createElement('option');
+                        option.value = workspace.id;
+                        option.textContent = workspace.name;
+                        dropdown.appendChild(option);
+                    });
+                    
+                    // Select first workspace if available
+                    if (workspaces.length > 0) {
+                        dropdown.value = workspaces[0].id;
+                        this.currentWorkspace = workspaces[0].id;
+                        this.api.setActiveWorkspace(workspaces[0].id);
+                    }
+                } catch (error) {
+                    console.error('Failed to load workspaces:', error);
+                }
+            }
+
+            async loadChannels() {
+                if (!this.api || !this.currentWorkspace) return;
+                
+                try {
+                    const channels = await this.api.getChannels();
+                    this.renderChannels(channels);
+                } catch (error) {
+                    console.error('Failed to load channels:', error);
+                }
+            }
+
+            renderChannels(channels) {
+                const channelsList = document.getElementById('channels-list');
+                const dmsList = document.getElementById('dms-list');
+                
+                channelsList.innerHTML = '';
+                dmsList.innerHTML = '';
+                
+                const publicChannels = channels.filter(c => !c.is_private && !c.is_im && !c.is_mpim);
+                const privateChannels = channels.filter(c => c.is_private && !c.is_im && !c.is_mpim);
+                const dms = channels.filter(c => c.is_im);
+                const groupDms = channels.filter(c => c.is_mpim);
+                
+                // Render public channels
+                publicChannels.forEach(channel => {
+                    const item = this.createChannelItem(channel, '#');
+                    channelsList.appendChild(item);
+                });
+                
+                // Render private channels
+                privateChannels.forEach(channel => {
+                    const item = this.createChannelItem(channel, '🔒');
+                    channelsList.appendChild(item);
+                });
+                
+                // Render DMs
+                dms.forEach(channel => {
+                    const item = this.createChannelItem(channel, '💬');
+                    dmsList.appendChild(item);
+                });
+                
+                // Render group DMs
+                groupDms.forEach(channel => {
+                    const item = this.createChannelItem(channel, '👥');
+                    dmsList.appendChild(item);
+                });
+            }
+
+            createChannelItem(channel, icon) {
+                const item = document.createElement('div');
+                item.className = 'sidebar-item';
+                item.dataset.channelId = channel.id;
+                
+                const unreadCount = this.api ? this.api.getUnreadCount(channel.id) : 0;
+                const badgeHtml = unreadCount > 0 ? `<div class="unread-badge">${unreadCount}</div>` : '';
+                
+                item.innerHTML = `
+                    <div class="icon">${icon}</div>
+                    <span class="channel-name">${channel.name || 'Direct Message'}</span>
+                    ${badgeHtml}
+                `;
+                
+                item.addEventListener('click', () => {
+                    this.selectChannel(channel);
+                });
+                
+                return item;
+            }
+
+            async selectChannel(channel) {
+                // Update UI
+                document.querySelectorAll('.sidebar-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+                
+                document.querySelector(`[data-channel-id="${channel.id}"]`).classList.add('active');
+                
+                this.currentChannel = channel;
+                
+                // Update channel header
+                document.getElementById('channel-name').textContent = 
+                    channel.is_im ? `@${channel.name || 'Direct Message'}` : `#${channel.name}`;
+                document.getElementById('channel-members').textContent = 
+                    `${channel.num_members || 1} members`;
+                
+                // Load messages
+                await this.loadMessages(channel.id);
+                
+                // Mark as read
+                if (this.api) {
+                    this.api.markChannelRead(channel.id);
+                }
+            }
+
+            async loadMessages(channelId) {
+                if (!this.api) return;
+                
+                this.isLoading = true;
+                document.getElementById('messages-loading').style.display = 'block';
+                
+                try {
+                    // For now, we'll use cached messages
+                    // In a real implementation, we'd fetch from the API
+                    const messages = this.messages.get(channelId) || [];
+                    this.renderMessages(messages);
+                } catch (error) {
+                    console.error('Failed to load messages:', error);
+                } finally {
+                    this.isLoading = false;
+                    document.getElementById('messages-loading').style.display = 'none';
+                }
+            }
+
+            renderMessages(messages) {
+                const container = document.getElementById('messages-container');
+                const loading = document.getElementById('messages-loading');
+                
+                // Clear existing messages except loading
+                Array.from(container.children).forEach(child => {
+                    if (child !== loading) {
+                        child.remove();
+                    }
+                });
+                
+                if (messages.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'empty-state';
+                    empty.innerHTML = '<h3>No messages yet</h3><p>Be the first to send a message!</p>';
+                    container.appendChild(empty);
+                    return;
+                }
+                
+                messages.forEach(message => {
+                    const messageElement = this.createMessageElement(message);
+                    container.appendChild(messageElement);
+                });
+                
+                // Scroll to bottom
+                container.scrollTop = container.scrollHeight;
+            }
+
+            createMessageElement(message) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message';
+                messageDiv.dataset.messageTs = message.ts;
+                
+                const user = message.user || {};
+                const avatar = user.profile?.image_48 || '';
+                const initials = (user.real_name || user.name || 'U').charAt(0).toUpperCase();
+                
+                const timestamp = new Date(parseFloat(message.ts) * 1000);
+                const timeString = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                
+                const reactionsHtml = message.reactions ? 
+                    message.reactions.map(reaction => 
+                        `<div class="reaction">:${reaction.name}: ${reaction.count}</div>`
+                    ).join('') : '';
+                
+                const threadHtml = message.reply_count > 0 ? 
+                    `<div class="thread-indicator">${message.reply_count} replies</div>` : '';
+                
+                messageDiv.innerHTML = `
+                    <div class="message-avatar" style="${avatar ? `background-image: url(${avatar}); background-size: cover;` : ''}">${avatar ? '' : initials}</div>
+                    <div class="message-content">
+                        <div class="message-header">
+                            <div class="message-user">${user.real_name || user.name || 'Unknown User'}</div>
+                            <div class="message-time">${timeString}</div>
+                        </div>
+                        <div class="message-text">${this.formatMessageText(message.text)}</div>
+                        ${message.reactions && message.reactions.length > 0 ? `<div class="message-reactions">${reactionsHtml}</div>` : ''}
+                        ${threadHtml}
+                    </div>
+                `;
+                
+                return messageDiv;
+            }
+
+            formatMessageText(text) {
+                // Basic Slack formatting
+                return text
+                    .replace(/<@U\w+\|([^>]+)>/g, '<strong>@$1</strong>')
+                    .replace(/<@U\w+>/g, '<strong>@user</strong>')
+                    .replace(/<#C\w+\|([^>]+)>/g, '<strong>#$1</strong>')
+                    .replace(/<#C\w+>/g, '<strong>#channel</strong>')
+                    .replace(/\*([^*]+)\*/g, '<strong>$1</strong>')
+                    .replace(/_([^_]+)_/g, '<em>$1</em>')
+                    .replace(/~([^~]+)~/g, '<del>$1</del>')
+                    .replace(/```([^`]+)```/g, '<pre><code>$1</code></pre>')
+                    .replace(/`([^`]+)`/g, '<code>$1</code>')
+                    .replace(/\n/g, '<br>');
+            }
+
+            async sendMessage() {
+                const input = document.getElementById('message-input');
+                const text = input.value.trim();
+                
+                if (!text || !this.currentChannel || !this.api) return;
+                
+                try {
+                    input.disabled = true;
+                    document.getElementById('send-btn').disabled = true;
+                    
+                    await this.api.sendMessage(this.currentChannel.id, text);
+                    
+                    input.value = '';
+                    this.adjustTextareaHeight(input);
+                    this.updateSendButton();
+                } catch (error) {
+                    console.error('Failed to send message:', error);
+                    alert('Failed to send message. Please try again.');
+                } finally {
+                    input.disabled = false;
+                    document.getElementById('send-btn').disabled = false;
+                    input.focus();
+                }
+            }
+
+            adjustTextareaHeight(textarea) {
+                textarea.style.height = 'auto';
+                textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+            }
+
+            updateSendButton() {
+                const input = document.getElementById('message-input');
+                const sendBtn = document.getElementById('send-btn');
+                sendBtn.disabled = !input.value.trim();
+            }
+
+            filterChannels(query) {
+                const items = document.querySelectorAll('.sidebar-item');
+                
+                items.forEach(item => {
+                    const channelName = item.querySelector('.channel-name').textContent.toLowerCase();
+                    const matches = channelName.includes(query.toLowerCase());
+                    item.style.display = matches ? 'flex' : 'none';
+                });
+            }
+
+            switchWorkspace(workspaceId) {
+                if (!workspaceId || !this.api) return;
+                
+                this.currentWorkspace = workspaceId;
+                this.api.setActiveWorkspace(workspaceId);
+                this.currentChannel = null;
+                
+                this.loadChannels();
+                this.showWelcomeScreen();
+            }
+
+            showWelcomeScreen() {
+                document.getElementById('welcome-screen').style.display = 'flex';
+                document.getElementById('chat-view').style.display = 'none';
+            }
+
+            showChatView() {
+                document.getElementById('welcome-screen').style.display = 'none';
+                document.getElementById('chat-view').style.display = 'flex';
+            }
+
+            onNewMessage(data) {
+                const { message, channelId } = data;
+                
+                // Update message cache
+                const messages = this.messages.get(channelId) || [];
+                messages.push(message);
+                this.messages.set(channelId, messages);
+                
+                // If this is the current channel, add the message to the view
+                if (this.currentChannel && this.currentChannel.id === channelId) {
+                    const container = document.getElementById('messages-container');
+                    const messageElement = this.createMessageElement(message);
+                    container.appendChild(messageElement);
+                    container.scrollTop = container.scrollHeight;
+                }
+            }
+
+            onTypingChanged(data) {
+                const { channelId, typing, user } = data;
+                
+                if (this.currentChannel && this.currentChannel.id === channelId) {
+                    const indicator = document.getElementById('typing-indicator');
+                    
+                    if (typing) {
+                        indicator.textContent = `${user} is typing...`;
+                        indicator.style.display = 'block';
+                    } else {
+                        indicator.style.display = 'none';
+                    }
+                }
+            }
+
+            updateChannelUnreadCount(channelId, count) {
+                const channelItem = document.querySelector(`[data-channel-id="${channelId}"]`);
+                if (channelItem) {
+                    let badge = channelItem.querySelector('.unread-badge');
+                    
+                    if (count > 0) {
+                        if (!badge) {
+                            badge = document.createElement('div');
+                            badge.className = 'unread-badge';
+                            channelItem.appendChild(badge);
+                        }
+                        badge.textContent = count;
+                    } else if (badge) {
+                        badge.remove();
+                    }
+                }
+            }
+
+            startPeriodicUpdate() {
+                // Update UI every 30 seconds
+                setInterval(() => {
+                    if (this.api && this.api.isAuthenticated()) {
+                        // Update unread counts
+                        document.querySelectorAll('[data-channel-id]').forEach(item => {
+                            const channelId = item.dataset.channelId;
+                            const unreadCount = this.api.getUnreadCount(channelId);
+                            this.updateChannelUnreadCount(channelId, unreadCount);
+                        });
+                    }
+                }, 30000);
+            }
+        }
+
+        // Global functions
+        function connectWorkspace() {
+            if (window.slackPanel) {
+                window.slackPanel.connectWorkspace();
+            }
+        }
+
+        // Initialize panel when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            window.slackPanel = new SlackPanel();
+        });
+
+        // Apply theme
+        function applyTheme(theme) {
+            document.body.className = theme === 'dark' ? 'dark-theme' : '';
+        }
+
+        // Listen for theme changes
+        if (window.pluginAPI) {
+            window.pluginAPI.events.on('theme:changed', (theme) => {
+                applyTheme(theme);
+            });
+        }
+    </script>
+</body>
+</html>

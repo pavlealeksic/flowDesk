@@ -1,0 +1,203 @@
+# Dependencies
+node_modules/
+.npm
+.yarn/
+yarn-error.log*
+lerna-debug.log*
+package-lock.json
+yarn.lock
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+coverage/
+.nyc_output/
+target/
+*.tsbuildinfo
+.tsbuildinfo
+.turbo/
+
+# Electron specific
+app/
+release/
+build-electron/
+release-builds/
+*.dmg
+*.exe
+*.deb
+*.rpm
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Turbo cache
+.turbo/
+
+# Rust
+**/target/
+**/*.rs.bk
+Cargo.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+PIPFILE.lock
+
+# Mobile specific
+.expo/
+android/app/build/
+ios/build/
+*.apk
+*.aab
+*.ipa
+
+# Desktop app specific
+desktop-app/dist/
+desktop-app/build/
+desktop-app/.turbo/
+
+# Mobile app specific
+mobile-app/dist/
+mobile-app/build/
+mobile-app/.turbo/
+android/app/build/
+ios/build/
+
+# Server specific
+server/dist/
+server/build/
+server/.turbo/
+
+# Shared library specific
+shared/dist/
+shared/build/
+shared/.turbo/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Testing
+coverage/
+.nyc_output/
+
+# Changesets
+.changeset/**/*.md
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+
+# Prisma
+prisma/migrations/
+
+# Development files
+*.log.*
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+
+# Linux
+*~
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

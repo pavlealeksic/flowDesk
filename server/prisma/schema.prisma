@@ -1,0 +1,341 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String    @id @default(cuid())
+  clerkId        String    @unique
+  email          String    @unique
+  firstName      String?
+  lastName       String?
+  imageUrl       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  // Subscription and billing
+  customerId     String?   @unique // Stripe customer ID
+  subscription   Subscription?
+  licenses       License[]
+  devices        Device[]
+  invoices       Invoice[]
+  
+  // Organization relationships
+  organizationMemberships OrganizationMember[]
+  
+  // Plugin relationships
+  pluginPurchases PluginPurchase[]
+  
+  @@map("users")
+}
+
+model Organization {
+  id          String    @id @default(cuid())
+  clerkOrgId  String    @unique
+  name        String
+  slug        String    @unique
+  imageUrl    String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  // Billing
+  customerId  String?   @unique // Stripe customer ID
+  subscription Subscription?
+  licenses    License[]
+  devices     Device[]
+  invoices    Invoice[]
+  
+  // Members
+  members     OrganizationMember[]
+  
+  // Plugin relationships
+  pluginPurchases PluginPurchase[]
+  
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String           @id @default(cuid())
+  userId         String
+  organizationId String
+  role           OrganizationRole @default(MEMBER)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@map("organization_members")
+}
+
+enum OrganizationRole {
+  ADMIN
+  MEMBER
+}
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  stripeSubscriptionId String           @unique
+  status             SubscriptionStatus
+  planType           PlanType
+  priceId            String
+  quantity           Int                @default(1)
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean            @default(false)
+  canceledAt         DateTime?
+  endedAt            DateTime?
+  trialStart         DateTime?
+  trialEnd           DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  // Polymorphic relationship - either user or organization
+  userId         String?       @unique
+  organizationId String?       @unique
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+enum SubscriptionStatus {
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+}
+
+enum PlanType {
+  STARTER
+  PRO
+  TEAM
+  ENTERPRISE
+}
+
+model License {
+  id             String        @id @default(cuid())
+  key            String        @unique // The actual license key
+  signature      String        // Digital signature for offline verification
+  planType       PlanType
+  maxDevices     Int
+  maxSeats       Int           @default(1)
+  features       String[]      // JSON array of enabled features
+  validFrom      DateTime
+  validUntil     DateTime?
+  revoked        Boolean       @default(false)
+  revokedAt      DateTime?
+  revokedReason  String?
+  metadata       Json?         // Additional license metadata
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Polymorphic relationship - either user or organization
+  userId         String?
+  organizationId String?
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Related devices
+  devices        Device[]
+
+  @@map("licenses")
+}
+
+model Device {
+  id                String    @id @default(cuid())
+  deviceId          String    @unique // Unique device identifier from client
+  name              String
+  platform          String    // desktop, mobile, web
+  osVersion         String?
+  appVersion        String?
+  lastSeenAt        DateTime  @default(now())
+  activated         Boolean   @default(false)
+  activatedAt       DateTime?
+  deactivated       Boolean   @default(false)
+  deactivatedAt     DateTime?
+  deactivationReason String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // License relationship
+  licenseId      String
+  license        License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  // Polymorphic relationship - either user or organization
+  userId         String?
+  organizationId String?
+  user           User?         @relation(fields: [userId], references: [id])
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
+  @@map("devices")
+}
+
+model Invoice {
+  id                   String        @id @default(cuid())
+  stripeInvoiceId      String        @unique
+  stripeCustomerId     String
+  status               InvoiceStatus
+  amountDue            Int           // Amount in cents
+  amountPaid           Int           // Amount in cents
+  amountRemaining      Int           // Amount in cents
+  currency             String        @default("usd")
+  description          String?
+  hostedInvoiceUrl     String?
+  invoicePdf           String?
+  number               String?
+  dueDate              DateTime?
+  paidAt               DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  // Polymorphic relationship - either user or organization
+  userId         String?
+  organizationId String?
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("invoices")
+}
+
+enum InvoiceStatus {
+  DRAFT
+  OPEN
+  PAID
+  VOID
+  UNCOLLECTIBLE
+}
+
+model Plugin {
+  id              String    @id @default(cuid())
+  name            String
+  slug            String    @unique
+  description     String
+  shortDescription String?
+  author          String
+  authorEmail     String
+  website         String?
+  repository      String?
+  license         String    @default("MIT")
+  category        PluginCategory
+  tags            String[]
+  featured        Boolean   @default(false)
+  verified        Boolean   @default(false)
+  published       Boolean   @default(false)
+  publishedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Plugin versions
+  versions        PluginVersion[]
+  purchases       PluginPurchase[]
+
+  @@map("plugins")
+}
+
+enum PluginCategory {
+  COMMUNICATION
+  PRODUCTIVITY
+  DEVELOPER_TOOLS
+  CALENDAR
+  MAIL
+  FILES
+  AUTOMATION
+  INTEGRATIONS
+  UTILITIES
+  OTHER
+}
+
+model PluginVersion {
+  id              String    @id @default(cuid())
+  pluginId        String
+  version         String    // Semantic version (e.g., "1.2.3")
+  changelog       String?
+  packageUrl      String    // URL to signed package file
+  packageHash     String    // SHA-256 hash of package
+  signature       String    // Digital signature of package
+  minAppVersion   String?   // Minimum Flow Desk version required
+  maxAppVersion   String?   // Maximum Flow Desk version supported
+  permissions     String[]  // Required permissions
+  beta            Boolean   @default(false)
+  deprecated      Boolean   @default(false)
+  downloadCount   Int       @default(0)
+  publishedAt     DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  plugin          Plugin    @relation(fields: [pluginId], references: [id], onDelete: Cascade)
+
+  @@unique([pluginId, version])
+  @@map("plugin_versions")
+}
+
+model PluginPurchase {
+  id             String    @id @default(cuid())
+  pluginId       String
+  planType       PlanType? // null for free plugins
+  price          Int?      // Price in cents, null for free
+  currency       String    @default("usd")
+  stripePaymentIntentId String? @unique
+  purchasedAt    DateTime  @default(now())
+  refunded       Boolean   @default(false)
+  refundedAt     DateTime?
+  refundReason   String?
+
+  plugin         Plugin    @relation(fields: [pluginId], references: [id], onDelete: Cascade)
+
+  // Polymorphic relationship - either user or organization
+  userId         String?
+  organizationId String?
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("plugin_purchases")
+}
+
+model WebhookEvent {
+  id              String    @id @default(cuid())
+  stripeEventId   String    @unique
+  type            String
+  processed       Boolean   @default(false)
+  processingError String?
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+  data            Json
+
+  @@map("webhook_events")
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  name        String
+  keyHash     String    @unique // Hashed version of the API key
+  permissions String[]  // Array of permissions
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  revoked     Boolean   @default(false)
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Polymorphic relationship - either user or organization
+  userId         String?
+  organizationId String?
+  user           User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}

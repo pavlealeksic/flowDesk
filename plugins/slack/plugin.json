@@ -1,0 +1,202 @@
+{
+  "id": "com.flowdesk.slack",
+  "name": "Slack",
+  "version": "2.0.0",
+  "description": "Complete Slack integration with real-time messaging, OAuth2, search, and automation triggers",
+  "author": "Flow Desk Team",
+  "authorEmail": "plugins@flowdesk.com",
+  "homepage": "https://flowdesk.com/plugins/slack",
+  "repository": "https://github.com/flowdesk/plugins/slack",
+  "documentation": "https://docs.flowdesk.com/plugins/slack",
+  "license": "MIT",
+  "type": "panel",
+  "category": "communication",
+  "tags": ["slack", "chat", "team", "communication", "collaboration", "websocket", "oauth"],
+  "icon": "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/slack/slack-original.svg",
+  "screenshots": [
+    "https://flowdesk.com/assets/plugins/slack/screenshot-1.png",
+    "https://flowdesk.com/assets/plugins/slack/screenshot-2.png",
+    "https://flowdesk.com/assets/plugins/slack/screenshot-3.png"
+  ],
+  "minFlowDeskVersion": "0.1.0",
+  "maxFlowDeskVersion": "2.0.0",
+  "platforms": ["desktop", "mobile"],
+  "permissions": [
+    "network",
+    "notifications",
+    "ui:panels",
+    "ui:commands",
+    "ui:notifications",
+    "ui:dialogs",
+    "events:listen",
+    "events:emit",
+    "automation",
+    "search:index",
+    "search:query",
+    "keychain"
+  ],
+  "scopes": [
+    "user:read",
+    "user:write",
+    "workspace:read",
+    "notifications:read",
+    "notifications:write",
+    "automation:read",
+    "automation:write",
+    "search:read",
+    "search:write"
+  ],
+  "entrypoints": [
+    {
+      "type": "main",
+      "file": "src/index.js"
+    },
+    {
+      "type": "panel",
+      "file": "src/panel.html"
+    },
+    {
+      "type": "background",
+      "file": "src/background.js"
+    },
+    {
+      "type": "automation",
+      "file": "src/automation.js"
+    }
+  ],
+  "configSchema": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "enableNotifications": {
+          "type": "boolean",
+          "title": "Enable Notifications",
+          "description": "Show desktop notifications for new messages",
+          "default": true
+        },
+        "notificationTypes": {
+          "type": "array",
+          "title": "Notification Types",
+          "description": "Types of notifications to show",
+          "items": {
+            "type": "string",
+            "enum": ["mentions", "direct-messages", "all-messages", "keyword-alerts"]
+          },
+          "default": ["mentions", "direct-messages"]
+        },
+        "keywords": {
+          "type": "array",
+          "title": "Alert Keywords",
+          "description": "Keywords that trigger notifications",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "autoMarkRead": {
+          "type": "boolean",
+          "title": "Auto Mark as Read",
+          "description": "Automatically mark messages as read when viewed",
+          "default": false
+        },
+        "syncHistoryDays": {
+          "type": "number",
+          "title": "Sync History (days)",
+          "description": "How many days of history to sync for search",
+          "minimum": 1,
+          "maximum": 365,
+          "default": 30
+        },
+        "enableTypingIndicators": {
+          "type": "boolean",
+          "title": "Show Typing Indicators",
+          "description": "Show when others are typing",
+          "default": true
+        },
+        "customStatus": {
+          "type": "object",
+          "title": "Custom Status Settings",
+          "properties": {
+            "syncWithCalendar": {
+              "type": "boolean",
+              "title": "Sync with Calendar",
+              "description": "Update Slack status based on calendar events",
+              "default": false
+            },
+            "busyMessage": {
+              "type": "string",
+              "title": "Busy Message",
+              "description": "Status message when in a meeting",
+              "default": "In a meeting"
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "uiSchema": {
+      "notificationTypes": {
+        "ui:widget": "checkboxes"
+      },
+      "keywords": {
+        "ui:widget": "tags"
+      },
+      "syncHistoryDays": {
+        "ui:widget": "range"
+      }
+    },
+    "defaults": {
+      "enableNotifications": true,
+      "notificationTypes": ["mentions", "direct-messages"],
+      "keywords": [],
+      "autoMarkRead": false,
+      "syncHistoryDays": 30,
+      "enableTypingIndicators": true,
+      "customStatus": {
+        "syncWithCalendar": false,
+        "busyMessage": "In a meeting"
+      }
+    }
+  },
+  "dependencies": [],
+  "capabilities": {
+    "search": true,
+    "notifications": true,
+    "automations": true,
+    "oauth": true,
+    "webhooks": true,
+    "filePreviews": true,
+    "quickActions": true,
+    "contextualData": true,
+    "realTime": true,
+    "offline": true
+  },
+  "marketplace": {
+    "published": true,
+    "pricing": {
+      "model": "freemium",
+      "freeTierLimits": {
+        "searchHistory": 7,
+        "automations": 3,
+        "workspaces": 1
+      }
+    },
+    "regions": ["US", "EU", "APAC"],
+    "ageRating": "everyone",
+    "contentRating": ["general"],
+    "privacyPolicy": "https://flowdesk.com/plugins/slack/privacy",
+    "termsOfService": "https://flowdesk.com/plugins/slack/terms",
+    "support": {
+      "email": "slack-plugin@flowdesk.com",
+      "url": "https://support.flowdesk.com/plugins/slack"
+    }
+  },
+  "build": {
+    "buildTime": "2024-01-26T14:30:00Z",
+    "environment": "production",
+    "commit": "v2.0.0-slack-complete",
+    "bundleSize": 3145728,
+    "buildTools": ["webpack", "typescript", "eslint", "prettier"],
+    "csp": "default-src 'self'; connect-src 'self' https://slack.com https://*.slack.com https://api.slack.com wss://*.slack.com; img-src 'self' data: https://*.slack.com https://*.slack-edge.com; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com;"
+  }
+}

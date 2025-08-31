@@ -1,0 +1,58 @@
+{
+  "name": "@flow-desk/shared-rust",
+  "version": "0.1.0",
+  "description": "Flow Desk shared Rust library with NAPI bindings",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "name": "flow-desk-shared",
+    "triples": {
+      "defaults": true,
+      "additional": [
+        "x86_64-pc-windows-msvc",
+        "x86_64-apple-darwin",
+        "aarch64-apple-darwin",
+        "x86_64-unknown-linux-gnu",
+        "aarch64-unknown-linux-gnu"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "npm run build:ffi",
+    "build:ffi": "cargo build --release --features ffi",
+    "build:napi": "napi build --platform --release --features napi",
+    "build:napi:debug": "napi build --platform --features napi",
+    "build:both": "npm run build:ffi && npm run build:napi",
+    "test": "npm run test:ffi",
+    "test:ffi": "node test-ffi.js",
+    "test:napi": "node test-napi.js",
+    "artifacts": "napi artifacts",
+    "prepublishOnly": "napi prepublish -t npm",
+    "universal": "napi universal",
+    "version": "napi version"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.1.5",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "ffi-napi": "^4.0.3",
+    "ref-napi": "^3.0.3"
+  },
+  "files": [
+    "*.js",
+    "*.d.ts",
+    "src/typescript-ffi-wrapper.ts",
+    "target/release/libflow_desk_shared.*",
+    "target/release/flow_desk_shared.*"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/flow-desk/flow-desk.git"
+  },
+  "engines": {
+    "node": ">= 16"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "target": "ES2020",
+    "moduleResolution": "node",
+    "allowImportingTsExtensions": false,
+    "noEmit": false,
+    "outDir": "dist",
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "downlevelIteration": true
+  },
+  "include": ["src/main/main.ts", "src/preload/preload.ts", "src/main/workspace.ts", "src/types/**/*"],
+  "exclude": [
+    "src/renderer/**/*", 
+    "**/*.test.*", 
+    "src/main/main-old.ts", 
+    "src/main/main-backup.ts",
+    "src/main/automation/**/*",
+    "src/main/plugin-runtime/**/*",
+    "src/main/plugin-integration.ts",
+    "src/main/integration-test.js"
+  ]
+}

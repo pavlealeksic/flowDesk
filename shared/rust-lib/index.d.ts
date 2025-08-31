@@ -1,0 +1,176 @@
+// TypeScript definitions for Flow Desk Rust library
+
+// Mail Types
+export interface NapiMailAccount {
+  id: string;
+  email: string;
+  provider: string;
+  display_name: string;
+  is_enabled: boolean;
+}
+
+export interface NapiMailMessage {
+  id: string;
+  account_id: string;
+  folder: string;
+  subject: string;
+  from_address: string;
+  from_name: string;
+  to_addresses: string[];
+  cc_addresses: string[];
+  bcc_addresses: string[];
+  body_text?: string;
+  body_html?: string;
+  is_read: boolean;
+  is_starred: boolean;
+  received_at: number; // Unix timestamp
+}
+
+export interface NapiMailSyncStatus {
+  account_id: string;
+  is_syncing: boolean;
+  last_sync?: number;
+  total_messages: number;
+  unread_messages: number;
+  error_message?: string;
+}
+
+// Calendar Types
+export interface NapiCalendarAccount {
+  id: string;
+  email: string;
+  provider: string;
+  display_name: string;
+  is_enabled: boolean;
+}
+
+export interface NapiCalendar {
+  id: string;
+  account_id: string;
+  name: string;
+  description?: string;
+  color: string;
+  is_primary: boolean;
+  is_writable: boolean;
+}
+
+export interface NapiCalendarEvent {
+  id: string;
+  calendar_id: string;
+  title: string;
+  description?: string;
+  location?: string;
+  start_time: number;
+  end_time: number;
+  is_all_day: boolean;
+  organizer: string;
+  attendees: string[];
+  status: string;
+  visibility: string;
+  recurrence_rule?: string;
+}
+
+export interface NapiCalendarSyncStatus {
+  account_id: string;
+  is_syncing: boolean;
+  last_sync?: number;
+  total_calendars: number;
+  total_events: number;
+  error_message?: string;
+}
+
+// Search Types
+export interface NapiSearchResult {
+  id: string;
+  title: string;
+  content: string;
+  source: string;
+  score: number;
+  metadata: string; // JSON string
+}
+
+// Main Engine Class
+export class RustEngineWrapper {
+  constructor();
+  
+  // Mail Engine Methods
+  initMailEngine(): Promise<string>;
+  addMailAccount(account: NapiMailAccount): Promise<any>;
+  removeMailAccount(accountId: string): Promise<any>;
+  getMailAccounts(): Promise<NapiMailAccount[]>;
+  syncMailAccount(accountId: string): Promise<NapiMailSyncStatus>;
+  getMailMessages(accountId: string): Promise<NapiMailMessage[]>;
+  markMailMessageRead(accountId: string, messageId: string): Promise<void>;
+  searchMailMessages(query: string): Promise<NapiMailMessage[]>;
+  
+  // Calendar Engine Methods
+  initCalendarEngine(): Promise<string>;
+  addCalendarAccount(account: NapiCalendarAccount): Promise<any>;
+  removeCalendarAccount(accountId: string): Promise<any>;
+  getCalendarAccounts(): Promise<NapiCalendarAccount[]>;
+  syncCalendarAccount(accountId: string): Promise<NapiCalendarSyncStatus>;
+  getCalendars(accountId: string): Promise<NapiCalendar[]>;
+  getCalendarEvents(accountId: string): Promise<NapiCalendarEvent[]>;
+  createCalendarEvent(calendarId: string, title: string, startTime: number, endTime: number): Promise<string>;
+  
+  // Search Engine Methods
+  initSearchEngine(): Promise<string>;
+  indexDocument(id: string, title: string, content: string, source: string, metadata: string): Promise<void>;
+  searchDocuments(query: string, limit?: number): Promise<NapiSearchResult[]>;
+  
+  // Crypto Methods
+  generateEncryptionKeyPair(): Promise<string>;
+  encryptString(data: string, key: string): Promise<string>;
+  decryptString(encryptedData: string, key: string): Promise<string>;
+  getVersion(): Promise<string>;
+}
+
+// Main exports
+export const engine: RustEngineWrapper;
+
+// Mail Engine Functions
+export function initMailEngine(): Promise<string>;
+export function addMailAccount(account: NapiMailAccount): Promise<any>;
+export function removeMailAccount(accountId: string): Promise<any>;
+export function getMailAccounts(): Promise<NapiMailAccount[]>;
+export function syncMailAccount(accountId: string): Promise<NapiMailSyncStatus>;
+export function getMailMessages(accountId: string): Promise<NapiMailMessage[]>;
+export function markMailMessageRead(accountId: string, messageId: string): Promise<void>;
+export function searchMailMessages(query: string): Promise<NapiMailMessage[]>;
+
+// Calendar Engine Functions
+export function initCalendarEngine(): Promise<string>;
+export function addCalendarAccount(account: NapiCalendarAccount): Promise<any>;
+export function removeCalendarAccount(accountId: string): Promise<any>;
+export function getCalendarAccounts(): Promise<NapiCalendarAccount[]>;
+export function syncCalendarAccount(accountId: string): Promise<NapiCalendarSyncStatus>;
+export function getCalendars(accountId: string): Promise<NapiCalendar[]>;
+export function getCalendarEvents(accountId: string): Promise<NapiCalendarEvent[]>;
+export function createCalendarEvent(calendarId: string, title: string, startTime: number, endTime: number): Promise<string>;
+
+// Search Engine Functions
+export function initSearchEngine(): Promise<string>;
+export function indexDocument(id: string, title: string, content: string, source: string, metadata: string): Promise<void>;
+export function searchDocuments(query: string, limit?: number): Promise<NapiSearchResult[]>;
+
+// Crypto Functions
+export function generateEncryptionKeyPair(): Promise<string>;
+export function encryptString(data: string, key: string): Promise<string>;
+export function decryptString(encryptedData: string, key: string): Promise<string>;
+export function getVersion(): Promise<string>;
+
+// Utility Functions
+export function hello(): Promise<string>;
+export function initialize(): Promise<string>;
+
+// Export types
+export const types: {
+  NapiMailAccount: string;
+  NapiMailMessage: string;
+  NapiMailSyncStatus: string;
+  NapiCalendarAccount: string;
+  NapiCalendar: string;
+  NapiCalendarEvent: string;
+  NapiCalendarSyncStatus: string;
+  NapiSearchResult: string;
+};

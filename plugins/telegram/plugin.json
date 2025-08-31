@@ -1,0 +1,61 @@
+{
+  "id": "com.flowdesk.telegram",
+  "name": "Telegram",
+  "version": "1.0.0",
+  "description": "Complete Telegram integration with personal/business messaging, channels, bots, and automation",
+  "author": "Flow Desk Team",
+  "authorEmail": "plugins@flowdesk.com",
+  "homepage": "https://flowdesk.com/plugins/telegram",
+  "repository": "https://github.com/flowdesk/plugins/telegram",
+  "documentation": "https://docs.flowdesk.com/plugins/telegram",
+  "license": "MIT",
+  "type": "panel",
+  "category": "communication",
+  "tags": ["telegram", "messaging", "channels", "bots", "privacy", "encryption"],
+  "icon": "https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg",
+  "screenshots": [
+    "https://flowdesk.com/assets/plugins/telegram/screenshot-1.png",
+    "https://flowdesk.com/assets/plugins/telegram/screenshot-2.png"
+  ],
+  "minFlowDeskVersion": "0.1.0",
+  "platforms": ["desktop", "mobile"],
+  "permissions": [
+    "network", "notifications", "ui:panels", "ui:commands", "automation",
+    "search:index", "search:query", "keychain"
+  ],
+  "scopes": [
+    "user:read", "notifications:read", "notifications:write",
+    "automation:read", "automation:write", "search:read", "search:write"
+  ],
+  "entrypoints": [
+    {"type": "main", "file": "src/index.js"},
+    {"type": "panel", "file": "src/panel.html"},
+    {"type": "background", "file": "src/background.js"}
+  ],
+  "configSchema": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "enableNotifications": {"type": "boolean", "default": true},
+        "notificationTypes": {
+          "type": "array",
+          "items": {"type": "string", "enum": ["messages", "channels", "bots"]},
+          "default": ["messages", "channels"]
+        },
+        "syncHistoryDays": {"type": "number", "minimum": 1, "maximum": 90, "default": 30}
+      }
+    }
+  },
+  "capabilities": {
+    "search": true, "notifications": true, "automations": true,
+    "realTime": true, "offline": true
+  },
+  "marketplace": {
+    "published": true,
+    "pricing": {"model": "freemium"}
+  },
+  "build": {
+    "buildTime": "2024-01-26T14:30:00Z",
+    "environment": "production"
+  }
+}

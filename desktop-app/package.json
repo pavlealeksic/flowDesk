@@ -1,0 +1,135 @@
+{
+  "name": "@flow-desk/desktop-app",
+  "version": "0.1.0",
+  "description": "Flow Desk Desktop Application (Electron)",
+  "private": true,
+  "main": "dist/main/main.js",
+  "homepage": "./",
+  "scripts": {
+    "build": "npm run build:rust && npm run build:renderer && npm run build:main",
+    "build:rust": "npm run copy-rust-lib && cd ../shared/rust-lib && npm run build",
+    "copy-rust-lib": "mkdir -p src/lib/rust-engine && cp -r ../shared/rust-lib/* src/lib/rust-engine/",
+    "build:main": "tsc --project tsconfig.main.json && npm run copy-rust-to-dist",
+    "copy-rust-to-dist": "mkdir -p dist/lib && cp -r src/lib/rust-engine dist/lib/",
+    "build:renderer": "vite build",
+    "dev": "concurrently \"npm run dev:renderer\" \"wait-on http://localhost:5173 && npm run dev:main\"",
+    "dev:main": "npm run build:main && NODE_ENV=development electron dist/main/main.js --inspect=9229",
+    "dev:renderer": "vite",
+    "start": "electron dist/main.js",
+    "pack": "electron-builder",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux",
+    "lint": "eslint . --ext .ts,.tsx --fix",
+    "type-check": "tsc --noEmit && tsc -p tsconfig.main.json --noEmit",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "clean": "rm -rf dist build node_modules/.cache"
+  },
+  "dependencies": {
+    "@flow-desk/shared": "*",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
+    "@octokit/rest": "^22.0.0",
+    "@slack/web-api": "^7.10.0",
+    "crypto-js": "^4.2.0",
+    "dayjs": "^1.11.18",
+    "electron-log": "^5.2.4",
+    "electron-store": "^10.0.0",
+    "electron-updater": "^6.3.9",
+    "google-auth-library": "^10.3.0",
+    "googleapis": "^144.0.0",
+    "minisearch": "^7.1.2",
+    "node-machine-id": "^1.1.12",
+    "open": "^8.4.2",
+    "rxjs": "^7.8.1",
+    "semver": "^7.6.3",
+    "tar": "^7.4.3",
+    "uuid": "^11.0.5",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@reduxjs/toolkit": "^2.4.0",
+    "@types/crypto-js": "^4.2.2",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.17",
+    "@types/react-dom": "^18.3.1",
+    "@types/semver": "^7.5.8",
+    "@types/tar": "^6.1.13",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "concurrently": "^9.1.0",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react": "^7.37.3",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "framer-motion": "^11.15.0",
+    "lucide-react": "^0.468.0",
+    "postcss": "^8.4.49",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-redux": "^9.2.0",
+    "react-router-dom": "^7.1.1",
+    "tailwind-merge": "^2.6.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7",
+    "vitest": "^2.1.8",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.flowdesk.desktop",
+    "productName": "Flow Desk",
+    "directories": {
+      "output": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "assets/**/*",
+      "node_modules/**/*"
+    ],
+    "extraMetadata": {
+      "main": "dist/main/main.js"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "category": "Office"
+    }
+  }
+}
