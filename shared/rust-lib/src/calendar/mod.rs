@@ -27,10 +27,20 @@ pub use error::{CalendarError, CalendarResult};
 pub use types::{
     CalendarAccount, CalendarEvent, Calendar, 
     CalendarProvider, CreateCalendarEventInput, 
-    UpdateCalendarEventInput, FreeBusyQuery, 
-    FreeBusyResponse, CalendarPrivacySync,
-    MeetingProposal, EventReminder, ConferencingInfo,
-    RecurrenceRule, EventAttendee, AttendeeResponseStatus
+    UpdateCalendarEventInput, CreateCalendarAccountInput,
+    UpdateCalendarAccountInput, CalendarPrivacySync,
+    FreeBusySlot, CalendarSyncStatus, EventAttendee, 
+    RecurrenceRule, ConferencingInfo, EventAttachment, 
+    EventReminder, AttendeeResponseStatus, EventStatus,
+    EventVisibility, CalendarAccessLevel, CalendarType,
+    CalendarAccountStatus, CalendarAccountConfig,
+    GoogleCalendarConfig, OutlookCalendarConfig,
+    ExchangeCalendarConfig, CalDavConfig,
+    CalendarAccountCredentials, RecurrenceFrequency,
+    ReminderMethod, FreeBusyStatus,
+    FreeBusyQuery, FreeBusyResponse, MeetingProposal, CalendarDatabase,
+    EventTransparency, EventParticipant, EventLocation, ConferencingSolution,
+    SyncStatusType, SyncStats
 };
 
 // Provider-specific re-exports
@@ -118,21 +128,6 @@ pub struct PrivacySyncConfig {
     pub enable_advanced_mode: bool,
     /// Sync check interval in minutes
     pub sync_interval_minutes: u64,
-}
-
-impl Default for CalendarConfig {
-    fn default() -> Self {
-        Self {
-            database_url: "sqlite://calendar.db".to_string(),
-            max_concurrent_syncs: 10,
-            default_sync_interval_minutes: 15,
-            webhook_config: None,
-            rate_limits: RateLimitConfig::default(),
-            privacy_sync: PrivacySyncConfig::default(),
-            server_timezone: "UTC".to_string(),
-            debug: false,
-        }
-    }
 }
 
 impl Default for RateLimitConfig {

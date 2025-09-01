@@ -7,6 +7,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import type { ConfigBackup } from '../../types/preload';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -37,7 +38,7 @@ export function EnhancedConfigSyncPanel({ className }: ConfigSyncPanelProps) {
   const { state, actions } = useConfigSync();
   const [qrCodeImage, setQrCodeImage] = useState<string>('');
   const [showQrCode, setShowQrCode] = useState(false);
-  const [backups, setBackups] = useState<any[]>([]);
+  const [backups, setBackups] = useState<ConfigBackup[]>([]);
   const [showBackups, setShowBackups] = useState(false);
   const [realTimeStatus, setRealTimeStatus] = useState<RealTimeSyncStatus>({
     status: 'idle',

@@ -94,7 +94,7 @@ interface NotificationItemProps {
   compact?: boolean
 }
 
-const NotificationItem: React.FC<NotificationItemProps> = ({
+const NotificationItem: React.FC<NotificationItemProps> = React.memo(({
   notification,
   onDismiss,
   onAction,
@@ -248,7 +248,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
       </div>
     </Card>
   )
-}
+})
 
 interface NotificationFilterProps {
   selectedFilter: string

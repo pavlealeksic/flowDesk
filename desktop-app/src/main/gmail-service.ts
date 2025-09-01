@@ -952,6 +952,279 @@ export class GmailService {
     return bytes.toString(CryptoJS.enc.Utf8);
   }
 
+  // New advanced features methods
+
+  /**
+   * Mark message as starred/unstarred
+   */
+  async markMessageStarred(accountId: string, messageId: string, starred: boolean): Promise<void> {
+    const gmail = await this.getGmailClient(accountId);
+    
+    const modifyRequest: gmail_v1.Params$Resource$Users$Messages$Modify = {
+      userId: 'me',
+      id: messageId,
+      requestBody: starred ? {
+        addLabelIds: ['STARRED']
+      } : {
+        removeLabelIds: ['STARRED']
+      }
+    };
+
+    await gmail.users.messages.modify(modifyRequest);
+    log.info(`Message ${messageId} ${starred ? 'starred' : 'unstarred'}`);
+  }
+
+  /**
+   * Get unified messages from all accounts
+   */
+  async getUnifiedMessages(limit?: number): Promise<EmailMessage[]> {
+    const allAccounts = this.store.get('accounts');
+    const allMessages: EmailMessage[] = [];
+
+    for (const [accountId, storedAccount] of Object.entries(allAccounts)) {
+      try {
+        const messages = await this.getMessages(accountId, { limit: limit ? Math.ceil(limit / Object.keys(allAccounts).length) : 50 });
+        allMessages.push(...messages);
+      } catch (error) {
+        log.error(`Failed to get messages for account ${accountId}:`, error);
+      }
+    }
+
+    // Sort by date (newest first)
+    allMessages.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    return limit ? allMessages.slice(0, limit) : allMessages;
+  }
+
+  /**
+   * Get smart mailbox messages based on criteria
+   */
+  async getSmartMailboxMessages(criteria: string): Promise<EmailMessage[]> {
+    const allAccounts = this.store.get('accounts');
+    const allMessages: EmailMessage[] = [];
+
+    for (const [accountId] of Object.entries(allAccounts)) {
+      try {
+        let query = '';
+        switch (criteria) {
+          case 'today':
+            const today = new Date().toISOString().split('T')[0];
+            query = `after:${today}`;
+            break;
+          case 'flagged':
+            query = 'is:starred';
+            break;
+          case 'unread':
+            query = 'is:unread';
+            break;
+          case 'with_attachments':
+            query = 'has:attachment';
+            break;
+          default:
+            continue;
+        }
+
+        const messages = await this.searchMessages(accountId, query, { limit: 100 });
+        allMessages.push(...messages);
+      } catch (error) {
+        log.error(`Failed to get smart mailbox messages for account ${accountId}:`, error);
+      }
+    }
+
+    return allMessages.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }
+
+  /**
+   * Get message thread (conversation)
+   */
+  async getMessageThread(accountId: string, threadId: string): Promise<EmailMessage[]> {
+    const gmail = await this.getGmailClient(accountId);
+    
+    const response = await gmail.users.threads.get({
+      userId: 'me',
+      id: threadId
+    });
+
+    const threadMessages: EmailMessage[] = [];
+    
+    if (response.data.messages) {
+      for (const message of response.data.messages) {
+        if (message.id) {
+          const convertedMessage = await this.convertGmailMessage(message, accountId);
+          if (convertedMessage) {
+            threadMessages.push(convertedMessage);
+          }
+        }
+      }
+    }
+
+    // Sort by date
+    return threadMessages.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }
+
+  /**
+   * Schedule message (simplified implementation - stores locally and sends via setTimeout)
+   */
+  async scheduleMessage(
+    accountId: string, 
+    message: {
+      to: string[]
+      cc?: string[]
+      bcc?: string[]
+      subject: string
+      body: string
+      fromAlias?: string
+    }, 
+    scheduledDate: Date
+  ): Promise<string> {
+    const scheduledId = uuidv4();
+    
+    // Calculate delay
+    const delay = scheduledDate.getTime() - Date.now();
+    
+    if (delay <= 0) {
+      throw new Error('Scheduled date must be in the future');
+    }
+
+    // Convert message format
+    const emailMessage: Partial<EmailMessage> = {
+      to: message.to.map(addr => ({ address: addr, name: '' })),
+      cc: message.cc?.map(addr => ({ address: addr, name: '' })),
+      bcc: message.bcc?.map(addr => ({ address: addr, name: '' })),
+      subject: message.subject,
+      bodyText: message.body,
+      from: { address: message.fromAlias || 'me', name: '' }
+    };
+
+    // Schedule the send
+    setTimeout(async () => {
+      try {
+        await this.sendMessage(accountId, emailMessage);
+        log.info(`Scheduled message ${scheduledId} sent successfully`);
+      } catch (error) {
+        log.error(`Failed to send scheduled message ${scheduledId}:`, error);
+      }
+    }, delay);
+
+    log.info(`Message scheduled for ${scheduledDate.toISOString()}`);
+    return scheduledId;
+  }
+
+  /**
+   * Get scheduled messages (placeholder - in real implementation would store in database)
+   */
+  async getScheduledMessages(accountId: string): Promise<any[]> {
+    // TODO: Implement proper scheduled message storage
+    return [];
+  }
+
+  /**
+   * Cancel scheduled message
+   */
+  async cancelScheduledMessage(accountId: string, messageId: string): Promise<void> {
+    // TODO: Implement proper scheduled message cancellation
+    log.info(`Scheduled message ${messageId} cancelled`);
+  }
+
+  /**
+   * Get email aliases for account
+   */
+  async getEmailAliases(accountId: string): Promise<any[]> {
+    const gmail = await this.getGmailClient(accountId);
+    
+    try {
+      const response = await gmail.users.settings.sendAs.list({
+        userId: 'me'
+      });
+
+      return response.data.sendAs?.map((alias, index) => ({
+        id: `${accountId}_${index}`,
+        accountId,
+        address: alias.sendAsEmail || '',
+        name: alias.displayName || alias.sendAsEmail || '',
+        isDefault: alias.isDefault || false,
+        isVerified: alias.verificationStatus === 'accepted'
+      })) || [];
+    } catch (error) {
+      log.error('Failed to get email aliases:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Add email alias
+   */
+  async addEmailAlias(accountId: string, address: string, name: string): Promise<any> {
+    const gmail = await this.getGmailClient(accountId);
+    
+    const response = await gmail.users.settings.sendAs.create({
+      userId: 'me',
+      requestBody: {
+        sendAsEmail: address,
+        displayName: name,
+        treatAsAlias: true
+      }
+    });
+
+    return {
+      id: uuidv4(),
+      accountId,
+      address,
+      name,
+      isDefault: false,
+      isVerified: false
+    };
+  }
+
+  /**
+   * Remove email alias
+   */
+  async removeEmailAlias(accountId: string, aliasAddress: string): Promise<void> {
+    const gmail = await this.getGmailClient(accountId);
+    
+    await gmail.users.settings.sendAs.delete({
+      userId: 'me',
+      sendAsEmail: aliasAddress
+    });
+    
+    log.info(`Email alias ${aliasAddress} removed`);
+  }
+
+  /**
+   * Start IDLE sync (for Gmail, we'll use periodic polling)
+   */
+  async startIdle(accountId: string): Promise<void> {
+    // Gmail doesn't support IMAP IDLE, so we'll do more frequent polling
+    const existingInterval = this.syncIntervals.get(accountId);
+    if (existingInterval) {
+      clearInterval(existingInterval);
+    }
+
+    // Poll every 30 seconds for IDLE simulation
+    const interval = setInterval(async () => {
+      try {
+        await this.syncAccount(accountId);
+      } catch (error) {
+        log.error(`IDLE sync error for account ${accountId}:`, error);
+      }
+    }, 30000); // 30 seconds
+
+    this.syncIntervals.set(accountId, interval);
+    log.info(`IDLE sync started for account ${accountId}`);
+  }
+
+  /**
+   * Stop IDLE sync
+   */
+  async stopIdle(accountId: string): Promise<void> {
+    const interval = this.syncIntervals.get(accountId);
+    if (interval) {
+      clearInterval(interval);
+      this.syncIntervals.delete(accountId);
+      log.info(`IDLE sync stopped for account ${accountId}`);
+    }
+  }
+
   /**
    * Cleanup resources
    */

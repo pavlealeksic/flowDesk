@@ -21,10 +21,16 @@ import {
   Loader2,
   AlertCircle,
   Minimize2,
-  Maximize2
+  Maximize2,
+  File,
+  Clock
 } from '../ui'
 import { type BaseComponentProps } from '../ui/types'
 import { sendMessage, selectMailAccounts, selectCurrentAccount, selectIsLoadingMail } from '../../store/slices/mailSlice'
+import { openTemplatesModal, selectShowTemplatesModal, closeTemplatesModal, openSchedulerModal, selectProductivityUI } from '../../store/slices/productivitySlice'
+import { EmailTemplatesModal } from './EmailTemplatesModal'
+import { EmailScheduler } from './EmailScheduler'
+import { QuickSnippetsPanel } from './QuickSnippetsPanel'
 import type { EmailMessage } from '@flow-desk/shared'
 
 interface ComposeModalProps extends BaseComponentProps {
@@ -244,6 +250,12 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
   const [isMinimized, setIsMinimized] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  // Productivity features integration
+  const showTemplatesModal = useAppSelector(selectShowTemplatesModal)
+  const productivityUI = useAppSelector(selectProductivityUI)
+  const [showScheduler, setShowScheduler] = useState(false)
+  const [showSnippets, setShowSnippets] = useState(false)
 
   // Initialize compose data based on context
   useEffect(() => {
@@ -381,6 +393,18 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
     setIsMinimized(false)
     onClose()
   }, [onClose])
+  
+  const handleOpenTemplates = useCallback(() => {
+    dispatch(openTemplatesModal())
+  }, [dispatch])
+  
+  const handleTemplateSelect = useCallback((template: any) => {
+    setComposeData(prev => ({
+      ...prev,
+      subject: template.subject,
+      body: template.body
+    }))
+  }, [])
 
   // Add ESC key handling and prevent body scroll
   useEffect(() => {
@@ -573,14 +597,30 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
                 )}
               </div>
 
-              {/* Rich Text Editor */}
-              <div className="flex-1 p-4 min-h-0">
-                <RichTextEditor
-                  value={composeData.body}
-                  onChange={(value) => handleInputChange('body', value)}
-                  placeholder="Type your message here..."
-                  className="h-full"
-                />
+              {/* Rich Text Editor with Optional Snippets Panel */}
+              <div className="flex-1 p-4 min-h-0 flex gap-4">
+                <div className={cn("flex-1", showSnippets && "pr-4")}>
+                  <RichTextEditor
+                    value={composeData.body}
+                    onChange={(value) => handleInputChange('body', value)}
+                    placeholder="Type your message here..."
+                    className="h-full"
+                  />
+                </div>
+                
+                {/* Quick Snippets Panel */}
+                {showSnippets && (
+                  <div className="w-64 border-l border-border pl-4">
+                    <QuickSnippetsPanel
+                      onInsertSnippet={(snippet) => {
+                        const currentBody = composeData.body
+                        const newBody = currentBody + (currentBody ? '\n\n' : '') + snippet.content
+                        handleInputChange('body', newBody)
+                      }}
+                      compact={true}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Error Display */}
@@ -599,6 +639,33 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
               {/* Footer */}
               <div className="flex items-center justify-between p-4 border-t border-border">
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleOpenTemplates}
+                    title="Insert email template"
+                  >
+                    <File className="h-4 w-4 mr-2" />
+                    Templates
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowScheduler(true)}
+                    title="Schedule email"
+                  >
+                    <Clock className="h-4 w-4 mr-2" />
+                    Schedule
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowSnippets(!showSnippets)}
+                    title="Quick text snippets"
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Snippets
+                  </Button>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -646,6 +713,38 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
           )}
         </div>
       </Card>
+      
+      {/* Email Templates Modal */}
+      {showTemplatesModal && (
+        <EmailTemplatesModal
+          isOpen={showTemplatesModal}
+          onClose={() => dispatch(closeTemplatesModal())}
+          onSelectTemplate={handleTemplateSelect}
+        />
+      )}
+      
+      {/* Email Scheduler Modal */}
+      {showScheduler && (
+        <EmailScheduler
+          isOpen={showScheduler}
+          onClose={() => setShowScheduler(false)}
+          onSchedule={async (emailData, scheduledTime) => {
+            try {
+              if (window.flowDesk?.mail) {
+                await window.flowDesk.mail.scheduleEmail(emailData, scheduledTime)
+                onClose() // Close compose modal after scheduling
+              }
+            } catch (error) {
+              setError(error instanceof Error ? error.message : 'Failed to schedule email')
+            }
+          }}
+          initialEmail={{
+            to: composeData.to,
+            subject: composeData.subject,
+            body: composeData.body
+          }}
+        />
+      )}
     </div>
   )
 }

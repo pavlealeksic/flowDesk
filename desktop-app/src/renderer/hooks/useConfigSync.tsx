@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../store';
 import type { WorkspaceConfig } from '@flow-desk/shared/types';
+import type { ConfigSyncConflict, ConfigSyncDevice, ConfigBackup } from '../types/preload';
 
 interface ConfigSyncState {
   initialized: boolean;
@@ -16,8 +17,8 @@ interface ConfigSyncState {
   lastSync: Date | null;
   syncInterval: number;
   error: string | null;
-  conflicts: any[];
-  discoveredDevices: any[];
+  conflicts: ConfigSyncConflict[];
+  discoveredDevices: ConfigSyncDevice[];
 }
 
 interface ConfigSyncActions {
@@ -27,9 +28,9 @@ interface ConfigSyncActions {
   exportConfig: () => Promise<string | null>;
   importConfig: () => Promise<WorkspaceConfig | null>;
   generatePairingQR: () => Promise<string>;
-  pairWithDevice: (qrData: string) => Promise<any>;
+  pairWithDevice: (qrData: string) => Promise<{ success: boolean; error?: string }>;
   createBackup: (description?: string) => Promise<string>;
-  listBackups: () => Promise<any[]>;
+  listBackups: () => Promise<ConfigBackup[]>;
   restoreBackup: (backupId: string) => Promise<void>;
   refreshDiscoveredDevices: () => Promise<void>;
 }

@@ -7,7 +7,7 @@
 
 import Store from 'electron-store';
 
-export interface TypedStore<T extends Record<string, any>> {
+export interface TypedStore<T extends Record<string, unknown>> {
   get<K extends keyof T>(key: K): T[K];
   get<K extends keyof T>(key: K, defaultValue: T[K]): T[K];
   get(key: string): unknown;
@@ -34,7 +34,7 @@ export interface TypedStore<T extends Record<string, any>> {
 /**
  * Create a typed store instance
  */
-export function createTypedStore<T extends Record<string, any>>(options?: any): TypedStore<T> {
+export function createTypedStore<T extends Record<string, unknown>>(options?: Record<string, unknown>): TypedStore<T> {
   return new Store(options) as unknown as TypedStore<T>;
 }
 

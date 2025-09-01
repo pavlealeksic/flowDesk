@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
+import type { ThemeConfig } from '../../types/preload'
 
 type ThemeMode = 'light' | 'dark' | 'system'
 
@@ -51,8 +52,16 @@ export const loadThemeSettings = createAsyncThunk(
 export const setThemeMode = createAsyncThunk(
   'theme/setThemeMode',
   async (mode: ThemeMode) => {
-    const success = await window.flowDesk.theme.set(mode)
-    if (!success) {
+    const themeConfig: ThemeConfig = {
+      name: mode,
+      type: mode === 'dark' ? 'dark' : 'light',
+      colors: {},
+      fonts: {},
+      spacing: {},
+      animations: true
+    };
+    const result = await window.flowDesk.theme.set(themeConfig)
+    if (!result) {
       throw new Error('Failed to set theme mode')
     }
     return mode
@@ -61,7 +70,7 @@ export const setThemeMode = createAsyncThunk(
 
 export const updateThemeSetting = createAsyncThunk(
   'theme/updateThemeSetting',
-  async ({ key, value }: { key: string; value: any }) => {
+  async ({ key, value }: { key: string; value: unknown }) => {
     const success = await window.flowDesk.settings.set(`theme.${key}`, value)
     if (!success) {
       throw new Error(`Failed to update theme setting: ${key}`)

@@ -6,7 +6,7 @@ use crate::mail::{
     providers::imap::ImapProvider,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 

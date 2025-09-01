@@ -11,6 +11,7 @@ import pluginSlice from './slices/pluginSlice'
 import notificationSlice from './slices/notificationSlice'
 import searchSlice from './slices/searchSlice'
 import automationSlice from './slices/automationSlice'
+import productivitySlice from './slices/productivitySlice'
 
 export const store = configureStore({
   reducer: {
@@ -23,6 +24,7 @@ export const store = configureStore({
     notification: notificationSlice,
     search: searchSlice,
     automation: automationSlice,
+    productivity: productivitySlice,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

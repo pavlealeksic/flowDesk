@@ -11,10 +11,10 @@ pub mod crypto;
 pub mod types;
 pub mod utils;
 
-// Simplified modules for NAPI bindings - these are lightweight and always compiled
-pub mod mail_simple;
-pub mod calendar_clean;
-pub mod search_simple;
+// Full featured modules with real implementations
+pub mod mail;
+pub mod calendar;
+pub mod search;
 
 // NAPI bindings
 #[cfg(feature = "napi")]

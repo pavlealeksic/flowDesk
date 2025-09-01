@@ -58,7 +58,7 @@ tantivy = "0.19"
 regex = "1.10"
 
 # Async runtime and concurrency
-tokio-util = "0.7"
+tokio-util = { version = "0.7", features = ["rt"] }
 dashmap = "5.5"
 parking_lot = "0.12"
 once_cell = "1.19"

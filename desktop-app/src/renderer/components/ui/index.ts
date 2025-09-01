@@ -5,6 +5,10 @@ export * from './Card'
 export * from './Avatar'
 export * from './Dropdown'
 export * from './ResizablePanel'
+export * from './Badge'
+export * from './Label'
+
+import React from 'react'
 
 // Utilities and types
 export * from './utils'
@@ -119,5 +123,20 @@ export {
   Pin,
   Move,
   Keyboard,
-  Monitor
+  Monitor,
+  
+  // Additional components for calendar
+  Badge as LucideBadge,
+  Hash,
+  Type,
+  Zap,
+  MousePointer,
+  Inbox
 } from 'lucide-react'
+
+// Simple component type exports (components will be created separately if needed)
+export type LabelProps = { children: React.ReactNode; className?: string; htmlFor?: string }
+export type DialogProps = { children: React.ReactNode }
+export type TabsProps = { children: React.ReactNode }
+export type SeparatorProps = { className?: string }
+export type TooltipProps = { children: React.ReactNode }

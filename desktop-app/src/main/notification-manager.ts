@@ -7,8 +7,9 @@
 
 import { Notification, ipcMain, BrowserWindow, app, systemPreferences } from 'electron';
 import { EventEmitter } from 'events';
-import Store from 'electron-store';
+// import Store from 'electron-store'; // Will use dynamic import
 import path from 'path';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 
 export interface NotificationRule {
   id: string;
@@ -88,7 +89,7 @@ export interface NotificationStats {
 }
 
 export class DesktopNotificationManager extends EventEmitter {
-  private electronStore: Store;
+  private electronStore: any; // Will be initialized with dynamic import
   private mainWindow: BrowserWindow | null = null;
   private rules: NotificationRule[] = [];
   private dndSchedules: DNDSchedule[] = [];
@@ -104,15 +105,39 @@ export class DesktopNotificationManager extends EventEmitter {
     super();
     this.mainWindow = mainWindow || null;
     
-    this.electronStore = new Store({
-      name: 'notification-config',
-      defaults: {
-        enabled: true,
-        sound: true,
-        badge: true,
-        rules: [],
-        dndSchedules: [],
-        stats: {
+    // Initialize with defaults
+    this.stats = {
+      totalSent: 0,
+      totalShown: 0,
+      totalDismissed: 0,
+      totalClicked: 0,
+      rulesApplied: 0,
+      dndBlocked: 0,
+      lastResetTime: Date.now(),
+    };
+    this.rules = [];
+    this.dndSchedules = [];
+
+    this.setupIPC();
+  }
+
+  private dataPath = path.join(app.getPath('userData'), 'notifications.json');
+  private settings = {
+    enabled: true,
+    sound: true,
+    badge: true,
+    groupSimilar: true,
+    maxNotifications: 50,
+    autoCloseDelay: 5000,
+  };
+
+  private async initializeStore() {
+    try {
+      if (existsSync(this.dataPath)) {
+        const data = JSON.parse(readFileSync(this.dataPath, 'utf8'));
+        this.rules = data.rules || [];
+        this.dndSchedules = data.dndSchedules || [];
+        this.stats = data.stats || {
           totalSent: 0,
           totalShown: 0,
           totalDismissed: 0,
@@ -120,18 +145,26 @@ export class DesktopNotificationManager extends EventEmitter {
           rulesApplied: 0,
           dndBlocked: 0,
           lastResetTime: Date.now(),
-        },
-        groupSimilar: true,
-        maxNotifications: 50,
-        autoCloseDelay: 5000,
-      },
-    });
+        };
+        this.settings = { ...this.settings, ...data.settings };
+      }
+    } catch (error) {
+      console.warn('Failed to load notification data, using defaults:', error);
+    }
+  }
 
-    this.stats = this.electronStore.get('stats') as NotificationStats;
-    this.rules = this.electronStore.get('rules') as NotificationRule[];
-    this.dndSchedules = this.electronStore.get('dndSchedules') as DNDSchedule[];
-
-    this.setupIPC();
+  private saveStore() {
+    try {
+      const data = {
+        rules: this.rules,
+        dndSchedules: this.dndSchedules,
+        stats: this.stats,
+        settings: this.settings
+      };
+      writeFileSync(this.dataPath, JSON.stringify(data, null, 2), 'utf8');
+    } catch (error) {
+      console.warn('Failed to save notification data:', error);
+    }
   }
 
   /**
@@ -141,6 +174,9 @@ export class DesktopNotificationManager extends EventEmitter {
     if (this.initialized) return;
 
     try {
+      // Initialize electron store
+      await this.initializeStore();
+      
       // Check and request notification permissions
       await this.checkPermissions();
       
@@ -227,7 +263,7 @@ export class DesktopNotificationManager extends EventEmitter {
         title: data.title,
         body: data.body,
         icon: data.icon || this.getDefaultIcon(),
-        sound: data.sound || (this.electronStore.get('sound') ? 'default' : undefined),
+        sound: data.sound || (this.settings.sound ? 'default' : undefined),
         silent: data.silent || false,
         urgency: this.mapImportanceToUrgency(data.importance),
         actions: data.actions?.map(action => ({
@@ -271,7 +307,7 @@ export class DesktopNotificationManager extends EventEmitter {
       this.emit('notificationShown', data);
 
       // Auto-close if specified
-      const autoCloseDelay = this.electronStore.get('autoCloseDelay') as number;
+      const autoCloseDelay = this.settings.autoCloseDelay;
       if (autoCloseDelay > 0) {
         setTimeout(() => {
           if (this.activeNotifications.has(data.id)) {
@@ -460,23 +496,33 @@ export class DesktopNotificationManager extends EventEmitter {
   // Private methods
 
   private async checkPermissions(): Promise<void> {
-    if (process.platform === 'darwin') {
-      // macOS - check notification permissions
-      const status = systemPreferences.getMediaAccessStatus('notifications' as any);
-      this.permissionGranted = status === 'granted';
-      
-      if (!this.permissionGranted) {
-        // Request permission
-        try {
-          await systemPreferences.askForMediaAccess('notifications' as any);
-          this.permissionGranted = true;
-        } catch {
-          console.warn('Notification permission denied');
-        }
+    try {
+      // Check if notifications are supported
+      if (!Notification.isSupported()) {
+        console.warn('System notifications not supported on this platform');
+        this.permissionGranted = false;
+        return;
       }
-    } else {
-      // Other platforms - notifications are generally allowed
+
+      // Test notification creation to verify permissions
+      const testNotification = new Notification({
+        title: 'Flow Desk',
+        body: 'Notifications enabled',
+        silent: true
+      });
+      
+      testNotification.show();
+      
+      // Close test notification after 500ms
+      setTimeout(() => {
+        testNotification.close();
+      }, 500);
+      
       this.permissionGranted = true;
+      console.log('Notification permissions verified');
+    } catch (error) {
+      console.warn('Failed to verify notification permissions:', error);
+      this.permissionGranted = false;
     }
   }
 
@@ -648,7 +694,7 @@ export class DesktopNotificationManager extends EventEmitter {
     this.queueProcessor = setInterval(async () => {
       if (this.notificationQueue.length === 0) return;
       
-      const maxNotifications = this.electronStore.get('maxNotifications') as number;
+      const maxNotifications = this.settings.maxNotifications;
       
       // Process notifications in queue
       while (this.notificationQueue.length > 0 && this.activeNotifications.size < maxNotifications) {
@@ -713,15 +759,15 @@ export class DesktopNotificationManager extends EventEmitter {
   }
 
   private async saveRules(): Promise<void> {
-    this.electronStore.set('rules', this.rules);
+    this.saveStore();
   }
 
   private async saveDNDSchedules(): Promise<void> {
-    this.electronStore.set('dndSchedules', this.dndSchedules);
+    this.saveStore();
   }
 
   private updateStats(): void {
-    this.electronStore.set('stats', this.stats);
+    this.saveStore();
   }
 
   private setupIPC(): void {

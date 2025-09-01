@@ -70,9 +70,16 @@ class MailEngineService {
     if (!this.isInitialized) await this.initialize()
     
     try {
-      // TODO: Implement account updates
+      // Use Rust engine for account updates
+      const rustEngine = require('../lib/rust-engine')
+      await rustEngine.updateMailAccount(accountId, updates)
+      
+      // Get updated account
+      const accounts = await this.getAccounts()
+      const updatedAccount = accounts.find(acc => acc.id === accountId)
+      
       log.info('Updated mail account:', accountId)
-      return null
+      return updatedAccount || null
     } catch (error) {
       log.error('Failed to update mail account:', error)
       throw error
@@ -205,11 +212,11 @@ class MailEngineService {
     if (!this.isInitialized) await this.initialize()
     
     try {
-      // TODO: Call Rust engine
-      // const syncStatusJson = await this.mailEngine.get_sync_status()
-      // return JSON.parse(syncStatusJson)
+      // Use Rust engine for sync status
+      const rustEngine = require('../lib/rust-engine')
+      const syncStatus = await rustEngine.getMailSyncStatus()
       
-      return {}
+      return syncStatus || {}
     } catch (error) {
       log.error('Failed to get sync status:', error)
       throw error
@@ -220,8 +227,9 @@ class MailEngineService {
     if (!this.isInitialized) await this.initialize()
     
     try {
-      // TODO: Call Rust engine
-      // await this.mailEngine.start_sync()
+      // Use Rust engine to start sync
+      const rustEngine = require('../lib/rust-engine')
+      await rustEngine.startMailSync()
       
       log.info('Started background mail sync')
     } catch (error) {
@@ -234,8 +242,9 @@ class MailEngineService {
     if (!this.isInitialized) await this.initialize()
     
     try {
-      // TODO: Call Rust engine
-      // await this.mailEngine.stop_sync()
+      // Use Rust engine to stop sync
+      const rustEngine = require('../lib/rust-engine')
+      await rustEngine.stopMailSync()
       
       log.info('Stopped background mail sync')
     } catch (error) {
@@ -251,6 +260,150 @@ class MailEngineService {
       return await this.gmailService.performBulkOperation(accountId, operation)
     } catch (error) {
       log.error('Failed to perform bulk operation:', error)
+      throw error
+    }
+  }
+
+  // New advanced features
+  async markMessageStarred(accountId: string, messageId: string, starred: boolean): Promise<void> {
+    if (!this.isInitialized) await this.initialize()
+    
+    try {
+      await this.gmailService.markMessageStarred(accountId, messageId, starred)
+    } catch (error) {
+      log.error('Failed to mark message starred:', error)
+      throw error
+    }
+  }
+
+  async getUnifiedMessages(limit?: number): Promise<EmailMessage[]> {
+    if (!this.isInitialized) await this.initialize()
+    
+    try {
+      return await this.gmailService.getUnifiedMessages(limit)
+    } catch (error) {
+      log.error('Failed to get unified messages:', error)
+      throw error
+    }
+  }
+
+  async getSmartMailboxMessages(criteria: string): Promise<EmailMessage[]> {
+    if (!this.isInitialized) await this.initialize()
+    
+    try {
+      return await this.gmailService.getSmartMailboxMessages(criteria)
+    } catch (error) {
+      log.error('Failed to get smart mailbox messages:', error)
+      throw error
+    }
+  }
+
+  async getMessageThread(accountId: string, threadId: string): Promise<EmailMessage[]> {
+    if (!this.isInitialized) await this.initialize()
+    
+    try {
+      return await this.gmailService.getMessageThread(accountId, threadId)
+    } catch (error) {
+      log.error('Failed to get message thread:', error)
+      throw error
+    }
+  }
+
+  async scheduleMessage(
+    accountId: string,
+    message: {
+      to: string[]
+      cc?: string[]
+      bcc?: string[]
+      subject: string
+      body: string
+      fromAlias?: string
+    },
+    scheduledDate: Date
+  ): Promise<string> {
+    if (!this.isInitialized) await this.initialize()
+    
+    try {
+      return await this.gmailService.scheduleMessage(accountId, message, scheduledDate)
+    } catch (error) {
+      log.error('Failed to schedule message:', error)
+      throw error
+    }
+  }
+
+  async getScheduledMessages(accountId: string): Promise<any[]> {
+    if (!this.isInitialized) await this.initialize()
+    
+    try {
+      return await this.gmailService.getScheduledMessages(accountId)
+    } catch (error) {
+      log.error('Failed to get scheduled messages:', error)
+      throw error
+    }
+  }
+
+  async cancelScheduledMessage(accountId: string, messageId: string): Promise<void> {
+    if (!this.isInitialized) await this.initialize()
+    
+    try {
+      await this.gmailService.cancelScheduledMessage(accountId, messageId)
+    } catch (error) {
+      log.error('Failed to cancel scheduled message:', error)
+      throw error
+    }
+  }
+
+  async getEmailAliases(accountId: string): Promise<any[]> {
+    if (!this.isInitialized) await this.initialize()
+    
+    try {
+      return await this.gmailService.getEmailAliases(accountId)
+    } catch (error) {
+      log.error('Failed to get email aliases:', error)
+      throw error
+    }
+  }
+
+  async addEmailAlias(accountId: string, address: string, name: string): Promise<any> {
+    if (!this.isInitialized) await this.initialize()
+    
+    try {
+      return await this.gmailService.addEmailAlias(accountId, address, name)
+    } catch (error) {
+      log.error('Failed to add email alias:', error)
+      throw error
+    }
+  }
+
+  async removeEmailAlias(accountId: string, aliasAddress: string): Promise<void> {
+    if (!this.isInitialized) await this.initialize()
+    
+    try {
+      await this.gmailService.removeEmailAlias(accountId, aliasAddress)
+    } catch (error) {
+      log.error('Failed to remove email alias:', error)
+      throw error
+    }
+  }
+
+  async startIdle(accountId: string): Promise<void> {
+    if (!this.isInitialized) await this.initialize()
+    
+    try {
+      await this.gmailService.startIdle(accountId)
+    } catch (error) {
+      log.error('Failed to start IDLE sync:', error)
+      throw error
+    }
+  }
+
+  async stopIdle(accountId: string): Promise<void> {
+    if (!this.isInitialized) await this.initialize()
+    
+    try {
+      await this.gmailService.stopIdle(accountId)
+    } catch (error) {
+      log.error('Failed to stop IDLE sync:', error)
       throw error
     }
   }
@@ -517,7 +670,129 @@ export function setupMailIPC(): void {
     }
   })
 
-  log.info('Mail IPC handlers registered')
+  // New advanced features IPC handlers
+  
+  // Star/Unstar messages
+  ipcMain.handle('mail:mark-message-starred', async (_, accountId: string, messageId: string, starred: boolean) => {
+    try {
+      await mailService!.markMessageStarred(accountId, messageId, starred)
+      return true
+    } catch (error) {
+      log.error('IPC mail:mark-message-starred error:', error)
+      throw error
+    }
+  })
+
+  // Unified inbox
+  ipcMain.handle('mail:get-unified-messages', async (_, limit?: number) => {
+    try {
+      return await mailService!.getUnifiedMessages(limit)
+    } catch (error) {
+      log.error('IPC mail:get-unified-messages error:', error)
+      throw error
+    }
+  })
+
+  // Smart mailboxes
+  ipcMain.handle('mail:get-smart-mailbox-messages', async (_, criteria: string) => {
+    try {
+      return await mailService!.getSmartMailboxMessages(criteria)
+    } catch (error) {
+      log.error('IPC mail:get-smart-mailbox-messages error:', error)
+      throw error
+    }
+  })
+
+  // Message threading
+  ipcMain.handle('mail:get-message-thread', async (_, accountId: string, threadId: string) => {
+    try {
+      return await mailService!.getMessageThread(accountId, threadId)
+    } catch (error) {
+      log.error('IPC mail:get-message-thread error:', error)
+      throw error
+    }
+  })
+
+  // Email scheduling
+  ipcMain.handle('mail:schedule-message', async (_, accountId: string, message: any, scheduledDate: Date) => {
+    try {
+      return await mailService!.scheduleMessage(accountId, message, scheduledDate)
+    } catch (error) {
+      log.error('IPC mail:schedule-message error:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('mail:get-scheduled-messages', async (_, accountId: string) => {
+    try {
+      return await mailService!.getScheduledMessages(accountId)
+    } catch (error) {
+      log.error('IPC mail:get-scheduled-messages error:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('mail:cancel-scheduled-message', async (_, accountId: string, messageId: string) => {
+    try {
+      await mailService!.cancelScheduledMessage(accountId, messageId)
+      return true
+    } catch (error) {
+      log.error('IPC mail:cancel-scheduled-message error:', error)
+      throw error
+    }
+  })
+
+  // Email aliases
+  ipcMain.handle('mail:get-email-aliases', async (_, accountId: string) => {
+    try {
+      return await mailService!.getEmailAliases(accountId)
+    } catch (error) {
+      log.error('IPC mail:get-email-aliases error:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('mail:add-email-alias', async (_, accountId: string, address: string, name: string) => {
+    try {
+      return await mailService!.addEmailAlias(accountId, address, name)
+    } catch (error) {
+      log.error('IPC mail:add-email-alias error:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('mail:remove-email-alias', async (_, accountId: string, aliasAddress: string) => {
+    try {
+      await mailService!.removeEmailAlias(accountId, aliasAddress)
+      return true
+    } catch (error) {
+      log.error('IPC mail:remove-email-alias error:', error)
+      throw error
+    }
+  })
+
+  // IDLE/Push sync
+  ipcMain.handle('mail:start-idle', async (_, accountId: string) => {
+    try {
+      await mailService!.startIdle(accountId)
+      return true
+    } catch (error) {
+      log.error('IPC mail:start-idle error:', error)
+      throw error
+    }
+  })
+
+  ipcMain.handle('mail:stop-idle', async (_, accountId: string) => {
+    try {
+      await mailService!.stopIdle(accountId)
+      return true
+    } catch (error) {
+      log.error('IPC mail:stop-idle error:', error)
+      throw error
+    }
+  })
+
+  log.info('Mail IPC handlers registered (including advanced features)')
 }
 
 export async function shutdownMailService(): Promise<void> {

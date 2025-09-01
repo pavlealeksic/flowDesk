@@ -4,7 +4,7 @@
  * Primary sidebar with Mail, Calendar buttons and Workspace squares
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAppSelector, useAppDispatch } from '../../store';
 import { loadWorkspaces } from '../../store/slices/workspaceSlice';
 import CreateWorkspaceModal from '../workspace/CreateWorkspaceModal';
@@ -29,7 +29,13 @@ interface Workspace {
   name: string;
   abbreviation: string;
   color: string;
-  services: any[];
+  services: Array<{
+    id: string;
+    name: string;
+    type: string;
+    url: string;
+    isEnabled: boolean;
+  }>;
   isActive: boolean;
 }
 
@@ -50,12 +56,13 @@ export const FlowDeskLeftRail: React.FC<FlowDeskLeftRailProps> = ({
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [contextMenuWorkspace, setContextMenuWorkspace] = useState<string | null>(null);
   
-  // Get workspaces from Redux store
+  // Get workspaces from Redux store with memoization
   const workspaces = useAppSelector(state => 
-    Object.values(state.workspace?.workspaces || {})
+    Object.values(state.workspace?.workspaces || {}),
+    (left, right) => JSON.stringify(left) === JSON.stringify(right)
   ) as Workspace[];
 
-  const handleCreateWorkspace = async (workspaceData: {
+  const handleCreateWorkspace = useCallback(async (workspaceData: {
     name: string;
     icon: string;
     color: string;
@@ -81,15 +88,15 @@ export const FlowDeskLeftRail: React.FC<FlowDeskLeftRailProps> = ({
       console.error('Failed to create workspace:', error);
       throw error;
     }
-  };
+  }, [dispatch, onWorkspaceSelect, onViewSelect]);
 
-  const handleEditWorkspace = (workspaceId: string) => {
+  const handleEditWorkspace = useCallback((workspaceId: string) => {
     // TODO: Implement edit workspace modal
     console.log('Edit workspace:', workspaceId);
     setContextMenuWorkspace(null);
-  };
+  }, []);
 
-  const handleDeleteWorkspace = async (workspaceId: string) => {
+  const handleDeleteWorkspace = useCallback(async (workspaceId: string) => {
     try {
       await window.flowDesk.workspace.delete(workspaceId);
       dispatch(loadWorkspaces());
@@ -97,13 +104,13 @@ export const FlowDeskLeftRail: React.FC<FlowDeskLeftRailProps> = ({
     } catch (error) {
       console.error('Failed to delete workspace:', error);
     }
-  };
+  }, [dispatch]);
 
-  const handleWorkspaceSettings = (workspaceId: string) => {
+  const handleWorkspaceSettings = useCallback((workspaceId: string) => {
     // TODO: Implement workspace settings
     console.log('Workspace settings:', workspaceId);
     setContextMenuWorkspace(null);
-  };
+  }, []);
 
   // Close context menu when clicking outside
   useEffect(() => {

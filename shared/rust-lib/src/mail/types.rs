@@ -538,6 +538,14 @@ pub struct BulkOperationError {
     pub error: String,
 }
 
+/// Bulk operation item result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BulkOperationItemResult {
+    pub message_id: Uuid,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
 // Default implementations
 impl Default for EmailFlags {
     fn default() -> Self {
@@ -611,3 +619,71 @@ impl Default for SignatureUsage {
         }
     }
 }
+/// OAuth2 tokens for authentication
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OAuthTokens {
+    pub access_token: String,
+    pub refresh_token: Option<String>,
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+/// IMAP configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImapConfig {
+    pub server: String,
+    pub port: u16,
+    pub use_tls: bool,
+    pub username: String,
+    pub password: Option<String>,
+}
+
+/// SMTP configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SmtpConfig {
+    pub server: String,
+    pub port: u16,
+    pub use_tls: bool,
+    pub username: String,
+    pub password: Option<String>,
+}
+
+/// New message for sending
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewMessage {
+    pub to: Vec<String>,
+    pub cc: Vec<String>,
+    pub bcc: Vec<String>,
+    pub subject: String,
+    pub body_text: Option<String>,
+    pub body_html: Option<String>,
+    pub attachments: Vec<String>, // File paths
+}
+
+/// Message flags for operations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MessageFlags {
+    pub is_seen: bool,
+    pub is_answered: bool,
+    pub is_flagged: bool,
+    pub is_deleted: bool,
+    pub is_draft: bool,
+    pub is_recent: bool,
+}
+
+impl Default for MessageFlags {
+    fn default() -> Self {
+        Self {
+            is_seen: false,
+            is_answered: false,
+            is_flagged: false,
+            is_deleted: false,
+            is_draft: false,
+            is_recent: false,
+        }
+    }
+}
+
+// Type aliases for compatibility
+pub type MailMessage = EmailMessage;
+pub type MailAttachment = EmailAttachment;
+pub type FolderType = MailFolderType;

@@ -400,10 +400,10 @@ export declare const FlowDeskErrorSchema: z.ZodObject<{
     maxRetries: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
     code: string;
-    timestamp: Date;
     message: string;
-    category: "unknown" | "security" | "validation" | "billing" | "license" | "network" | "plugin" | "authentication" | "authorization" | "not_found" | "conflict" | "rate_limit" | "external" | "internal" | "timeout" | "sync" | "quota" | "maintenance";
-    severity: "low" | "high" | "medium" | "critical";
+    category: "unknown" | "validation" | "authentication" | "authorization" | "not_found" | "conflict" | "rate_limit" | "external" | "internal" | "network" | "timeout" | "sync" | "plugin" | "billing" | "license" | "security" | "quota" | "maintenance";
+    severity: "low" | "high" | "critical" | "medium";
+    timestamp: Date;
     retryable: boolean;
     description?: string | undefined;
     context?: Record<string, any> | undefined;
@@ -415,10 +415,10 @@ export declare const FlowDeskErrorSchema: z.ZodObject<{
     maxRetries?: number | undefined;
 }, {
     code: string;
-    timestamp: Date;
     message: string;
-    category: "unknown" | "security" | "validation" | "billing" | "license" | "network" | "plugin" | "authentication" | "authorization" | "not_found" | "conflict" | "rate_limit" | "external" | "internal" | "timeout" | "sync" | "quota" | "maintenance";
-    severity: "low" | "high" | "medium" | "critical";
+    category: "unknown" | "validation" | "authentication" | "authorization" | "not_found" | "conflict" | "rate_limit" | "external" | "internal" | "network" | "timeout" | "sync" | "plugin" | "billing" | "license" | "security" | "quota" | "maintenance";
+    severity: "low" | "high" | "critical" | "medium";
+    timestamp: Date;
     retryable: boolean;
     description?: string | undefined;
     context?: Record<string, any> | undefined;
@@ -448,7 +448,7 @@ export type AsyncResult<T> = Promise<Result<T, FlowDeskError>>;
 /**
  * Wrap async function to return Result instead of throwing
  */
-export declare function wrapAsync<T>(fn: () => Promise<T>): AsyncResult<T>;
+export declare function wrapAsync<T>(fn: () => Promise<T>): Promise<Result<T, FlowDeskError>>;
 /**
  * Retry wrapper with exponential backoff
  */

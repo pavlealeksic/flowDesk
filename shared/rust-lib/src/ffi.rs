@@ -7,15 +7,15 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int};
 use std::ptr;
 
-use crate::{crypto, mail_simple, calendar_clean, search_simple};
+use crate::{crypto, mail, calendar, search};
 use std::sync::Mutex;
 use std::collections::HashMap;
 use once_cell::sync::Lazy;
 
 // Global state to manage instances
-static SEARCH_ENGINES: Lazy<Mutex<HashMap<usize, search_simple::SearchEngine>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-static MAIL_ENGINES: Lazy<Mutex<HashMap<usize, mail_simple::MailEngine>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-static CALENDAR_ENGINES: Lazy<Mutex<HashMap<usize, calendar_clean::CalendarEngine>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static SEARCH_ENGINES: Lazy<Mutex<HashMap<usize, search::SearchEngine>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static MAIL_ENGINES: Lazy<Mutex<HashMap<usize, mail::MailEngine>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static CALENDAR_ENGINES: Lazy<Mutex<HashMap<usize, calendar::CalendarEngine>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 static NEXT_HANDLE: Lazy<Mutex<usize>> = Lazy::new(|| Mutex::new(1));
 
 fn get_next_handle() -> usize {
@@ -164,7 +164,11 @@ pub extern "C" fn flow_desk_hash_password(password: *const c_char) -> *mut c_cha
 // Search functions
 #[no_mangle]
 pub extern "C" fn flow_desk_search_create() -> usize {
-    let engine = search_simple::SearchEngine::new();
+    let data_dir = dirs::data_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("FlowDesk")
+        .join("search_index");
+    let engine = search::SearchEngine::new(data_dir.to_string_lossy().as_ref()).unwrap();
     let handle = get_next_handle();
     
     let mut engines = SEARCH_ENGINES.lock().unwrap();
@@ -327,7 +331,7 @@ pub extern "C" fn flow_desk_mail_add_account(
         }
     };
 
-    let account = mail_simple::MailAccount {
+    let account = mail::MailAccount {
         id: account_id_str.to_string(),
         email: email_str.to_string(),
         provider: provider_str.to_string(),
@@ -352,7 +356,7 @@ pub extern "C" fn flow_desk_mail_add_account(
 // Calendar functions
 #[no_mangle]
 pub extern "C" fn flow_desk_calendar_create_engine() -> usize {
-    let engine = calendar_clean::CalendarEngine::new();
+    let engine = calendar::CalendarEngine::new();
     let handle = get_next_handle();
     
     let mut engines = CALENDAR_ENGINES.lock().unwrap();
@@ -406,22 +410,23 @@ pub extern "C" fn flow_desk_calendar_add_account(
         }
     };
 
-    let account = calendar_clean::CalendarAccount {
+    let account = calendar::CalendarAccount {
         id: account_id_str.to_string(),
         email: email_str.to_string(),
         provider: provider_str.to_string(),
         display_name: display_name_str.to_string(),
         is_enabled: true,
-        server_config: calendar_clean::CalDAVConfig {
+        server_config: calendar::CalDavConfig {
             host: "example.com".to_string(),
             port: 443,
             use_ssl: true,
             base_path: "/caldav".to_string(),
         },
-        auth_config: calendar_clean::CalendarAuthConfig::Basic {
+        auth_config: calendar::CalendarAccountConfig::CalDAV(calendar::CalDavConfig {
+            server_url: "https://example.com".to_string(),
             username: email_str.to_string(),
             password: "password".to_string(),
-        },
+        }),
     };
 
     let mut engines = CALENDAR_ENGINES.lock().unwrap();

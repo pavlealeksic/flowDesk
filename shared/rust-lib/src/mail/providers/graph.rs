@@ -16,6 +16,7 @@ use crate::mail::{
 };
 use reqwest::{Client, Method, RequestBuilder};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::{
     collections::HashMap,
     sync::Arc,

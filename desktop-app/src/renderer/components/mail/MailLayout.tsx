@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useRef } from 'react'
 import { useAppSelector, useAppDispatch } from '../../store'
 import { 
   ResizableContainer,
@@ -45,6 +45,10 @@ import { ComposeModal } from './ComposeModal'
 import { MailErrorBoundary } from './MailErrorBoundary'
 import { useMailSync } from '../../hooks/useMailSync'
 import { useMailNotifications, ToastContainer } from '../../hooks/useMailNotifications'
+import EmailRulesModal from './EmailRulesModal'
+import SmartMailboxes from './SmartMailboxes'
+import UnifiedInboxView from './UnifiedInboxView'
+import ConversationView from './ConversationView'
 
 interface FolderListProps {
   folders: MailFolder[]
@@ -79,10 +83,43 @@ const FolderList: React.FC<FolderListProps> = ({
     <div className="flex flex-col h-full">
       <div className="p-4 border-b border-border">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-lg">Mail</h2>
-          <Button size="sm" leftIcon={<Plus className="h-4 w-4" />} onClick={onCompose}>
-            Compose
-          </Button>
+          <div className="flex items-center gap-3">
+            <h2 className="font-semibold text-lg">Mail</h2>
+            <div className="flex gap-1">
+              {[{mode: 'folders', label: 'Folders'}, {mode: 'unified', label: 'Unified'}, {mode: 'smart', label: 'Smart'}].map(({mode, label}) => (
+                <Button
+                  key={mode}
+                  size="sm"
+                  variant={viewMode === mode ? "default" : "ghost"}
+                  onClick={() => setViewMode(mode as any)}
+                  className="text-xs"
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button 
+              size="sm" 
+              variant="ghost"
+              onClick={() => setShowConversationView(!showConversationView)}
+              title={showConversationView ? "Show List View" : "Show Conversation View"}
+            >
+              <Users className="h-4 w-4" />
+            </Button>
+            <Button 
+              size="sm" 
+              variant="ghost"
+              onClick={() => setShowRulesModal(true)}
+              title="Email Rules"
+            >
+              <Filter className="h-4 w-4" />
+            </Button>
+            <Button size="sm" leftIcon={<Plus className="h-4 w-4" />} onClick={onCompose}>
+              Compose
+            </Button>
+          </div>
         </div>
         
         <Input
@@ -93,6 +130,17 @@ const FolderList: React.FC<FolderListProps> = ({
         />
       </div>
 
+      {/* Smart Mailboxes */}
+      <div className="p-2 border-b border-border">
+        <SmartMailboxes
+          onSelectMailbox={(mailboxId, messages) => {
+            console.log(`Selected smart mailbox: ${mailboxId} with ${messages.length} messages`)
+            // TODO: Switch view to show filtered messages
+          }}
+          selectedMailboxId={undefined}
+        />
+      </div>
+      
       <div className="flex-1 overflow-y-auto p-2">
         {isLoading ? (
           <div className="flex items-center justify-center py-4">
@@ -445,6 +493,12 @@ export const MailLayout: React.FC<MailLayoutProps> = ({
   const [messageListSize, setMessageListSize] = useState(400)
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
   const [showComposeModal, setShowComposeModal] = useState(false)
+  const [showRulesModal, setShowRulesModal] = useState(false)
+  const [viewMode, setViewMode] = useState<'folders' | 'unified' | 'smart'>('folders')
+  const [showConversationView, setShowConversationView] = useState(false)
+  const [currentThread, setCurrentThread] = useState<any>(null)
+  const [containerHeight, setContainerHeight] = useState(600)
+  const messageListRef = useRef<HTMLDivElement>(null)
   const [composeContext, setComposeContext] = useState<{
     replyTo?: EmailMessage
     replyType?: 'reply' | 'reply-all' | 'forward'
@@ -511,6 +565,23 @@ export const MailLayout: React.FC<MailLayoutProps> = ({
   const handleMessageListResize = useCallback((size: number) => {
     setMessageListSize(size)
   }, [])
+
+  // Calculate container height for unified inbox
+  useEffect(() => {
+    const updateHeight = () => {
+      if (messageListRef.current) {
+        const rect = messageListRef.current.getBoundingClientRect()
+        setContainerHeight(rect.height || 600)
+      }
+    }
+
+    updateHeight()
+    window.addEventListener('resize', updateHeight)
+    
+    return () => {
+      window.removeEventListener('resize', updateHeight)
+    }
+  }, [messageListSize])
 
   const handleFolderSelect = useCallback((folderId: string) => {
     dispatch(setCurrentFolder(folderId))
@@ -645,27 +716,64 @@ export const MailLayout: React.FC<MailLayoutProps> = ({
           onResize={handleMessageListResize}
           className="bg-background border-r border-border"
         >
-          <MessageList
-            messages={messages}
-            selectedMessageId={selectedMessageId}
-            onMessageSelect={handleMessageSelect}
-            currentFolder="inbox"
-            isLoading={isLoading}
-            onRefresh={handleRefresh}
-          />
+          <div ref={messageListRef} className="h-full">
+            {viewMode === 'unified' ? (
+              <UnifiedInboxView
+                onMessageSelect={handleMessageSelect}
+                selectedMessageId={selectedMessageId}
+                height={containerHeight}
+                className="h-full"
+              />
+            ) : (
+              <MessageList
+                messages={messages}
+                selectedMessageId={selectedMessageId}
+                onMessageSelect={handleMessageSelect}
+                currentFolder="inbox"
+                isLoading={isLoading}
+                onRefresh={handleRefresh}
+              />
+            )}
+          </div>
         </ResizablePanel>
 
         {/* Message View Panel */}
         <div className="flex-1 bg-background">
-          <MessageView
-            message={selectedMessage}
-            onReply={handleReply}
-            onReplyAll={handleReplyAll}
-            onForward={handleForward}
-            onDelete={() => console.log('Delete')}
-            onArchive={() => console.log('Archive')}
-            onMarkRead={handleMarkRead}
-          />
+          {showConversationView && selectedMessage ? (
+            <ConversationView
+              thread={{
+                id: selectedMessage.id,
+                subject: selectedMessage.subject,
+                participants: [selectedMessage.from, ...selectedMessage.to],
+                messages: [selectedMessage], // In real implementation, would group related messages
+                unreadCount: selectedMessage.flags?.isRead ? 0 : 1,
+                lastMessageDate: selectedMessage.date,
+                hasAttachments: selectedMessage.flags?.hasAttachments || false,
+                isStarred: selectedMessage.flags?.isStarred || false
+              }}
+              onReply={(messageId) => handleReply()}
+              onReplyAll={(messageId) => handleReplyAll()}
+              onForward={(messageId) => handleForward()}
+              onArchive={() => console.log('Archive')}
+              onDelete={() => console.log('Delete')}
+              onToggleStar={() => console.log('Toggle star')}
+              onMarkRead={(messageId, isRead) => handleMarkRead()}
+              onDownloadAttachment={(attachment) => {
+                // Handle attachment download
+                console.log('Download attachment:', attachment)
+              }}
+            />
+          ) : (
+            <MessageView
+              message={selectedMessage}
+              onReply={handleReply}
+              onReplyAll={handleReplyAll}
+              onForward={handleForward}
+              onDelete={() => console.log('Delete')}
+              onArchive={() => console.log('Archive')}
+              onMarkRead={handleMarkRead}
+            />
+          )}
         </div>
         </ResizableContainer>
       </div>
@@ -692,6 +800,12 @@ export const MailLayout: React.FC<MailLayoutProps> = ({
       <ToastContainer
         notifications={notifications}
         onRemove={removeNotification}
+      />
+      
+      {/* Email Rules Modal */}
+      <EmailRulesModal
+        isOpen={showRulesModal}
+        onClose={() => setShowRulesModal(false)}
       />
     </MailErrorBoundary>
   )

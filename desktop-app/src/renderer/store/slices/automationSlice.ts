@@ -2,18 +2,18 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 
 interface AutomationTrigger {
   type: string
-  config: Record<string, any>
+  config: Record<string, unknown>
 }
 
 interface AutomationCondition {
   type: string
-  config: Record<string, any>
+  config: Record<string, unknown>
   negate: boolean
 }
 
 interface AutomationAction {
   type: string
-  config: Record<string, any>
+  config: Record<string, unknown>
   continueOnError: boolean
 }
 
@@ -47,8 +47,8 @@ interface AutomationExecution {
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
   startedAt: number
   completedAt?: number
-  context: Record<string, any>
-  result?: any
+  context: Record<string, unknown>
+  result?: unknown
   error?: string
   logs: Array<{
     timestamp: number

@@ -29,17 +29,24 @@ pub mod integration;
 #[cfg(feature = "napi")]
 pub mod napi;
 
-pub use engine::*;
-pub use index::*;
-pub use query::*;
-pub use providers::*;
-pub use analytics::*;
-pub use error::*;
-pub use types::*;
-pub use performance::*;
-pub use indexing::*;
-pub use advanced_query::*;
-pub use integration::*;
+// Re-export core types
+pub use engine::SearchEngine;
+pub use error::{SearchError, SearchResult, ErrorContext, SearchErrorContext};
+pub use types::{
+    SearchQuery, SearchResponse, ContentType, SearchDocument, SearchFacet, 
+    ProviderResponse, ProviderType, SearchFilter, SortOrder, QueryPerformanceBreakdown,
+    SearchResult as SearchResultStruct, DocumentMetadata, SearchHighlight,
+    FacetValue, FacetType, SearchDebugInfo, ParsingInfo, ExecutionInfo,
+    SearchOptions, LocationInfo, FilterOperator, JobStatus,
+    IndexingInfo, IndexType, IndexingJobType
+};
+pub use providers::{SearchProvider, ProviderFactory, ProviderManager};
+pub use analytics::{SearchAnalytics, AnalyticsManager};
+pub use index::IndexManager;
+pub use indexing::{IndexingJob, RealTimeIndexManager, IndexingStats, IndexingConfig};
+pub use query::QueryProcessor;
+pub use advanced_query::{QueryExpression, AdvancedFilters, AdvancedQueryBuilder};
+pub use performance::{PerformanceMonitor, PerformanceTargets, PerformanceMetrics};
 
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};

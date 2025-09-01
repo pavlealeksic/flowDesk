@@ -8,22 +8,17 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use base64::{engine::general_purpose, Engine as _};
 
-use crate::mail_simple::{MailEngine, MailAccount, MailMessage, MailSyncStatus};
-use crate::calendar_simple::{CalendarEngine, CalendarAccount, Calendar, CalendarEvent, CalendarSyncStatus};
-use crate::search_simple::SearchEngine;
+use crate::mail::{MailEngine, MailAccount, MailMessage};
+use crate::calendar::{CalendarEngine, CalendarAccount, Calendar, CalendarEvent};
+use crate::search::{SearchEngine, SearchResult, ContentType};
 use crate::crypto::{encrypt_data, decrypt_data, generate_key_pair};
 
-/// Shared mail engine instance
-static MAIL_ENGINE: once_cell::sync::Lazy<Arc<Mutex<MailEngine>>> =
-    once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(MailEngine::new())));
+/// Shared engine instances will be initialized on demand
+use once_cell::sync::OnceCell;
 
-/// Shared calendar engine instance  
-static CALENDAR_ENGINE: once_cell::sync::Lazy<Arc<Mutex<CalendarEngine>>> =
-    once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(CalendarEngine::new())));
-
-/// Shared search engine instance
-static SEARCH_ENGINE: once_cell::sync::Lazy<Arc<Mutex<SearchEngine>>> =
-    once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(SearchEngine::new())));
+static MAIL_ENGINE: OnceCell<Arc<Mutex<MailEngine>>> = OnceCell::new();
+static CALENDAR_ENGINE: OnceCell<Arc<Mutex<CalendarEngine>>> = OnceCell::new();  
+static SEARCH_ENGINE: OnceCell<Arc<Mutex<SearchEngine>>> = OnceCell::new();
 
 // ============================================================================
 // Mail Engine NAPI Bindings

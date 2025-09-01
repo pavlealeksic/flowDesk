@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Provider } from 'react-redux'
 import { store } from './store'
 import { useAppDispatch, useAppSelector } from './store'
@@ -17,6 +17,8 @@ import FlowDeskLeftRail from './components/layout/FlowDeskLeftRail'
 import ServicesSidebar from './components/layout/ServicesSidebar'
 import AddServiceModal from './components/workspace/AddServiceModal'
 import EditServiceModal from './components/workspace/EditServiceModal'
+import { useMemoryCleanup } from './hooks/useMemoryCleanup'
+import type { Workspace } from '../types/preload'
 import './App.css'
 
 type AppView = 'mail' | 'calendar' | 'workspace'
@@ -29,17 +31,30 @@ function AppContent() {
   const [activeView, setActiveView] = useState<AppView>('mail')
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>('')
   
-  // Get workspaces data for ServicesSidebar (after state is initialized)
+  // Memoize workspaces data to prevent unnecessary re-renders
   const workspaces = useAppSelector(state => 
-    Object.values(state.workspace?.workspaces || {})
-  ) as any[]
-  const currentWorkspace = workspaces.find(w => w.id === activeWorkspaceId)
+    Object.values(state.workspace?.workspaces || {}), 
+    (left, right) => JSON.stringify(left) === JSON.stringify(right)
+  ) as Workspace[]
+  
+  const currentWorkspace = useMemo(() => 
+    workspaces.find(w => w.id === activeWorkspaceId), 
+    [workspaces, activeWorkspaceId]
+  )
+  
   const [activeServiceId, setActiveServiceId] = useState<string | undefined>()
   const [showSearchOverlay, setShowSearchOverlay] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [showAddServiceModal, setShowAddServiceModal] = useState(false)
   const [showEditServiceModal, setShowEditServiceModal] = useState(false)
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null)
+
+  // Memory management
+  const memoryCleanup = useMemoryCleanup({
+    maxItems: 500,
+    cleanupInterval: 30000,
+    enablePerfMonitoring: process.env.NODE_ENV === 'development'
+  })
 
   // Initialize theme and workspace data - wait for preload script
   useEffect(() => {
@@ -68,7 +83,7 @@ function AppContent() {
     dispatch(applyTheme())
   }, [theme, dispatch])
 
-  const handleAddService = async (serviceData: { name: string; type: string; url: string }) => {
+  const handleAddService = useCallback(async (serviceData: { name: string; type: string; url: string }) => {
     try {
       if (!activeWorkspaceId) {
         console.error('No active workspace selected');
@@ -89,7 +104,7 @@ function AppContent() {
     } catch (error) {
       console.error('Failed to add service:', error);
     }
-  };
+  }, [activeWorkspaceId, dispatch]);
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -127,7 +142,7 @@ function AppContent() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  const renderMainContent = () => {
+  const renderMainContent = useMemo(() => {
     switch (activeView) {
       case 'mail':
         return <MailLayout className="h-full" />
@@ -173,7 +188,7 @@ function AppContent() {
       default:
         return <MailLayout className="h-full" />
     }
-  }
+  }, [activeView, activeServiceId, currentWorkspace?.services])
 
   return (
     <div className="h-screen flex overflow-hidden bg-background text-foreground">
@@ -229,7 +244,7 @@ function AppContent() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Main App View */}
         <div className="flex-1 overflow-hidden relative">
-          {renderMainContent()}
+          {renderMainContent}
           
           {/* Plugin Panels Overlay */}
           <PluginPanels

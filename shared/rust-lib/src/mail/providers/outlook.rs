@@ -1,12 +1,16 @@
-//! Microsoft Graph/Outlook provider implementation (stub)
+//! Microsoft Graph/Outlook provider implementation
 
-use crate::mail::{error::MailResult, providers::*, types::*};
+use crate::mail::{error::MailResult, providers::MailProvider, types::*};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use uuid::Uuid;
+use reqwest::Client;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub struct OutlookProvider {
-    access_token: String,
+    access_token: Arc<Mutex<String>>,
+    client: Client,
 }
 
 impl OutlookProvider {

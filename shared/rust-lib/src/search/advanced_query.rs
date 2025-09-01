@@ -10,7 +10,7 @@ use tantivy::{
     collector::{FacetCollector, TopDocs},
     query::{BooleanQuery, TermQuery, RangeQuery, FuzzyTermQuery, PhraseQuery, Query, QueryParser},
     schema::{Field, Schema, Value, FieldType},
-    Term, TantivyDocument, DocAddress, Score,
+    Term, Document as TantivyDocument, DocAddress, Score,
 };
 use chrono::{DateTime, Utc};
 use tracing::{debug, warn, error, instrument};

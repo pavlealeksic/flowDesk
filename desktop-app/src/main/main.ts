@@ -4,10 +4,17 @@
  * Uses IMAP/SMTP for email, CalDAV for calendar, and Chrome browser instances for all other services
  */
 
-import { app, BrowserWindow, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, Notification, systemPreferences, dialog, shell } from 'electron';
 import { join } from 'path';
 import log from 'electron-log';
 import { WorkspaceManager } from './workspace';
+import { DesktopNotificationManager } from './notification-manager';
+import { MailSyncManager } from './mail-sync-manager';
+import { EmailTemplateManager } from './email-template-manager';
+import { EmailScheduler } from './email-scheduler';
+import { EmailRulesEngine } from './email-rules-engine';
+import { RealEmailService } from './real-email-service';
+import { SnippetManager } from './snippet-manager';
 
 // Import Workspace interface  
 import type { Workspace } from './workspace';
@@ -22,6 +29,13 @@ log.transports.console.level = 'info';
 class FlowDeskApp {
   private mainWindow: BrowserWindow | null = null;
   private workspaceManager: WorkspaceManager;
+  private notificationManager: DesktopNotificationManager | null = null;
+  private mailSyncManager: MailSyncManager | null = null;
+  private emailTemplateManager: EmailTemplateManager | null = null;
+  private emailScheduler: EmailScheduler | null = null;
+  private emailRulesEngine: EmailRulesEngine | null = null;
+  private realEmailService: RealEmailService | null = null;
+  private snippetManager: SnippetManager | null = null;
   private currentView: 'mail' | 'calendar' | 'workspace' = 'mail';
 
   constructor() {
@@ -30,9 +44,11 @@ class FlowDeskApp {
   }
 
   private initializeApp() {
-    app.whenReady().then(() => {
+    app.whenReady().then(async () => {
+      await this.requestNotificationPermissions();
       this.createMainWindow();
       this.setupMenu();
+      await this.initializeNotifications();
       this.setupIpcHandlers();
       this.createDefaultWorkspace();
     });
@@ -51,6 +67,12 @@ class FlowDeskApp {
 
     app.on('before-quit', async () => {
       await this.workspaceManager.cleanup();
+      if (this.notificationManager) {
+        await this.notificationManager.cleanup();
+      }
+      if (this.mailSyncManager) {
+        await this.mailSyncManager.cleanup();
+      }
     });
   }
 
@@ -63,11 +85,23 @@ class FlowDeskApp {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        preload: join(__dirname, '../preload/preload.js')
+        preload: join(__dirname, '../preload/preload.js'),
+        webSecurity: true,
+        experimentalFeatures: false,
+        offscreen: false,
+        spellcheck: false,
+        v8CacheOptions: 'code'
       },
       titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
       show: false,
-      backgroundColor: '#0a0a0a'
+      backgroundColor: '#0a0a0a',
+      frame: true,
+      transparent: false,
+      hasShadow: true,
+      resizable: true,
+      maximizable: true,
+      minimizable: true,
+      closable: true
     });
 
     // Load the renderer
@@ -89,6 +123,79 @@ class FlowDeskApp {
     });
 
     log.info('Flow Desk main window created');
+  }
+
+  private async requestNotificationPermissions() {
+    try {
+      // Check if notifications are supported
+      if (!Notification.isSupported()) {
+        log.warn('System notifications not supported on this platform');
+        return;
+      }
+
+      // Request notification permissions on macOS
+      if (process.platform === 'darwin') {
+        const granted = await systemPreferences.askForMediaAccess('microphone');
+        if (!granted) {
+          log.warn('Microphone access denied - may affect some notifications');
+        }
+      }
+
+      // Test system notification to ensure it works
+      const testNotification = new Notification({
+        title: 'Flow Desk',
+        body: 'Notifications are ready!',
+        silent: true
+      });
+      
+      testNotification.show();
+      
+      // Hide the test notification quickly
+      setTimeout(() => {
+        testNotification.close();
+      }, 1000);
+      
+      log.info('System notifications initialized and tested');
+    } catch (error) {
+      log.error('Failed to initialize system notifications:', error);
+    }
+  }
+
+  private async initializeNotifications() {
+    try {
+      this.notificationManager = new DesktopNotificationManager(this.mainWindow!);
+      await this.notificationManager.initialize();
+      log.info('Notification manager initialized');
+      
+      // Initialize mail sync manager
+      this.mailSyncManager = new MailSyncManager(this.notificationManager);
+      await this.mailSyncManager.initialize();
+      log.info('Mail sync manager initialized');
+      
+      // Initialize email template manager
+      this.emailTemplateManager = new EmailTemplateManager();
+      log.info('Email template manager initialized');
+      
+      // Initialize email scheduler
+      this.emailScheduler = new EmailScheduler();
+      await this.emailScheduler.initialize();
+      log.info('Email scheduler initialized');
+      
+      // Initialize email rules engine
+      this.emailRulesEngine = new EmailRulesEngine();
+      await this.emailRulesEngine.initialize();
+      log.info('Email rules engine initialized');
+      
+      // Initialize real email service
+      this.realEmailService = new RealEmailService();
+      log.info('Real email service initialized');
+      
+      // Initialize snippet manager
+      this.snippetManager = new SnippetManager();
+      log.info('Snippet manager initialized');
+    } catch (error) {
+      log.error('Failed to initialize notification/sync managers:', error);
+    }
   }
 
   private setupMenu() {
@@ -195,6 +302,30 @@ class FlowDeskApp {
     Menu.setApplicationMenu(menu);
   }
 
+  private getFileFilters(mimeType: string): Electron.FileFilter[] {
+    const filters: Electron.FileFilter[] = [
+      { name: 'All Files', extensions: ['*'] }
+    ];
+    
+    if (mimeType.startsWith('image/')) {
+      filters.unshift({ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'] });
+    } else if (mimeType === 'application/pdf') {
+      filters.unshift({ name: 'PDF Documents', extensions: ['pdf'] });
+    } else if (mimeType.startsWith('text/')) {
+      filters.unshift({ name: 'Text Files', extensions: ['txt', 'md', 'csv', 'log'] });
+    } else if (mimeType.includes('word')) {
+      filters.unshift({ name: 'Word Documents', extensions: ['doc', 'docx'] });
+    } else if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) {
+      filters.unshift({ name: 'Spreadsheets', extensions: ['xls', 'xlsx', 'csv'] });
+    } else if (mimeType.includes('powerpoint') || mimeType.includes('presentation')) {
+      filters.unshift({ name: 'Presentations', extensions: ['ppt', 'pptx'] });
+    } else if (mimeType.includes('zip') || mimeType.includes('archive')) {
+      filters.unshift({ name: 'Archives', extensions: ['zip', 'rar', '7z', 'tar', 'gz'] });
+    }
+    
+    return filters;
+  }
+
   private async createDefaultWorkspace() {
     // No longer create default workspaces - users create their own
     log.info('Workspace manager initialized - users will create workspaces as needed');
@@ -279,6 +410,144 @@ class FlowDeskApp {
 
     ipcMain.handle('workspace:get-predefined-services', () => {
       return this.workspaceManager.getPredefinedServices();
+    });
+
+    // Mail attachment handlers
+    ipcMain.handle('mail:download-attachment', async (_, attachmentData: { filename: string; data: string; mimeType: string }) => {
+      try {
+        const { canceled, filePath } = await dialog.showSaveDialog(this.mainWindow!, {
+          defaultPath: attachmentData.filename,
+          filters: this.getFileFilters(attachmentData.mimeType)
+        });
+        
+        if (!canceled && filePath) {
+          const fs = require('fs');
+          const buffer = Buffer.from(attachmentData.data, 'base64');
+          fs.writeFileSync(filePath, buffer);
+          
+          // Show in file manager
+          shell.showItemInFolder(filePath);
+          
+          return { success: true, path: filePath };
+        }
+        
+        return { success: false, error: 'Download cancelled' };
+      } catch (error) {
+        log.error('Failed to download attachment:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Download failed' };
+      }
+    });
+
+    // Email template handlers
+    ipcMain.handle('email-templates:get-all', async () => {
+      return this.emailTemplateManager ? await this.emailTemplateManager.getAllTemplates() : [];
+    });
+
+    ipcMain.handle('email-templates:get-by-category', async (_, category: string) => {
+      return this.emailTemplateManager ? await this.emailTemplateManager.getTemplatesByCategory(category) : [];
+    });
+
+    ipcMain.handle('email-templates:get', async (_, templateId: string) => {
+      return this.emailTemplateManager ? await this.emailTemplateManager.getTemplate(templateId) : null;
+    });
+
+    ipcMain.handle('email-templates:save', async (_, template: any) => {
+      return this.emailTemplateManager ? await this.emailTemplateManager.saveTemplate(template) : null;
+    });
+
+    ipcMain.handle('email-templates:update', async (_, templateId: string, updates: any) => {
+      return this.emailTemplateManager ? await this.emailTemplateManager.updateTemplate(templateId, updates) : false;
+    });
+
+    ipcMain.handle('email-templates:delete', async (_, templateId: string) => {
+      return this.emailTemplateManager ? await this.emailTemplateManager.deleteTemplate(templateId) : false;
+    });
+
+    ipcMain.handle('email-templates:use', async (_, templateId: string) => {
+      return this.emailTemplateManager ? await this.emailTemplateManager.useTemplate(templateId) : null;
+    });
+
+    ipcMain.handle('email-templates:search', async (_, query: string) => {
+      return this.emailTemplateManager ? await this.emailTemplateManager.searchTemplates(query) : [];
+    });
+
+    ipcMain.handle('email-templates:process-variables', async (_, template: any, variables: any) => {
+      return this.emailTemplateManager ? this.emailTemplateManager.processTemplateVariables(template, variables) : { subject: '', body: '' };
+    });
+
+    // Email scheduling handlers
+    ipcMain.handle('email-scheduler:schedule', async (_, emailData: any, scheduledTime: Date) => {
+      return this.emailScheduler ? await this.emailScheduler.scheduleEmail(emailData) : null;
+    });
+
+    ipcMain.handle('email-scheduler:cancel', async (_, emailId: string) => {
+      return this.emailScheduler ? await this.emailScheduler.cancelScheduledEmail(emailId) : false;
+    });
+
+    ipcMain.handle('email-scheduler:get-scheduled', async () => {
+      return this.emailScheduler ? await this.emailScheduler.getScheduledEmails() : [];
+    });
+
+    ipcMain.handle('email-scheduler:get-snoozed', async () => {
+      return this.emailScheduler ? await this.emailScheduler.getSnoozedEmails() : [];
+    });
+
+    ipcMain.handle('email-scheduler:snooze', async (_, messageId: string, accountId: string, snoozeUntil: Date, reason: string) => {
+      return this.emailScheduler ? await this.emailScheduler.snoozeEmail(messageId, accountId, snoozeUntil, reason) : null;
+    });
+
+    // Email rules handlers
+    ipcMain.handle('email-rules:get-all', async () => {
+      return this.emailRulesEngine ? await this.emailRulesEngine.getAllRules() : [];
+    });
+
+    ipcMain.handle('email-rules:create', async (_, ruleData: any) => {
+      return this.emailRulesEngine ? await this.emailRulesEngine.createRule(ruleData) : null;
+    });
+
+    ipcMain.handle('email-rules:update', async (_, ruleId: string, updates: any) => {
+      return this.emailRulesEngine ? await this.emailRulesEngine.updateRule(ruleId, updates) : false;
+    });
+
+    ipcMain.handle('email-rules:delete', async (_, ruleId: string) => {
+      return this.emailRulesEngine ? await this.emailRulesEngine.deleteRule(ruleId) : false;
+    });
+
+    ipcMain.handle('email-rules:get-stats', async () => {
+      return this.emailRulesEngine ? await this.emailRulesEngine.getRuleStats() : null;
+    });
+
+    // Text snippet handlers
+    ipcMain.handle('snippets:get-all', async () => {
+      return this.snippetManager ? await this.snippetManager.getAllSnippets() : [];
+    });
+
+    ipcMain.handle('snippets:get-by-category', async (_, category: string) => {
+      return this.snippetManager ? await this.snippetManager.getSnippetsByCategory(category) : [];
+    });
+
+    ipcMain.handle('snippets:save', async (_, snippet: any) => {
+      return this.snippetManager ? await this.snippetManager.saveSnippet(snippet) : null;
+    });
+
+    ipcMain.handle('snippets:update', async (_, snippetId: string, updates: any) => {
+      return this.snippetManager ? await this.snippetManager.updateSnippet(snippetId, updates) : false;
+    });
+
+    ipcMain.handle('snippets:delete', async (_, snippetId: string) => {
+      return this.snippetManager ? await this.snippetManager.deleteSnippet(snippetId) : false;
+    });
+
+    ipcMain.handle('snippets:use', async (_, snippetId: string) => {
+      return this.snippetManager ? await this.snippetManager.useSnippet(snippetId) : null;
+    });
+
+    ipcMain.handle('snippets:search', async (_, query: string) => {
+      return this.snippetManager ? await this.snippetManager.searchSnippets(query) : [];
+    });
+
+    ipcMain.handle('snippets:get-by-shortcut', async (_, shortcut: string) => {
+      return this.snippetManager ? await this.snippetManager.getSnippetsByShortcut(shortcut) : null;
     });
 
     // Additional workspace handlers for Redux slice compatibility
@@ -391,13 +660,46 @@ class FlowDeskApp {
 
     // Additional mail handlers for Redux slice compatibility
     ipcMain.handle('mail:send-message-obj', async (_, accountId: string, message: any) => {
-      log.info(`Sending message from account ${accountId}: ${message.subject}`);
-      return true; // Redux expects boolean
+      try {
+        log.info(`Sending message from account ${accountId}: ${message.subject}`);
+        
+        // Use real email service for multi-provider support
+        if (this.realEmailService) {
+          const success = await this.realEmailService.sendMessage(accountId, message);
+          return success;
+        }
+        
+        // Fallback to Rust engine for Gmail
+        const rustEngine = require('../lib/rust-engine');
+        const result = await rustEngine.sendMessage(accountId, message);
+        
+        if (result && result.success) {
+          log.info(`Email sent successfully: ${message.subject}`);
+          return true;
+        } else {
+          log.error(`Failed to send email: ${result?.error || 'Unknown error'}`);
+          return false;
+        }
+      } catch (error) {
+        log.error('Failed to send email:', error);
+        return false;
+      }
     });
 
     ipcMain.handle('mail:mark-message-read', async (_, accountId: string, messageId: string, read: boolean) => {
-      log.info(`Marking message ${messageId} as ${read ? 'read' : 'unread'}`);
-      return true; // Redux expects boolean
+      try {
+        log.info(`Marking message ${messageId} as ${read ? 'read' : 'unread'}`);
+        
+        // Use Rust engine to actually mark message
+        const rustEngine = require('../lib/rust-engine');
+        await rustEngine.markMailMessageRead(accountId, messageId, read);
+        
+        log.info(`Successfully marked message ${messageId} as ${read ? 'read' : 'unread'}`);
+        return true;
+      } catch (error) {
+        log.error('Failed to mark message:', error);
+        return false;
+      }
     });
 
     ipcMain.handle('mail:start-sync', async () => {

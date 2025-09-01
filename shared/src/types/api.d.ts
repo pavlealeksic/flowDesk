@@ -673,15 +673,8 @@ export declare const ApiResponseSchema: z.ZodObject<{
     timestamp: z.ZodDate;
     correlationId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
-    success: boolean;
     timestamp: Date;
-    error?: {
-        code: string;
-        message: string;
-        details?: any;
-    } | undefined;
-    data?: any;
-    correlationId?: string | undefined;
+    success: boolean;
     meta?: {
         version: string;
         requestId: string;
@@ -703,16 +696,16 @@ export declare const ApiResponseSchema: z.ZodObject<{
         } | undefined;
         totalCount?: number | undefined;
     } | undefined;
+    error?: {
+        code: string;
+        message: string;
+        details?: any;
+    } | undefined;
+    correlationId?: string | undefined;
+    data?: any;
 }, {
-    success: boolean;
     timestamp: Date;
-    error?: {
-        code: string;
-        message: string;
-        details?: any;
-    } | undefined;
-    data?: any;
-    correlationId?: string | undefined;
+    success: boolean;
     meta?: {
         version: string;
         requestId: string;
@@ -734,6 +727,13 @@ export declare const ApiResponseSchema: z.ZodObject<{
         } | undefined;
         totalCount?: number | undefined;
     } | undefined;
+    error?: {
+        code: string;
+        message: string;
+        details?: any;
+    } | undefined;
+    correlationId?: string | undefined;
+    data?: any;
 }>;
 export declare const ListParamsSchema: z.ZodObject<{
     page: z.ZodOptional<z.ZodNumber>;
@@ -746,11 +746,11 @@ export declare const ListParamsSchema: z.ZodObject<{
         field: z.ZodString;
         order: z.ZodEnum<["asc", "desc"]>;
     }, "strip", z.ZodTypeAny, {
-        order: "asc" | "desc";
         field: string;
+        order: "asc" | "desc";
     }, {
-        order: "asc" | "desc";
         field: string;
+        order: "asc" | "desc";
     }>, "many">>;
     filters: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
     search: z.ZodOptional<z.ZodString>;
@@ -759,13 +759,13 @@ export declare const ListParamsSchema: z.ZodObject<{
         start: z.ZodDate;
         end: z.ZodDate;
     }, "strip", z.ZodTypeAny, {
-        end: Date;
-        start: Date;
         field: string;
+        start: Date;
+        end: Date;
     }, {
-        end: Date;
-        start: Date;
         field: string;
+        start: Date;
+        end: Date;
     }>>;
     where: z.ZodOptional<z.ZodArray<z.ZodObject<{
         field: z.ZodString;
@@ -774,68 +774,68 @@ export declare const ListParamsSchema: z.ZodObject<{
         logic: z.ZodOptional<z.ZodEnum<["AND", "OR"]>>;
     }, "strip", z.ZodTypeAny, {
         field: string;
-        operator: "endsWith" | "startsWith" | "null" | "contains" | "regex" | "in" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "nin" | "exists" | "empty";
+        operator: "endsWith" | "startsWith" | "in" | "null" | "contains" | "regex" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "nin" | "exists" | "empty";
         value?: any;
-        logic?: "OR" | "AND" | undefined;
+        logic?: "AND" | "OR" | undefined;
     }, {
         field: string;
-        operator: "endsWith" | "startsWith" | "null" | "contains" | "regex" | "in" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "nin" | "exists" | "empty";
+        operator: "endsWith" | "startsWith" | "in" | "null" | "contains" | "regex" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "nin" | "exists" | "empty";
         value?: any;
-        logic?: "OR" | "AND" | undefined;
+        logic?: "AND" | "OR" | undefined;
     }>, "many">>;
     select: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     include: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     includeSoftDeleted: z.ZodOptional<z.ZodBoolean>;
 }, "strip", z.ZodTypeAny, {
-    limit?: number | undefined;
-    sort?: {
-        order: "asc" | "desc";
-        field: string;
-    }[] | undefined;
     search?: string | undefined;
+    sort?: {
+        field: string;
+        order: "asc" | "desc";
+    }[] | undefined;
     filters?: Record<string, any> | undefined;
+    limit?: number | undefined;
     page?: number | undefined;
     cursor?: string | undefined;
     offset?: number | undefined;
     sortBy?: string | undefined;
     sortOrder?: "asc" | "desc" | undefined;
     dateRange?: {
-        end: Date;
-        start: Date;
         field: string;
+        start: Date;
+        end: Date;
     } | undefined;
     where?: {
         field: string;
-        operator: "endsWith" | "startsWith" | "null" | "contains" | "regex" | "in" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "nin" | "exists" | "empty";
+        operator: "endsWith" | "startsWith" | "in" | "null" | "contains" | "regex" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "nin" | "exists" | "empty";
         value?: any;
-        logic?: "OR" | "AND" | undefined;
+        logic?: "AND" | "OR" | undefined;
     }[] | undefined;
     select?: string[] | undefined;
     include?: string[] | undefined;
     includeSoftDeleted?: boolean | undefined;
 }, {
-    limit?: number | undefined;
-    sort?: {
-        order: "asc" | "desc";
-        field: string;
-    }[] | undefined;
     search?: string | undefined;
+    sort?: {
+        field: string;
+        order: "asc" | "desc";
+    }[] | undefined;
     filters?: Record<string, any> | undefined;
+    limit?: number | undefined;
     page?: number | undefined;
     cursor?: string | undefined;
     offset?: number | undefined;
     sortBy?: string | undefined;
     sortOrder?: "asc" | "desc" | undefined;
     dateRange?: {
-        end: Date;
-        start: Date;
         field: string;
+        start: Date;
+        end: Date;
     } | undefined;
     where?: {
         field: string;
-        operator: "endsWith" | "startsWith" | "null" | "contains" | "regex" | "in" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "nin" | "exists" | "empty";
+        operator: "endsWith" | "startsWith" | "in" | "null" | "contains" | "regex" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "nin" | "exists" | "empty";
         value?: any;
-        logic?: "OR" | "AND" | undefined;
+        logic?: "AND" | "OR" | undefined;
     }[] | undefined;
     select?: string[] | undefined;
     include?: string[] | undefined;
@@ -849,29 +849,29 @@ export declare const BulkOperationParamsSchema: z.ZodObject<{
         returnResults: z.ZodOptional<z.ZodBoolean>;
         batchSize: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        batchSize?: number | undefined;
         continueOnError?: boolean | undefined;
         returnResults?: boolean | undefined;
+        batchSize?: number | undefined;
     }, {
-        batchSize?: number | undefined;
         continueOnError?: boolean | undefined;
         returnResults?: boolean | undefined;
+        batchSize?: number | undefined;
     }>>;
 }, "strip", z.ZodTypeAny, {
     operation: "delete" | "create" | "update" | "upsert";
     items: any[];
     options?: {
-        batchSize?: number | undefined;
         continueOnError?: boolean | undefined;
         returnResults?: boolean | undefined;
+        batchSize?: number | undefined;
     } | undefined;
 }, {
     operation: "delete" | "create" | "update" | "upsert";
     items: any[];
     options?: {
-        batchSize?: number | undefined;
         continueOnError?: boolean | undefined;
         returnResults?: boolean | undefined;
+        batchSize?: number | undefined;
     } | undefined;
 }>;
 /**

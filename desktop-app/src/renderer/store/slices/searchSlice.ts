@@ -1,4 +1,5 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit'
+import type { SearchDocument, SearchSuggestion, AnalyticsData } from '../../types/preload'
 
 // Declare global window interface for search API
 
@@ -8,7 +9,7 @@ interface SearchResult {
   title: string
   description?: string
   snippet?: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
   score: number
   source: string
   url?: string
@@ -19,7 +20,7 @@ interface SearchResult {
 interface SearchFilter {
   field: string
   operator: 'equals' | 'contains' | 'starts_with' | 'ends_with' | 'greater_than' | 'less_than'
-  value: any
+  value: unknown
 }
 
 interface SearchState {
@@ -105,7 +106,7 @@ export const getSearchSuggestions = createAsyncThunk(
 
 export const indexSearchDocument = createAsyncThunk(
   'search/indexDocument',
-  async (document: any, { rejectWithValue }) => {
+  async (document: SearchDocument, { rejectWithValue }) => {
     try {
       if (!window.searchAPI) {
         throw new Error('Search API not available');

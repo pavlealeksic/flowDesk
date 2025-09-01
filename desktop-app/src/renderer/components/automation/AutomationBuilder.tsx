@@ -101,8 +101,8 @@ export const AutomationBuilder: React.FC<AutomationBuilderProps> = ({
   const [activePanel, setActivePanel] = useState<'triggers' | 'actions' | 'properties' | 'test' | 'templates' | null>('triggers');
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [availableTriggers, setAvailableTriggers] = useState<any[]>([]);
-  const [availableActions, setAvailableActions] = useState<any[]>([]);
+  const [availableTriggers, setAvailableTriggers] = useState<Array<{ type: string; name: string; description: string; schema: Record<string, unknown> }>>([]);
+  const [availableActions, setAvailableActions] = useState<Array<{ type: string; name: string; description: string; schema: Record<string, unknown> }>>([]);
 
   // Load available triggers and actions on mount
   useEffect(() => {
@@ -410,7 +410,7 @@ export const AutomationBuilder: React.FC<AutomationBuilderProps> = ({
 
   const buildActionSequence = (actionNodes: Node[], edges: Edge[]) => {
     // Build the sequence of actions based on the edge connections
-    const actions: any[] = [];
+    const actions: Array<{ type: string; id: string; config: Record<string, unknown>; description?: string }> = [];
     
     // Start from trigger and follow the edges
     let currentNodeId = 'trigger';

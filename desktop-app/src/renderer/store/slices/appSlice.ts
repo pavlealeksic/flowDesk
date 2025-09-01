@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
+import type { AppSettings } from '../../types/preload'
 // FlowDeskAPI type is defined globally in preload script
 
 interface SystemInfo {
@@ -15,7 +16,7 @@ interface AppState {
   isLoading: boolean
   error: string | null
   systemInfo: SystemInfo | null
-  settings: Record<string, any>
+  settings: Partial<AppSettings>
   windowFocused: boolean
   onlineStatus: boolean
   keyboardShortcuts: Record<string, string>
@@ -26,7 +27,7 @@ interface AppState {
     downloading: boolean
     downloadProgress: number
     downloaded: boolean
-    info: any | null
+    info: Record<string, unknown> | null
   }
 }
 
@@ -65,7 +66,7 @@ export const initializeApp = createAsyncThunk(
 
 export const updateSetting = createAsyncThunk(
   'app/updateSetting',
-  async ({ key, value }: { key: string; value: any }) => {
+  async ({ key, value }: { key: string; value: unknown }) => {
     const success = await window.flowDesk.settings.set(key, value)
     if (!success) {
       throw new Error(`Failed to update setting: ${key}`)

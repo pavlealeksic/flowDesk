@@ -19,7 +19,7 @@ pub mod utils;
 pub use client::ImapClient;
 pub use connection::{ImapConnection, ImapConnectionPool};
 
-use crate::mail::{error::MailResult, providers::*, types::*};
+use crate::mail::{error::MailResult, providers::{MailProvider, ProviderCapabilities}, types::*};
 use async_trait::async_trait;
 use std::{sync::Arc, collections::HashMap, time::Duration};
 use tokio::sync::{RwLock, Mutex};

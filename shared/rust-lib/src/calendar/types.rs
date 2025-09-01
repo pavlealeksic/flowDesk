@@ -5,359 +5,354 @@
  * calendar-specific type definitions and utilities.
  */
 
-// Re-export main types from shared module
-pub use crate::types::{
-    CalendarAccount, CalendarEvent, Calendar, CalendarProvider,
-    CreateCalendarEventInput, UpdateCalendarEventInput,
-    CreateCalendarAccountInput, UpdateCalendarAccountInput,
-    CalendarPrivacySync, FreeBusyQuery, FreeBusyResponse, FreeBusySlot, FreeBusyStatus,
-    EventAttendee, EventParticipant, AttendeeResponseStatus, EventStatus,
-    EventVisibility, EventTransparency, EventLocation, ConferencingInfo,
-    ConferencingSolution, EventAttachment, EventReminder, ReminderMethod,
-    RecurrenceRule, RecurrenceFrequency, WeekDay, MeetingProposal,
-    CalendarAccessLevel, CalendarType, CalendarAccountStatus,
-    CalendarAccountConfig, GoogleCalendarConfig, OutlookCalendarConfig,
-    ExchangeCalendarConfig, CalDavConfig, CalendarAccountCredentials,
-    CalendarSyncStatus
-};
-
-use serde::{Deserialize, Serialize};
+// Calendar core types - defined locally for now
+use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// Additional calendar-specific types not in the main types module
-
-/// Privacy settings for privacy sync
+/// Calendar account representation
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PrivacySettings {
-    /// Default title for copied events
-    pub default_title: String,
-    /// Title template with allowed tokens
-    pub title_template: Option<String>,
-    /// Strip description
-    pub strip_description: bool,
-    /// Strip location
-    pub strip_location: bool,
-    /// Strip attendees
-    pub strip_attendees: bool,
-    /// Strip attachments
-    pub strip_attachments: bool,
-    /// Visibility setting for copied events
+pub struct CalendarAccount {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub name: String,
+    pub provider: CalendarProvider,
+    pub status: CalendarAccountStatus,
+    pub config: CalendarAccountConfig,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Calendar provider types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CalendarProvider {
+    Google,
+    Outlook,
+    Exchange,
+    CalDAV,
+    ICloud,
+}
+
+/// Calendar account status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CalendarAccountStatus {
+    Active,
+    Error,
+    Disabled,
+}
+
+/// Calendar account configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CalendarAccountConfig {
+    Google(GoogleCalendarConfig),
+    Outlook(OutlookCalendarConfig),
+    Exchange(ExchangeCalendarConfig),
+    CalDAV(CalDavConfig),
+}
+
+/// Google calendar configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GoogleCalendarConfig {
+    pub client_id: String,
+    pub access_token: String,
+    pub refresh_token: Option<String>,
+}
+
+/// Outlook calendar configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OutlookCalendarConfig {
+    pub client_id: String,
+    pub access_token: String,
+    pub refresh_token: Option<String>,
+}
+
+/// Exchange calendar configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExchangeCalendarConfig {
+    pub server_url: String,
+    pub username: String,
+    pub password: String,
+}
+
+/// CalDAV configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CalDavConfig {
+    pub server_url: String,
+    pub username: String,
+    pub password: String,
+}
+
+/// Calendar representation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Calendar {
+    pub id: String,
+    pub account_id: Uuid,
+    pub name: String,
+    pub color: Option<String>,
+    pub is_primary: bool,
+    pub access_level: CalendarAccessLevel,
+}
+
+/// Calendar access levels
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CalendarAccessLevel {
+    Owner,
+    Read,
+    Write,
+}
+
+/// Calendar event representation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CalendarEvent {
+    pub id: String,
+    pub calendar_id: String,
+    pub account_id: Uuid,
+    pub title: String,
+    pub description: Option<String>,
+    pub start_time: DateTime<Utc>,
+    pub end_time: DateTime<Utc>,
+    pub all_day: bool,
+    pub location: Option<String>,
+    pub attendees: Vec<EventAttendee>,
+    pub status: EventStatus,
     pub visibility: EventVisibility,
 }
 
-/// Privacy sync filters
+/// Event attendee
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PrivacyFilters {
-    /// Only sync work hours
-    pub work_hours_only: bool,
-    /// Exclude all-day events
-    pub exclude_all_day: bool,
-    /// Minimum duration in minutes
-    pub min_duration_minutes: Option<u32>,
-    /// Only specific event colors
-    pub include_colors: Option<Vec<String>>,
-    /// Exclude specific event colors
-    pub exclude_colors: Option<Vec<String>>,
+pub struct EventAttendee {
+    pub email: String,
+    pub name: Option<String>,
+    pub response_status: AttendeeResponseStatus,
 }
 
-/// Sync status types
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Attendee response status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum AttendeeResponseStatus {
+    Accepted,
+    Declined,
+    Tentative,
+    NeedsAction,
+}
+
+/// Event status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum EventStatus {
+    Confirmed,
+    Tentative,
+    Cancelled,
+}
+
+/// Event visibility
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum EventVisibility {
+    Default,
+    Public,
+    Private,
+    Confidential,
+}
+
+/// Sync status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CalendarSyncStatus {
+    pub last_sync_at: Option<DateTime<Utc>>,
+    pub is_syncing: bool,
+    pub error: Option<String>,
+}
+
+/// Privacy sync for calendar
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CalendarPrivacySync {
+    pub enabled: bool,
+    pub source_calendar_id: String,
+    pub target_calendar_id: String,
+}
+
+/// Free/busy slot
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FreeBusySlot {
+    pub start_time: DateTime<Utc>,
+    pub end_time: DateTime<Utc>,
+    pub status: FreeBusyStatus,
+}
+
+/// Free/busy status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum FreeBusyStatus {
+    Free,
+    Busy,
+    Tentative,
+}
+
+/// Conferencing info
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConferencingInfo {
+    pub platform: String,
+    pub url: Option<String>,
+    pub phone: Option<String>,
+    pub access_code: Option<String>,
+}
+
+/// Event attachment
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventAttachment {
+    pub id: String,
+    pub filename: String,
+    pub mime_type: String,
+    pub url: Option<String>,
+}
+
+/// Event reminder
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventReminder {
+    pub minutes_before: i32,
+    pub method: ReminderMethod,
+}
+
+/// Reminder method
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ReminderMethod {
+    Email,
+    Popup,
+    SMS,
+}
+
+/// Recurrence rule
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecurrenceRule {
+    pub frequency: RecurrenceFrequency,
+    pub interval: i32,
+    pub count: Option<i32>,
+    pub until: Option<DateTime<Utc>>,
+}
+
+/// Recurrence frequency
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum RecurrenceFrequency {
+    Daily,
+    Weekly,
+    Monthly,
+    Yearly,
+}
+
+/// Input types for API
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateCalendarEventInput {
+    pub title: String,
+    pub description: Option<String>,
+    pub start_time: DateTime<Utc>,
+    pub end_time: DateTime<Utc>,
+    pub all_day: bool,
+    pub location: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateCalendarEventInput {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub start_time: Option<DateTime<Utc>>,
+    pub end_time: Option<DateTime<Utc>>,
+    pub location: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateCalendarAccountInput {
+    pub name: String,
+    pub provider: CalendarProvider,
+    pub config: CalendarAccountConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateCalendarAccountInput {
+    pub name: Option<String>,
+    pub config: Option<CalendarAccountConfig>,
+}
+
+/// Calendar type
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CalendarType {
+    Primary,
+    Secondary,
+    Shared,
+}
+
+/// Calendar account credentials
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CalendarAccountCredentials {
+    pub access_token: String,
+    pub refresh_token: Option<String>,
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+/// Free/busy query
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FreeBusyQuery {
+    pub start_time: DateTime<Utc>,
+    pub end_time: DateTime<Utc>,
+    pub calendar_ids: Vec<String>,
+}
+
+/// Free/busy response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FreeBusyResponse {
+    pub calendar_id: String,
+    pub busy_slots: Vec<FreeBusySlot>,
+}
+
+/// Meeting proposal
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MeetingProposal {
+    pub title: String,
+    pub duration_minutes: i32,
+    pub attendees: Vec<String>,
+    pub suggested_times: Vec<DateTime<Utc>>,
+}
+
+/// Calendar database type alias
+pub type CalendarDatabase = crate::calendar::database::CalendarDatabase;
+
+/// Event transparency (for free/busy)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum EventTransparency {
+    Opaque,
+    Transparent,
+}
+
+/// Event participant (alias for attendee)
+pub type EventParticipant = EventAttendee;
+
+/// Event location details
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventLocation {
+    pub name: String,
+    pub address: Option<String>,
+    pub coordinates: Option<(f64, f64)>,
+}
+
+/// Conferencing solution details
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConferencingSolution {
+    pub platform: String,
+    pub url: String,
+    pub access_code: Option<String>,
+    pub phone_numbers: Vec<String>,
+}
+
+/// Sync status type
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SyncStatusType {
     Idle,
     Syncing,
     Error,
-    Paused,
-}
-
-/// Sync operation details
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SyncOperation {
-    /// Type of sync operation
-    pub type_: String,
-    /// Calendar being synced (if applicable)
-    pub calendar_id: Option<String>,
-    /// Progress percentage (0-100)
-    pub progress: u8,
-    /// Start time of operation
-    pub started_at: DateTime<Utc>,
+    Completed,
 }
 
 /// Sync statistics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncStats {
-    /// Total events processed
-    pub total_events: u64,
-    /// New events created
-    pub new_events: u64,
-    /// Events updated
-    pub updated_events: u64,
-    /// Events deleted
-    pub deleted_events: u64,
-    /// Sync errors encountered
-    pub sync_errors: u64,
+    pub events_synced: usize,
+    pub calendars_synced: usize,
+    pub last_sync_duration: Option<std::time::Duration>,
 }
 
-impl Default for SyncStats {
-    fn default() -> Self {
-        Self {
-            total_events: 0,
-            new_events: 0,
-            updated_events: 0,
-            deleted_events: 0,
-            sync_errors: 0,
-        }
-    }
-}
-
-/// Sync error details
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SyncError {
-    /// Error message
-    pub message: String,
-    /// Error code
-    pub code: String,
-    /// Error timestamp
-    pub timestamp: DateTime<Utc>,
-    /// Additional error details
-    pub details: Option<HashMap<String, serde_json::Value>>,
-}
-
-/// Default implementations for common types
-
-impl Default for CreateCalendarEventInput {
-    fn default() -> Self {
-        use chrono::Duration;
-        let now = Utc::now();
-        
-        Self {
-            calendar_id: String::new(),
-            provider_id: String::new(),
-            title: String::new(),
-            description: None,
-            location: None,
-            location_data: None,
-            start_time: now,
-            end_time: now + Duration::hours(1),
-            timezone: None,
-            is_all_day: false,
-            status: EventStatus::Confirmed,
-            visibility: EventVisibility::Default,
-            creator: None,
-            organizer: None,
-            attendees: Vec::new(),
-            recurrence: None,
-            recurring_event_id: None,
-            original_start_time: None,
-            reminders: Vec::new(),
-            conferencing: None,
-            attachments: Vec::new(),
-            extended_properties: None,
-            source: None,
-            color: None,
-            transparency: EventTransparency::Opaque,
-            uid: uuid::Uuid::new_v4().to_string(),
-        }
-    }
-}
-
-impl Default for CalendarEvent {
-    fn default() -> Self {
-        use chrono::Duration;
-        let now = Utc::now();
-        
-        Self {
-            id: uuid::Uuid::new_v4().to_string(),
-            calendar_id: String::new(),
-            provider_id: String::new(),
-            title: String::new(),
-            description: None,
-            location: None,
-            location_data: None,
-            start_time: now,
-            end_time: now + Duration::hours(1),
-            timezone: None,
-            is_all_day: false,
-            status: EventStatus::Confirmed,
-            visibility: EventVisibility::Default,
-            creator: None,
-            organizer: None,
-            attendees: Vec::new(),
-            recurrence: None,
-            recurring_event_id: None,
-            original_start_time: None,
-            reminders: Vec::new(),
-            conferencing: None,
-            attachments: Vec::new(),
-            extended_properties: None,
-            source: None,
-            color: None,
-            transparency: EventTransparency::Opaque,
-            uid: uuid::Uuid::new_v4().to_string(),
-            sequence: 0,
-            created_at: now,
-            updated_at: now,
-        }
-    }
-}
-
-/// Helper trait for string conversion of enums
-pub trait ToStringHelper {
-    fn to_string(&self) -> String;
-}
-
-impl ToStringHelper for EventStatus {
-    fn to_string(&self) -> String {
-        match self {
-            EventStatus::Confirmed => "confirmed".to_string(),
-            EventStatus::Tentative => "tentative".to_string(),
-            EventStatus::Cancelled => "cancelled".to_string(),
-        }
-    }
-}
-
-impl ToStringHelper for EventVisibility {
-    fn to_string(&self) -> String {
-        match self {
-            EventVisibility::Default => "default".to_string(),
-            EventVisibility::Public => "public".to_string(),
-            EventVisibility::Private => "private".to_string(),
-            EventVisibility::Confidential => "confidential".to_string(),
-        }
-    }
-}
-
-impl ToStringHelper for EventTransparency {
-    fn to_string(&self) -> String {
-        match self {
-            EventTransparency::Opaque => "opaque".to_string(),
-            EventTransparency::Transparent => "transparent".to_string(),
-        }
-    }
-}
-
-impl ToStringHelper for CalendarProvider {
-    fn to_string(&self) -> String {
-        match self {
-            CalendarProvider::Google => "google".to_string(),
-            CalendarProvider::Outlook => "outlook".to_string(),
-            CalendarProvider::Exchange => "exchange".to_string(),
-            CalendarProvider::CalDav => "caldav".to_string(),
-            CalendarProvider::ICloud => "icloud".to_string(),
-            CalendarProvider::Fastmail => "fastmail".to_string(),
-        }
-    }
-}
-
-impl ToStringHelper for CalendarAccessLevel {
-    fn to_string(&self) -> String {
-        match self {
-            CalendarAccessLevel::Owner => "owner".to_string(),
-            CalendarAccessLevel::Writer => "writer".to_string(),
-            CalendarAccessLevel::Reader => "reader".to_string(),
-            CalendarAccessLevel::FreeBusyReader => "freeBusyReader".to_string(),
-        }
-    }
-}
-
-impl ToStringHelper for CalendarType {
-    fn to_string(&self) -> String {
-        match self {
-            CalendarType::Primary => "primary".to_string(),
-            CalendarType::Secondary => "secondary".to_string(),
-            CalendarType::Shared => "shared".to_string(),
-            CalendarType::Public => "public".to_string(),
-            CalendarType::Resource => "resource".to_string(),
-            CalendarType::Holiday => "holiday".to_string(),
-            CalendarType::Birthdays => "birthdays".to_string(),
-        }
-    }
-}
-
-/// Utility functions for calendar operations
-
-/// Generate a unique event UID
-pub fn generate_event_uid(domain: &str) -> String {
-    format!("{}@{}", uuid::Uuid::new_v4(), domain)
-}
-
-/// Convert DateTime to RFC3339 string
-pub fn datetime_to_rfc3339(dt: DateTime<Utc>) -> String {
-    dt.to_rfc3339()
-}
-
-/// Parse RFC3339 string to DateTime
-pub fn parse_rfc3339(s: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
-    DateTime::parse_from_rfc3339(s).map(|dt| dt.with_timezone(&Utc))
-}
-
-/// Calculate event duration in minutes
-pub fn event_duration_minutes(start: DateTime<Utc>, end: DateTime<Utc>) -> i64 {
-    (end - start).num_minutes()
-}
-
-/// Check if two time ranges overlap
-pub fn time_ranges_overlap(
-    start1: DateTime<Utc>, end1: DateTime<Utc>,
-    start2: DateTime<Utc>, end2: DateTime<Utc>
-) -> bool {
-    start1 < end2 && start2 < end1
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_event_duration_calculation() {
-        let start = Utc::now();
-        let end = start + chrono::Duration::hours(2);
-        
-        assert_eq!(event_duration_minutes(start, end), 120);
-    }
-
-    #[test]
-    fn test_time_range_overlap() {
-        let base_time = Utc::now();
-        
-        // Overlapping ranges
-        let start1 = base_time;
-        let end1 = base_time + chrono::Duration::hours(2);
-        let start2 = base_time + chrono::Duration::hours(1);
-        let end2 = base_time + chrono::Duration::hours(3);
-        
-        assert!(time_ranges_overlap(start1, end1, start2, end2));
-        
-        // Non-overlapping ranges
-        let start3 = base_time + chrono::Duration::hours(3);
-        let end3 = base_time + chrono::Duration::hours(4);
-        
-        assert!(!time_ranges_overlap(start1, end1, start3, end3));
-    }
-
-    #[test]
-    fn test_enum_string_conversion() {
-        assert_eq!(EventStatus::Confirmed.to_string(), "confirmed");
-        assert_eq!(EventVisibility::Private.to_string(), "private");
-        assert_eq!(CalendarProvider::Google.to_string(), "google");
-    }
-
-    #[test]
-    fn test_event_uid_generation() {
-        let uid1 = generate_event_uid("example.com");
-        let uid2 = generate_event_uid("example.com");
-        
-        assert_ne!(uid1, uid2);
-        assert!(uid1.ends_with("@example.com"));
-        assert!(uid2.ends_with("@example.com"));
-    }
-
-    #[test]
-    fn test_default_event_creation() {
-        let event = CreateCalendarEventInput::default();
-        assert!(!event.title.is_empty() || event.title.is_empty()); // Allow empty default
-        assert_eq!(event.status, EventStatus::Confirmed);
-        assert_eq!(event.visibility, EventVisibility::Default);
-        assert_eq!(event.transparency, EventTransparency::Opaque);
-    }
-}

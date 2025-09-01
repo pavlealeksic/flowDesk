@@ -4,7 +4,7 @@
  * Secondary sidebar showing services for the selected workspace
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Button, 
   cn, 
@@ -69,7 +69,8 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
       return () => document.removeEventListener('click', handleClickOutside);
     }
   }, [contextMenuService, showWorkspaceActions]);
-  const getServiceIcon = (type: string) => {
+  
+  const getServiceIcon = useCallback((type: string) => {
     const iconMap: Record<string, string> = {
       slack: '/src/renderer/assets/service-icons/slack.svg',
       notion: '/src/renderer/assets/service-icons/notion.png',
@@ -95,7 +96,7 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
       intercom: '/src/renderer/assets/service-icons/intercom.png'
     };
     return iconMap[type] || '/src/renderer/assets/service-icons/default.svg';
-  };
+  }, []);
 
   if (!workspaceId) {
     return (

@@ -8,7 +8,11 @@ import type {
   CreateCalendarEventInput,
   UpdateCalendarEventInput,
   CalendarSyncStatus,
-  CalendarPrivacySync
+  CalendarPrivacySync,
+  MeetingProposal,
+  FreeBusySlot,
+  EventReminder,
+  ReminderMethod
 } from '@flow-desk/shared'
 
 // Declare global window interface for calendar API
@@ -183,11 +187,101 @@ export const searchCalendarEvents = createAsyncThunk(
   }
 );
 
+// Extended calendar types for comprehensive features
+interface EventTemplate {
+  id: string
+  name: string
+  title: string
+  description?: string
+  location?: string
+  duration: number // in minutes
+  reminders: EventReminder[]
+  attendees?: string[]
+  category: string
+  color?: string
+  isDefault: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+interface ConflictingEvent {
+  eventId: string
+  conflictingEventIds: string[]
+  severity: 'overlap' | 'double_booked' | 'travel_conflict'
+  resolved: boolean
+  suggestedActions: Array<{
+    type: 'move' | 'shorten' | 'decline'
+    description: string
+  }>
+}
+
+interface CalendarSettings {
+  workWeekStart: 'sunday' | 'monday'
+  timeFormat: '12h' | '24h'
+  weekendVisible: boolean
+  defaultDuration: number
+  defaultReminders: EventReminder[]
+  autoDeclineConflicts: boolean
+  showDeclinedEvents: boolean
+}
+
+interface CalendarNotification {
+  id: string
+  type: 'event_reminder' | 'meeting_invitation' | 'event_update' | 'conflict_detected'
+  title: string
+  message: string
+  eventId?: string
+  priority: 'low' | 'normal' | 'high' | 'urgent'
+  timestamp: Date
+  read: boolean
+  actionable: boolean
+  actions?: Array<{
+    type: string
+    label: string
+    handler: string
+  }>
+}
+
+interface PrintSettings {
+  layout: 'day' | 'week' | 'month' | 'agenda'
+  includeWeekends: boolean
+  colorPrint: boolean
+  showDetails: boolean
+}
+
+interface FocusTimeSlot {
+  id: string
+  title: string
+  startTime: Date
+  endTime: Date
+  calendarIds: string[]
+  blockInterruptions: boolean
+  autoDecline: boolean
+  status: 'active' | 'inactive'
+  createdAt: Date
+}
+
+interface WorkingHours {
+  monday: DayWorkingHours
+  tuesday: DayWorkingHours
+  wednesday: DayWorkingHours
+  thursday: DayWorkingHours
+  friday: DayWorkingHours
+  saturday: DayWorkingHours
+  sunday: DayWorkingHours
+}
+
+interface DayWorkingHours {
+  start: string // HH:MM format
+  end: string // HH:MM format
+  enabled: boolean
+}
+
 interface CalendarState {
   accounts: CalendarAccount[]
   calendars: Record<string, Calendar[]> // calendars by account ID
   events: Record<string, CalendarEvent[]> // events by calendar ID
-  currentView: 'day' | 'week' | 'month' | 'agenda'
+  currentView: 'day' | 'week' | 'month' | 'year' | 'agenda' | 'timeline'
   currentDate: string
   selectedEventIds: string[]
   visibleCalendars: string[]
@@ -197,6 +291,19 @@ interface CalendarState {
   privacySyncRules: CalendarPrivacySync[]
   searchQuery: string
   searchResults: CalendarEvent[]
+  eventTemplates: EventTemplate[]
+  meetingProposals: MeetingProposal[]
+  conflictingEvents: ConflictingEvent[]
+  freeBusyData: Record<string, FreeBusySlot[]>
+  selectedDateRange: { start: Date; end: Date } | null
+  calendarSettings: CalendarSettings
+  notifications: CalendarNotification[]
+  printSettings: PrintSettings
+  focusTime: FocusTimeSlot[]
+  travelTimeEnabled: boolean
+  smartSchedulingEnabled: boolean
+  workingHours: WorkingHours
+  timeZone: string
 }
 
 const initialState: CalendarState = {
@@ -212,7 +319,41 @@ const initialState: CalendarState = {
   syncStatus: {},
   privacySyncRules: [],
   searchQuery: '',
-  searchResults: []
+  searchResults: [],
+  eventTemplates: [],
+  meetingProposals: [],
+  conflictingEvents: [],
+  freeBusyData: {},
+  selectedDateRange: null,
+  calendarSettings: {
+    workWeekStart: 'monday',
+    timeFormat: '12h',
+    weekendVisible: true,
+    defaultDuration: 60,
+    defaultReminders: [{ method: 'popup', minutesBefore: 15 }],
+    autoDeclineConflicts: false,
+    showDeclinedEvents: false
+  },
+  notifications: [],
+  printSettings: {
+    layout: 'week',
+    includeWeekends: true,
+    colorPrint: true,
+    showDetails: true
+  },
+  focusTime: [],
+  travelTimeEnabled: true,
+  smartSchedulingEnabled: true,
+  workingHours: {
+    monday: { start: '09:00', end: '17:00', enabled: true },
+    tuesday: { start: '09:00', end: '17:00', enabled: true },
+    wednesday: { start: '09:00', end: '17:00', enabled: true },
+    thursday: { start: '09:00', end: '17:00', enabled: true },
+    friday: { start: '09:00', end: '17:00', enabled: true },
+    saturday: { start: '09:00', end: '17:00', enabled: false },
+    sunday: { start: '09:00', end: '17:00', enabled: false }
+  },
+  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
 }
 
 const calendarSlice = createSlice({
@@ -225,7 +366,7 @@ const calendarSlice = createSlice({
     setError: (state, action: PayloadAction<string | null>) => {
       state.error = action.payload
     },
-    setCurrentView: (state, action: PayloadAction<'day' | 'week' | 'month' | 'agenda'>) => {
+    setCurrentView: (state, action: PayloadAction<'day' | 'week' | 'month' | 'year' | 'agenda' | 'timeline'>) => {
       state.currentView = action.payload
     },
     setCurrentDate: (state, action: PayloadAction<string>) => {
@@ -313,6 +454,90 @@ const calendarSlice = createSlice({
     syncStatusUpdated: (state, action: PayloadAction<{ accountId: string; status: CalendarSyncStatus }>) => {
       const { accountId, status } = action.payload
       state.syncStatus[accountId] = status
+    },
+    // Extended calendar actions
+    setSelectedDateRange: (state, action: PayloadAction<{ start: Date; end: Date } | null>) => {
+      state.selectedDateRange = action.payload
+    },
+    setTimeZone: (state, action: PayloadAction<string>) => {
+      state.timeZone = action.payload
+    },
+    updateCalendarSettings: (state, action: PayloadAction<Partial<CalendarSettings>>) => {
+      state.calendarSettings = { ...state.calendarSettings, ...action.payload }
+    },
+    addEventTemplate: (state, action: PayloadAction<EventTemplate>) => {
+      state.eventTemplates.push(action.payload)
+    },
+    updateEventTemplate: (state, action: PayloadAction<EventTemplate>) => {
+      const index = state.eventTemplates.findIndex(t => t.id === action.payload.id)
+      if (index !== -1) {
+        state.eventTemplates[index] = action.payload
+      }
+    },
+    deleteEventTemplate: (state, action: PayloadAction<string>) => {
+      state.eventTemplates = state.eventTemplates.filter(t => t.id !== action.payload)
+    },
+    addMeetingProposal: (state, action: PayloadAction<MeetingProposal>) => {
+      state.meetingProposals.push(action.payload)
+    },
+    updateMeetingProposal: (state, action: PayloadAction<MeetingProposal>) => {
+      const index = state.meetingProposals.findIndex(p => p.id === action.payload.id)
+      if (index !== -1) {
+        state.meetingProposals[index] = action.payload
+      }
+    },
+    addConflictingEvent: (state, action: PayloadAction<ConflictingEvent>) => {
+      state.conflictingEvents.push(action.payload)
+    },
+    resolveConflict: (state, action: PayloadAction<string>) => {
+      const conflict = state.conflictingEvents.find(c => c.eventId === action.payload)
+      if (conflict) {
+        conflict.resolved = true
+      }
+    },
+    updateFreeBusyData: (state, action: PayloadAction<{ email: string; slots: FreeBusySlot[] }>) => {
+      const { email, slots } = action.payload
+      state.freeBusyData[email] = slots
+    },
+    addNotification: (state, action: PayloadAction<CalendarNotification>) => {
+      state.notifications.unshift(action.payload)
+      // Keep only last 100 notifications
+      if (state.notifications.length > 100) {
+        state.notifications = state.notifications.slice(0, 100)
+      }
+    },
+    markNotificationRead: (state, action: PayloadAction<string>) => {
+      const notification = state.notifications.find(n => n.id === action.payload)
+      if (notification) {
+        notification.read = true
+      }
+    },
+    clearNotifications: (state) => {
+      state.notifications = []
+    },
+    addFocusTime: (state, action: PayloadAction<FocusTimeSlot>) => {
+      state.focusTime.push(action.payload)
+    },
+    updateFocusTime: (state, action: PayloadAction<FocusTimeSlot>) => {
+      const index = state.focusTime.findIndex(f => f.id === action.payload.id)
+      if (index !== -1) {
+        state.focusTime[index] = action.payload
+      }
+    },
+    deleteFocusTime: (state, action: PayloadAction<string>) => {
+      state.focusTime = state.focusTime.filter(f => f.id !== action.payload)
+    },
+    toggleTravelTime: (state) => {
+      state.travelTimeEnabled = !state.travelTimeEnabled
+    },
+    toggleSmartScheduling: (state) => {
+      state.smartSchedulingEnabled = !state.smartSchedulingEnabled
+    },
+    updateWorkingHours: (state, action: PayloadAction<WorkingHours>) => {
+      state.workingHours = action.payload
+    },
+    updatePrintSettings: (state, action: PayloadAction<PrintSettings>) => {
+      state.printSettings = action.payload
     }
   },
   extraReducers: (builder) => {
@@ -504,7 +729,28 @@ export const {
   eventCreated,
   eventUpdated,
   eventDeleted,
-  syncStatusUpdated
+  syncStatusUpdated,
+  setSelectedDateRange,
+  setTimeZone,
+  updateCalendarSettings,
+  addEventTemplate,
+  updateEventTemplate,
+  deleteEventTemplate,
+  addMeetingProposal,
+  updateMeetingProposal,
+  addConflictingEvent,
+  resolveConflict,
+  updateFreeBusyData,
+  addNotification,
+  markNotificationRead,
+  clearNotifications,
+  addFocusTime,
+  updateFocusTime,
+  deleteFocusTime,
+  toggleTravelTime,
+  toggleSmartScheduling,
+  updateWorkingHours,
+  updatePrintSettings
 } = calendarSlice.actions
 
 export default calendarSlice.reducer

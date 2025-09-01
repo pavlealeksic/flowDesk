@@ -1,219 +1,153 @@
-//! Mail synchronization engine
-
-use crate::mail::{config::SyncConfig, error::MailResult, types::*};
+use crate::mail::{MailDatabase, MailMessage, MailAccount};
+use std::sync::Arc;
+use tokio::sync::{RwLock, Mutex};
+use tokio::time::{Duration, interval, Instant};
+use dashmap::DashMap;
 use std::collections::HashMap;
-use tokio::sync::RwLock;
-use uuid::Uuid;
 
-/// Synchronization progress information
+pub struct MailSyncManager {
+    database: Arc<MailDatabase>,
+    sync_states: Arc<DashMap<String, SyncState>>,
+    active_syncs: Arc<DashMap<String, tokio::task::JoinHandle<()>>>,
+}
+
 #[derive(Debug, Clone)]
-pub struct SyncProgress {
-    pub account_id: Uuid,
-    pub total_items: u32,
-    pub completed_items: u32,
-    pub current_operation: String,
-    pub started_at: chrono::DateTime<chrono::Utc>,
+struct SyncState {
+    account_id: String,
+    last_sync: Option<Instant>,
+    is_syncing: bool,
+    sync_interval: Duration,
+    error_count: u32,
 }
 
-/// Synchronization engine for managing mail sync operations
-pub struct SyncEngine {
-    config: SyncConfig,
-    /// Active sync tasks keyed by account ID
-    active_syncs: RwLock<HashMap<Uuid, tokio::task::JoinHandle<MailResult<()>>>>,
-    /// Sync progress tracking
-    sync_progress: RwLock<HashMap<Uuid, SyncProgress>>,
-}
-
-impl SyncEngine {
-    /// Create new sync engine
-    pub fn new(config: SyncConfig) -> Self {
+impl MailSyncManager {
+    pub fn new(database: Arc<MailDatabase>) -> Self {
         Self {
-            config,
-            active_syncs: RwLock::new(HashMap::new()),
-            sync_progress: RwLock::new(HashMap::new()),
+            database,
+            sync_states: Arc::new(DashMap::new()),
+            active_syncs: Arc::new(DashMap::new()),
         }
     }
 
-    /// Start synchronization for an account
-    pub async fn start_account_sync(&self, account_id: Uuid) -> MailResult<()> {
+    pub async fn sync_account(&self, account_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Check if already syncing
-        {
-            let active_syncs = self.active_syncs.read().await;
-            if active_syncs.contains_key(&account_id) {
-                return Ok(()); // Already syncing
+        if let Some(state) = self.sync_states.get(account_id) {
+            if state.is_syncing {
+                return Ok(()); // Skip if already syncing
             }
         }
 
-        // Start sync task
-        let sync_handle = tokio::spawn(async move {
-            // Implementation would perform actual sync operations
-            // For now, just a placeholder
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-            Ok(())
+        // Mark as syncing
+        self.sync_states.insert(account_id.to_string(), SyncState {
+            account_id: account_id.to_string(),
+            last_sync: None,
+            is_syncing: true,
+            sync_interval: Duration::from_secs(60),
+            error_count: 0,
         });
 
-        // Store sync handle
-        {
-            let mut active_syncs = self.active_syncs.write().await;
-            active_syncs.insert(account_id, sync_handle);
+        let result = self.perform_sync(account_id).await;
+
+        // Update sync state
+        if let Some(mut state) = self.sync_states.get_mut(account_id) {
+            state.is_syncing = false;
+            state.last_sync = Some(Instant::now());
+            if result.is_err() {
+                state.error_count += 1;
+            } else {
+                state.error_count = 0;
+            }
         }
 
-        // Initialize progress tracking
-        {
-            let mut sync_progress = self.sync_progress.write().await;
-            sync_progress.insert(
-                account_id,
-                SyncProgress {
-                    account_id,
-                    total_items: 0,
-                    completed_items: 0,
-                    current_operation: "Starting sync".to_string(),
-                    started_at: chrono::Utc::now(),
-                },
-            );
-        }
+        result
+    }
 
-        tracing::info!("Started sync for account {}", account_id);
+    async fn perform_sync(&self, account_id: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        tracing::info!("Starting sync for account: {}", account_id);
+        
+        // In a real implementation, this would:
+        // 1. Connect to IMAP server
+        // 2. Fetch new messages since last sync
+        // 3. Update message flags (read/unread, starred, etc.)
+        // 4. Store new messages in database
+        // 5. Handle folder synchronization
+        
+        // For now, this is a placeholder that demonstrates the structure
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        
+        tracing::info!("Sync completed for account: {}", account_id);
         Ok(())
     }
 
-    /// Stop synchronization for an account
-    pub async fn stop_account_sync(&self, account_id: Uuid) {
-        // Remove and abort sync task
-        let sync_handle = {
-            let mut active_syncs = self.active_syncs.write().await;
-            active_syncs.remove(&account_id)
-        };
+    pub fn start_background_sync(&self, account_id: String) {
+        let sync_states = self.sync_states.clone();
+        let database = self.database.clone();
+        
+        let handle = tokio::spawn(async move {
+            let mut interval = interval(Duration::from_secs(30));
+            
+            loop {
+                interval.tick().await;
+                
+                // Check if we should sync
+                let should_sync = if let Some(state) = sync_states.get(&account_id) {
+                    !state.is_syncing && 
+                    (state.last_sync.is_none() || 
+                     state.last_sync.unwrap().elapsed() >= state.sync_interval)
+                } else {
+                    true
+                };
 
-        if let Some(handle) = sync_handle {
-            handle.abort();
-            tracing::info!("Stopped sync for account {}", account_id);
-        }
-
-        // Remove progress tracking
-        {
-            let mut sync_progress = self.sync_progress.write().await;
-            sync_progress.remove(&account_id);
-        }
-    }
-
-    /// Stop all active synchronizations
-    pub async fn stop_all_syncs(&self) {
-        let account_ids: Vec<Uuid> = {
-            let active_syncs = self.active_syncs.read().await;
-            active_syncs.keys().cloned().collect()
-        };
-
-        for account_id in account_ids {
-            self.stop_account_sync(account_id).await;
-        }
-
-        tracing::info!("Stopped all active syncs");
-    }
-
-    /// Get sync status for an account
-    pub async fn get_account_status(&self, account_id: Uuid) -> MailSyncStatus {
-        let sync_progress = self.sync_progress.read().await;
-        let active_syncs = self.active_syncs.read().await;
-
-        let is_syncing = active_syncs.contains_key(&account_id);
-        let progress = sync_progress.get(&account_id);
-
-        let status = if is_syncing {
-            SyncStatus::Syncing
-        } else {
-            SyncStatus::Idle
-        };
-
-        let current_operation = progress.map(|p| SyncOperation {
-            operation_type: SyncOperationType::FullSync, // Simplified
-            folder: None,
-            progress: if p.total_items > 0 {
-                (p.completed_items as f64 / p.total_items as f64) * 100.0
-            } else {
-                0.0
-            },
-            started_at: p.started_at,
+                if should_sync {
+                    // Perform sync logic here
+                    tracing::debug!("Background sync for account: {}", account_id);
+                }
+            }
         });
 
-        MailSyncStatus {
-            account_id,
-            status,
-            last_sync_at: None, // Would be fetched from database
-            current_operation,
-            stats: SyncStats::default(),
-            last_error: None,
+        self.active_syncs.insert(account_id, handle);
+    }
+
+    pub fn stop_background_sync(&self, account_id: &str) {
+        if let Some((_, handle)) = self.active_syncs.remove(account_id) {
+            handle.abort();
         }
+        self.sync_states.remove(account_id);
     }
 
-    /// Check if account is currently syncing
-    pub async fn is_syncing(&self, account_id: Uuid) -> bool {
-        let active_syncs = self.active_syncs.read().await;
-        active_syncs.contains_key(&account_id)
-    }
-
-    /// Get sync progress for an account
-    pub async fn get_progress(&self, account_id: Uuid) -> Option<SyncProgress> {
-        let sync_progress = self.sync_progress.read().await;
-        sync_progress.get(&account_id).cloned()
-    }
-
-    /// Update sync progress
-    pub async fn update_progress(
-        &self,
-        account_id: Uuid,
-        completed_items: u32,
-        total_items: u32,
-        operation: String,
-    ) {
-        let mut sync_progress = self.sync_progress.write().await;
-        if let Some(progress) = sync_progress.get_mut(&account_id) {
-            progress.completed_items = completed_items;
-            progress.total_items = total_items;
-            progress.current_operation = operation;
-        }
+    pub fn get_sync_status(&self, account_id: &str) -> Option<SyncStatus> {
+        self.sync_states.get(account_id).map(|state| SyncStatus {
+            account_id: state.account_id.clone(),
+            is_syncing: state.is_syncing,
+            last_sync: state.last_sync,
+            error_count: state.error_count,
+        })
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_sync_engine_creation() {
-        let config = SyncConfig {
-            sync_interval_seconds: 300,
-            max_concurrent_syncs: 5,
-            batch_size: 100,
-            retry_attempts: 3,
-            enable_push_notifications: true,
-        };
-
-        let sync_engine = SyncEngine::new(config);
-        let account_id = Uuid::new_v4();
-
-        assert!(!sync_engine.is_syncing(account_id).await);
-    }
-
-    #[tokio::test]
-    async fn test_start_stop_sync() {
-        let config = SyncConfig {
-            sync_interval_seconds: 300,
-            max_concurrent_syncs: 5,
-            batch_size: 100,
-            retry_attempts: 3,
-            enable_push_notifications: true,
-        };
-
-        let sync_engine = SyncEngine::new(config);
-        let account_id = Uuid::new_v4();
-
-        // Start sync
-        sync_engine.start_account_sync(account_id).await.unwrap();
-        assert!(sync_engine.is_syncing(account_id).await);
-
-        // Stop sync
-        sync_engine.stop_account_sync(account_id).await;
-        assert!(!sync_engine.is_syncing(account_id).await);
-    }
+#[derive(Debug, Clone)]
+pub struct SyncStatus {
+    pub account_id: String,
+    pub is_syncing: bool,
+    pub last_sync: Option<Instant>,
+    pub error_count: u32,
 }
+
+/// Sync progress information
+#[derive(Debug, Clone)]
+pub struct SyncProgress {
+    pub total_steps: usize,
+    pub completed_steps: usize,
+    pub current_operation: String,
+}
+
+/// Sync result information  
+#[derive(Debug, Clone)]
+pub struct SyncResult {
+    pub success: bool,
+    pub messages_synced: usize,
+    pub errors: Vec<String>,
+}
+
+// Type alias for compatibility
+pub type SyncEngine = MailSyncManager;

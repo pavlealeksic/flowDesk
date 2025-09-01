@@ -1,20 +1,71 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
-import type { MailAccount, EmailMessage, MailFolder, MailSyncStatus } from '@flow-desk/shared'
+import type { MailAccount, EmailMessage, MailFolder, MailSyncStatus, CreateMailAccountInput, UpdateMailAccountInput } from '@flow-desk/shared'
+import type { MailMessageOptions, ComposeMessageInput } from '../../types/preload'
 
+
+interface SmartMailbox {
+  id: string
+  name: string
+  criteria: string
+  icon: string
+  color: string
+  count: number
+}
+
+interface MessageThread {
+  threadId: string
+  messages: EmailMessage[]
+  subject: string
+  participants: string[]
+  lastMessageDate: Date
+  unreadCount: number
+}
+
+interface ScheduledMessage {
+  id: string
+  accountId: string
+  to: string[]
+  cc?: string[]
+  bcc?: string[]
+  subject: string
+  body: string
+  scheduledDate: Date
+  status: 'pending' | 'sent' | 'failed'
+  createdAt: Date
+}
+
+interface EmailAlias {
+  id: string
+  accountId: string
+  address: string
+  name: string
+  isDefault: boolean
+  isVerified: boolean
+}
 
 interface MailState {
   accounts: MailAccount[]
   folders: Record<string, MailFolder[]>
   messages: Record<string, EmailMessage[]>
+  threads: Record<string, MessageThread>
+  unifiedMessages: EmailMessage[]
+  smartMailboxes: SmartMailbox[]
+  scheduledMessages: ScheduledMessage[]
+  aliases: Record<string, EmailAlias[]>
   currentAccountId: string | null
   currentFolderId: string | null
+  currentThreadId: string | null
   selectedMessageIds: string[]
   searchQuery: string
   searchResults: EmailMessage[]
+  viewMode: 'messages' | 'threads' | 'unified'
+  previewPane: 'right' | 'bottom' | 'hidden'
   isLoading: boolean
   isLoadingMessages: boolean
   isLoadingAccounts: boolean
+  isLoadingThreads: boolean
   isSyncing: boolean
+  isIdleActive: Record<string, boolean>
   error: string | null
   syncStatus: Record<string, MailSyncStatus>
 }
@@ -23,15 +74,30 @@ const initialState: MailState = {
   accounts: [],
   folders: {},
   messages: {},
+  threads: {},
+  unifiedMessages: [],
+  smartMailboxes: [
+    { id: 'today', name: 'Today', criteria: 'today', icon: '📅', color: 'blue', count: 0 },
+    { id: 'flagged', name: 'Flagged', criteria: 'flagged', icon: '⭐', color: 'yellow', count: 0 },
+    { id: 'unread', name: 'Unread', criteria: 'unread', icon: '🔵', color: 'blue', count: 0 },
+    { id: 'attachments', name: 'Attachments', criteria: 'with_attachments', icon: '📎', color: 'gray', count: 0 },
+  ],
+  scheduledMessages: [],
+  aliases: {},
   currentAccountId: null,
   currentFolderId: null,
+  currentThreadId: null,
   selectedMessageIds: [],
   searchQuery: '',
   searchResults: [],
+  viewMode: 'messages',
+  previewPane: 'right',
   isLoading: false,
   isLoadingMessages: false,
   isLoadingAccounts: false,
+  isLoadingThreads: false,
   isSyncing: false,
+  isIdleActive: {},
   error: null,
   syncStatus: {}
 }
@@ -54,7 +120,7 @@ export const fetchMailAccounts = createAsyncThunk(
 
 export const addMailAccount = createAsyncThunk(
   'mail/addAccount',
-  async (account: any, { rejectWithValue }) => {
+  async (account: CreateMailAccountInput, { rejectWithValue }) => {
     try {
       if (!window.flowDesk?.mail) {
         throw new Error('Mail API not available')
@@ -87,7 +153,7 @@ export const fetchMessages = createAsyncThunk(
   async ({ accountId, folderId, options }: { 
     accountId: string
     folderId?: string
-    options?: any 
+    options?: MailMessageOptions 
   }, { rejectWithValue }) => {
     try {
       if (!window.flowDesk?.mail) {
@@ -118,7 +184,7 @@ export const fetchFolders = createAsyncThunk(
 
 export const sendMessage = createAsyncThunk(
   'mail/sendMessage',
-  async ({ accountId, message }: { accountId: string, message: any }, { rejectWithValue }) => {
+  async ({ accountId, message }: { accountId: string, message: ComposeMessageInput }, { rejectWithValue }) => {
     try {
       if (!window.flowDesk?.mail) {
         throw new Error('Mail API not available')
@@ -133,7 +199,7 @@ export const sendMessage = createAsyncThunk(
 
 export const searchMessages = createAsyncThunk(
   'mail/searchMessages',
-  async ({ query, options }: { query: string, options?: any }, { rejectWithValue }) => {
+  async ({ query, options }: { query: string, options?: { accountId?: string; folderId?: string } }, { rejectWithValue }) => {
     try {
       if (!window.flowDesk?.mail) {
         throw new Error('Mail API not available')
@@ -176,6 +242,138 @@ export const fetchSyncStatus = createAsyncThunk(
       return syncStatus
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to fetch sync status')
+    }
+  }
+)
+
+export const markMessageStarred = createAsyncThunk(
+  'mail/markMessageStarred',
+  async ({ accountId, messageId, starred }: { 
+    accountId: string
+    messageId: string
+    starred: boolean 
+  }, { rejectWithValue }) => {
+    try {
+      if (!window.flowDesk?.mail) {
+        throw new Error('Mail API not available')
+      }
+      await window.flowDesk.mail.markMessageStarred(accountId, messageId, starred)
+      return { messageId, starred }
+    } catch (error) {
+      return rejectWithValue(error instanceof Error ? error.message : 'Failed to mark message starred')
+    }
+  }
+)
+
+export const fetchUnifiedMessages = createAsyncThunk(
+  'mail/fetchUnifiedMessages', 
+  async (limit?: number, { rejectWithValue }) => {
+    try {
+      if (!window.flowDesk?.mail) {
+        throw new Error('Mail API not available')
+      }
+      const messages = await window.flowDesk.mail.getUnifiedMessages(limit)
+      return messages
+    } catch (error) {
+      return rejectWithValue(error instanceof Error ? error.message : 'Failed to fetch unified messages')
+    }
+  }
+)
+
+export const fetchSmartMailboxMessages = createAsyncThunk(
+  'mail/fetchSmartMailboxMessages',
+  async (criteria: string, { rejectWithValue }) => {
+    try {
+      if (!window.flowDesk?.mail) {
+        throw new Error('Mail API not available')
+      }
+      const messages = await window.flowDesk.mail.getSmartMailboxMessages(criteria)
+      return { criteria, messages }
+    } catch (error) {
+      return rejectWithValue(error instanceof Error ? error.message : 'Failed to fetch smart mailbox messages')
+    }
+  }
+)
+
+export const fetchMessageThread = createAsyncThunk(
+  'mail/fetchMessageThread',
+  async ({ accountId, threadId }: { accountId: string, threadId: string }, { rejectWithValue }) => {
+    try {
+      if (!window.flowDesk?.mail) {
+        throw new Error('Mail API not available')
+      }
+      const messages = await window.flowDesk.mail.getMessageThread(accountId, threadId)
+      return { threadId, messages }
+    } catch (error) {
+      return rejectWithValue(error instanceof Error ? error.message : 'Failed to fetch thread')
+    }
+  }
+)
+
+export const scheduleMessage = createAsyncThunk(
+  'mail/scheduleMessage',
+  async ({ 
+    accountId, 
+    message, 
+    scheduledDate 
+  }: { 
+    accountId: string
+    message: ComposeMessageInput
+    scheduledDate: Date
+  }, { rejectWithValue }) => {
+    try {
+      if (!window.flowDesk?.mail) {
+        throw new Error('Mail API not available')
+      }
+      const scheduledId = await window.flowDesk.mail.scheduleMessage(accountId, message, scheduledDate)
+      return { accountId, message, scheduledDate, scheduledId }
+    } catch (error) {
+      return rejectWithValue(error instanceof Error ? error.message : 'Failed to schedule message')
+    }
+  }
+)
+
+export const fetchEmailAliases = createAsyncThunk(
+  'mail/fetchEmailAliases',
+  async (accountId: string, { rejectWithValue }) => {
+    try {
+      if (!window.flowDesk?.mail) {
+        throw new Error('Mail API not available')
+      }
+      const aliases = await window.flowDesk.mail.getEmailAliases(accountId)
+      return { accountId, aliases }
+    } catch (error) {
+      return rejectWithValue(error instanceof Error ? error.message : 'Failed to fetch aliases')
+    }
+  }
+)
+
+export const startIdleSync = createAsyncThunk(
+  'mail/startIdleSync',
+  async (accountId: string, { rejectWithValue }) => {
+    try {
+      if (!window.flowDesk?.mail) {
+        throw new Error('Mail API not available')
+      }
+      await window.flowDesk.mail.startIdle(accountId)
+      return accountId
+    } catch (error) {
+      return rejectWithValue(error instanceof Error ? error.message : 'Failed to start IDLE sync')
+    }
+  }
+)
+
+export const stopIdleSync = createAsyncThunk(
+  'mail/stopIdleSync',
+  async (accountId: string, { rejectWithValue }) => {
+    try {
+      if (!window.flowDesk?.mail) {
+        throw new Error('Mail API not available')
+      }
+      await window.flowDesk.mail.stopIdle(accountId)
+      return accountId
+    } catch (error) {
+      return rejectWithValue(error instanceof Error ? error.message : 'Failed to stop IDLE sync')
     }
   }
 )
@@ -230,6 +428,30 @@ const mailSlice = createSlice({
           }
         }
       })
+      // Update unified messages
+      const unifiedIndex = state.unifiedMessages.findIndex(msg => msg.id === messageId)
+      if (unifiedIndex !== -1) {
+        state.unifiedMessages[unifiedIndex].flags = {
+          ...state.unifiedMessages[unifiedIndex].flags,
+          ...flags
+        }
+      }
+    },
+    setViewMode: (state, action: PayloadAction<'messages' | 'threads' | 'unified'>) => {
+      state.viewMode = action.payload
+    },
+    setPreviewPane: (state, action: PayloadAction<'right' | 'bottom' | 'hidden'>) => {
+      state.previewPane = action.payload
+    },
+    setCurrentThread: (state, action: PayloadAction<string | null>) => {
+      state.currentThreadId = action.payload
+    },
+    updateSmartMailboxCounts: (state, action: PayloadAction<Record<string, number>>) => {
+      const counts = action.payload
+      state.smartMailboxes = state.smartMailboxes.map(mailbox => ({
+        ...mailbox,
+        count: counts[mailbox.criteria] || 0
+      }))
     }
   },
   extraReducers: (builder) => {
@@ -363,6 +585,113 @@ const mailSlice = createSlice({
       .addCase(fetchSyncStatus.fulfilled, (state, action) => {
         state.syncStatus = action.payload
       })
+
+    // Mark message starred
+    builder
+      .addCase(markMessageStarred.fulfilled, (state, action) => {
+        const { messageId, starred } = action.payload
+        // Update message flags in all collections
+        Object.keys(state.messages).forEach(key => {
+          const messages = state.messages[key]
+          const messageIndex = messages.findIndex(msg => msg.id === messageId)
+          if (messageIndex !== -1) {
+            state.messages[key][messageIndex].flags.isStarred = starred
+          }
+        })
+        const unifiedIndex = state.unifiedMessages.findIndex(msg => msg.id === messageId)
+        if (unifiedIndex !== -1) {
+          state.unifiedMessages[unifiedIndex].flags.isStarred = starred
+        }
+      })
+
+    // Fetch unified messages
+    builder
+      .addCase(fetchUnifiedMessages.pending, (state) => {
+        state.isLoadingMessages = true
+      })
+      .addCase(fetchUnifiedMessages.fulfilled, (state, action) => {
+        state.isLoadingMessages = false
+        state.unifiedMessages = action.payload
+      })
+      .addCase(fetchUnifiedMessages.rejected, (state, action) => {
+        state.isLoadingMessages = false
+        state.error = action.payload as string
+      })
+
+    // Fetch smart mailbox messages
+    builder
+      .addCase(fetchSmartMailboxMessages.fulfilled, (state, action) => {
+        const { criteria, messages } = action.payload
+        // Update smart mailbox count
+        const mailboxIndex = state.smartMailboxes.findIndex(mb => mb.criteria === criteria)
+        if (mailboxIndex !== -1) {
+          state.smartMailboxes[mailboxIndex].count = messages.length
+        }
+        // Store messages with special key
+        state.messages[`smart:${criteria}`] = messages
+      })
+
+    // Fetch message thread
+    builder
+      .addCase(fetchMessageThread.pending, (state) => {
+        state.isLoadingThreads = true
+      })
+      .addCase(fetchMessageThread.fulfilled, (state, action) => {
+        state.isLoadingThreads = false
+        const { threadId, messages } = action.payload
+        state.threads[threadId] = {
+          threadId,
+          messages,
+          subject: messages[0]?.subject || '',
+          participants: [...new Set(messages.flatMap(m => [m.from.address, ...m.to.map(t => t.address)]))],
+          lastMessageDate: messages[messages.length - 1]?.date || new Date(),
+          unreadCount: messages.filter(m => !m.flags.isRead).length
+        }
+      })
+      .addCase(fetchMessageThread.rejected, (state, action) => {
+        state.isLoadingThreads = false
+        state.error = action.payload as string
+      })
+
+    // Schedule message
+    builder
+      .addCase(scheduleMessage.fulfilled, (state, action) => {
+        const { accountId, message, scheduledDate, scheduledId } = action.payload
+        state.scheduledMessages.push({
+          id: scheduledId,
+          accountId,
+          to: message.to || [],
+          cc: message.cc,
+          bcc: message.bcc,
+          subject: message.subject || '',
+          body: message.body || '',
+          scheduledDate,
+          status: 'pending',
+          createdAt: new Date()
+        })
+      })
+
+    // Fetch email aliases
+    builder
+      .addCase(fetchEmailAliases.fulfilled, (state, action) => {
+        const { accountId, aliases } = action.payload
+        state.aliases[accountId] = aliases
+      })
+
+    // Start IDLE sync
+    builder
+      .addCase(startIdleSync.fulfilled, (state, action) => {
+        state.isIdleActive[action.payload] = true
+      })
+      .addCase(startIdleSync.rejected, (state, action) => {
+        state.error = action.payload as string
+      })
+
+    // Stop IDLE sync
+    builder
+      .addCase(stopIdleSync.fulfilled, (state, action) => {
+        state.isIdleActive[action.payload] = false
+      })
   }
 })
 
@@ -376,7 +705,11 @@ export const {
   clearSelection,
   setSearchQuery,
   clearError,
-  updateMessageFlags
+  updateMessageFlags,
+  setViewMode,
+  setPreviewPane,
+  setCurrentThread,
+  updateSmartMailboxCounts
 } = mailSlice.actions
 
 // Selectors
@@ -397,7 +730,27 @@ export const selectCurrentFolders = (state: { mail: MailState }) => {
 }
 export const selectMailSyncStatus = (state: { mail: MailState }) => state.mail.syncStatus
 export const selectIsLoadingMail = (state: { mail: MailState }) => 
-  state.mail.isLoading || state.mail.isLoadingMessages || state.mail.isLoadingAccounts
+  state.mail.isLoading || state.mail.isLoadingMessages || state.mail.isLoadingAccounts || state.mail.isLoadingThreads
 export const selectMailError = (state: { mail: MailState }) => state.mail.error
+
+// New selectors for advanced features
+export const selectUnifiedMessages = (state: { mail: MailState }) => state.mail.unifiedMessages
+export const selectSmartMailboxes = (state: { mail: MailState }) => state.mail.smartMailboxes
+export const selectMessageThreads = (state: { mail: MailState }) => state.mail.threads
+export const selectCurrentThread = (state: { mail: MailState }) => {
+  const { threads, currentThreadId } = state.mail
+  return currentThreadId ? threads[currentThreadId] : null
+}
+export const selectScheduledMessages = (state: { mail: MailState }) => state.mail.scheduledMessages
+export const selectEmailAliases = (state: { mail: MailState }) => {
+  const { aliases, currentAccountId } = state.mail
+  return currentAccountId ? aliases[currentAccountId] || [] : []
+}
+export const selectViewMode = (state: { mail: MailState }) => state.mail.viewMode
+export const selectPreviewPane = (state: { mail: MailState }) => state.mail.previewPane
+export const selectIdleStatus = (state: { mail: MailState }) => state.mail.isIdleActive
+export const selectSmartMailboxMessages = (criteria: string) => (state: { mail: MailState }) => {
+  return state.mail.messages[`smart:${criteria}`] || []
+}
 
 export default mailSlice.reducer

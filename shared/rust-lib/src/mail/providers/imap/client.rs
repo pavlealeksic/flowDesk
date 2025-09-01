@@ -4,10 +4,10 @@ use super::{ImapConnectionPool, ImapConfig};
 use crate::mail::{
     error::{MailError, MailResult},
     types::*,
+    providers::SyncResult,
 };
 use async_imap::{
-    types::{Fetch, Flag, Mailbox, Name},
-    Seq, SequenceSet,
+    types::{Fetch, Flag, Mailbox, Name, Seq},
 };
 use std::{collections::HashMap, sync::Arc, time::SystemTime};
 use tokio::sync::{Mutex, RwLock};
@@ -443,7 +443,7 @@ impl ImapClient {
     }
 
     /// Convert IMAP address to EmailAddress
-    fn convert_imap_address(&self, addr: Option<&Vec<async_imap::types::Address>>) -> Option<EmailAddress> {
+    fn convert_imap_address(&self, addr: Option<&Vec<mailparse::MailAddr>>) -> Option<EmailAddress> {
         addr?.first().and_then(|a| {
             let name = a.name.as_ref().and_then(|n| String::from_utf8(n.clone()).ok());
             let mailbox = a.mailbox.as_ref().and_then(|m| String::from_utf8(m.clone()).ok())?;
@@ -965,15 +965,19 @@ impl ImapClient {
                 BulkOperationType::Delete => self.delete_message(message_id).await,
                 BulkOperationType::Archive => {
                     // Move to Archive folder (if it exists)
-                    self.move_message(message_id, "Archive").await
-                        .or_else(|_| self.move_message(message_id, "INBOX.Archive").await)
+                    match self.move_message(message_id, "Archive").await {
+                        Ok(()) => Ok(()),
+                        Err(_) => self.move_message(message_id, "INBOX.Archive").await,
+                    }
                 }
                 BulkOperationType::Spam => {
                     // Move to Spam/Junk folder
-                    self.move_message(message_id, "Spam").await
-                        .or_else(|_| self.move_message(message_id, "Junk").await)
+                    match self.move_message(message_id, "Spam").await {
+                        Ok(()) => Ok(()),
+                        Err(_) => self.move_message(message_id, "Junk").await,
+                    }
                 }
-                BulkOperationType::Move { ref folder_id: _ } => {
+                BulkOperationType::Move { folder_id } => {
                     // TODO: Convert folder_id to folder_name
                     Err(MailError::not_implemented("Bulk move with folder ID"))
                 }

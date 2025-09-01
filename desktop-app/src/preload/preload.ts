@@ -68,7 +68,23 @@ interface FlowDeskAPI {
     getMessages(accountId: string, folderId?: string, options?: any): Promise<EmailMessage[]>;
     sendMessage(accountId: string, message: any): Promise<boolean>;
     markMessageRead(accountId: string, messageId: string, read: boolean): Promise<boolean>;
+    markMessageStarred(accountId: string, messageId: string, starred: boolean): Promise<boolean>;
     deleteMessage(accountId: string, messageId: string): Promise<boolean>;
+    
+    // Advanced message features
+    getUnifiedMessages(limit?: number): Promise<EmailMessage[]>;
+    getSmartMailboxMessages(criteria: string): Promise<EmailMessage[]>;
+    getMessageThread(accountId: string, threadId: string): Promise<EmailMessage[]>;
+    
+    // Email scheduling
+    scheduleMessage(accountId: string, message: any, scheduledDate: Date): Promise<string>;
+    getScheduledMessages(accountId: string): Promise<any[]>;
+    cancelScheduledMessage(accountId: string, messageId: string): Promise<boolean>;
+    
+    // Email aliases
+    getEmailAliases(accountId: string): Promise<any[]>;
+    addEmailAlias(accountId: string, address: string, name: string): Promise<any>;
+    removeEmailAlias(accountId: string, aliasAddress: string): Promise<boolean>;
     
     // Search and sync
     searchMessages(query: string, options?: { accountId?: string; folderId?: string }): Promise<EmailMessage[]>;
@@ -77,6 +93,52 @@ interface FlowDeskAPI {
     getSyncStatus(): Promise<Record<string, any>>;
     startSync(): Promise<boolean>;
     stopSync(): Promise<boolean>;
+    
+    // Real-time sync (IDLE)
+    startIdle(accountId: string): Promise<boolean>;
+    stopIdle(accountId: string): Promise<boolean>;
+    
+    // Attachment operations
+    downloadAttachment(attachment: { filename: string; data: string; mimeType: string }): Promise<{ success: boolean; path?: string; error?: string }>;
+    
+    // Email template operations
+    getAllTemplates(): Promise<any[]>;
+    getTemplatesByCategory(category: string): Promise<any[]>;
+    getTemplate(templateId: string): Promise<any>;
+    saveTemplate(template: any): Promise<string>;
+    updateTemplate(templateId: string, updates: any): Promise<boolean>;
+    deleteTemplate(templateId: string): Promise<boolean>;
+    useTemplate(templateId: string): Promise<any>;
+    searchTemplates(query: string): Promise<any[]>;
+    processTemplateVariables(template: any, variables: any): Promise<{ subject: string; body: string }>;
+    
+    // Email scheduling operations
+    scheduleEmail(emailData: any, scheduledTime: Date): Promise<string>;
+    cancelScheduledEmail(emailId: string): Promise<boolean>;
+    getScheduledEmails(): Promise<any[]>;
+    snoozeEmail(messageId: string, accountId: string, snoozeUntil: Date, reason: string): Promise<string>;
+    getSnoozedEmails(): Promise<any[]>;
+    getSchedulerStats(): Promise<any>;
+    
+    // Email rules operations
+    getAllRules(): Promise<any[]>;
+    getRulesByAccount(accountId: string): Promise<any[]>;
+    createRule(ruleData: any): Promise<string>;
+    updateRule(ruleId: string, updates: any): Promise<boolean>;
+    deleteRule(ruleId: string): Promise<boolean>;
+    testRule(ruleId: string, testMessage: any): Promise<boolean>;
+    getRuleStats(): Promise<any>;
+    processMessage(message: any): Promise<any>;
+    
+    // Text snippet operations
+    getAllSnippets(): Promise<any[]>;
+    getSnippetsByCategory(category: string): Promise<any[]>;
+    saveSnippet(snippet: any): Promise<string>;
+    updateSnippet(snippetId: string, updates: any): Promise<boolean>;
+    deleteSnippet(snippetId: string): Promise<boolean>;
+    useSnippet(snippetId: string): Promise<any>;
+    searchSnippets(query: string): Promise<any[]>;
+    getSnippetByShortcut(shortcut: string): Promise<any>;
     
     // Event callbacks for real-time updates
     onSyncStarted(callback: (data: { accountId: string }) => void): () => void;
@@ -185,7 +247,7 @@ interface WorkspaceService {
   url: string;
   iconUrl?: string;
   isEnabled: boolean;
-  config: any;
+  config: Record<string, unknown>;
 }
 
 interface MailAccount {
@@ -206,12 +268,28 @@ interface MailFolder {
 interface EmailMessage {
   id: string;
   subject: string;
-  from: string;
-  to: string[];
+  from: { name: string; address: string };
+  to: { name: string; address: string }[];
   date: Date;
-  isRead: boolean;
-  isStarred: boolean;
-  preview: string;
+  bodyText: string;
+  bodyHtml: string;
+  snippet?: string;
+  flags: {
+    isRead: boolean;
+    isStarred: boolean;
+    hasAttachments: boolean;
+  };
+  attachments?: EmailAttachment[];
+}
+
+interface EmailAttachment {
+  id: string;
+  filename: string;
+  size: number;
+  mimeType: string;
+  isInline: boolean;
+  contentId?: string;
+  data?: string;
 }
 
 interface CalendarAccount {
@@ -265,19 +343,19 @@ const flowDeskAPI: FlowDeskAPI = {
     getAll: () => ipcRenderer.invoke('workspace:get-all'),
     getById: (workspaceId: string) => ipcRenderer.invoke('workspace:get-by-id', workspaceId),
     getCurrent: () => ipcRenderer.invoke('workspace:get-active'),
-    create: (workspaceData: any) => ipcRenderer.invoke('workspace:create-full', workspaceData),
-    update: (workspaceId: string, updates: any) => ipcRenderer.invoke('workspace:update', workspaceId, updates),
+    create: (workspaceData: { name: string; icon?: string; color?: string; browserIsolation?: 'shared' | 'isolated' }) => ipcRenderer.invoke('workspace:create-full', workspaceData),
+    update: (workspaceId: string, updates: Partial<{ name: string; icon: string; color: string; browserIsolation: 'shared' | 'isolated' }>) => ipcRenderer.invoke('workspace:update', workspaceId, updates),
     delete: (workspaceId: string) => ipcRenderer.invoke('workspace:delete', workspaceId),
     switch: (workspaceId: string) => ipcRenderer.invoke('workspace:switch', workspaceId),
     
     // Redux slice compatibility methods
     list: () => ipcRenderer.invoke('workspace:get-all'),
     listPartitions: () => ipcRenderer.invoke('workspace:list-partitions'),
-    createPartition: (partitionData: any) => ipcRenderer.invoke('workspace:create-partition', partitionData),
-    updatePartition: (partitionId: string, updates: any) => ipcRenderer.invoke('workspace:update-partition', partitionId, updates),
+    createPartition: (partitionData: Record<string, unknown>) => ipcRenderer.invoke('workspace:create-partition', partitionData),
+    updatePartition: (partitionId: string, updates: Record<string, unknown>) => ipcRenderer.invoke('workspace:update-partition', partitionId, updates),
     clearData: (workspaceId: string) => ipcRenderer.invoke('workspace:clear-data', workspaceId),
     getWindows: (workspaceId: string) => ipcRenderer.invoke('workspace:get-windows', workspaceId),
-    createWindow: (windowData: any) => ipcRenderer.invoke('workspace:create-window', windowData),
+    createWindow: (windowData: Record<string, unknown>) => ipcRenderer.invoke('workspace:create-window', windowData),
     
     // Service management within workspaces
     addService: (workspaceId: string, serviceName: string, serviceType: string, url: string) => 
@@ -298,9 +376,9 @@ const flowDeskAPI: FlowDeskAPI = {
   mail: {
     // Account management (exact Redux signatures)
     getAccounts: () => ipcRenderer.invoke('mail:get-accounts'),
-    addAccount: (account: any) => 
+    addAccount: (account: { email: string; name: string; provider: string; config?: Record<string, unknown> }) => 
       ipcRenderer.invoke('mail:add-account-obj', account),
-    updateAccount: (accountId: string, updates: any) => 
+    updateAccount: (accountId: string, updates: Partial<MailAccount>) => 
       ipcRenderer.invoke('mail:update-account', accountId, updates),
     removeAccount: (accountId: string) => 
       ipcRenderer.invoke('mail:remove-account', accountId),
@@ -310,14 +388,40 @@ const flowDeskAPI: FlowDeskAPI = {
       ipcRenderer.invoke('mail:get-folders', accountId),
     
     // Message operations (exact Redux signatures)
-    getMessages: (accountId: string, folderId?: string, options?: any) => 
+    getMessages: (accountId: string, folderId?: string, options?: { limit?: number; offset?: number }) => 
       ipcRenderer.invoke('mail:get-messages', accountId, folderId, options),
     sendMessage: (accountId: string, message: any) => 
       ipcRenderer.invoke('mail:send-message-obj', accountId, message),
     markMessageRead: (accountId: string, messageId: string, read: boolean) => 
       ipcRenderer.invoke('mail:mark-message-read', accountId, messageId, read),
+    markMessageStarred: (accountId: string, messageId: string, starred: boolean) => 
+      ipcRenderer.invoke('mail:mark-message-starred', accountId, messageId, starred),
     deleteMessage: (accountId: string, messageId: string) => 
       ipcRenderer.invoke('mail:delete-message', accountId, messageId),
+    
+    // Advanced message features
+    getUnifiedMessages: (limit?: number) => 
+      ipcRenderer.invoke('mail:get-unified-messages', limit),
+    getSmartMailboxMessages: (criteria: string) => 
+      ipcRenderer.invoke('mail:get-smart-mailbox-messages', criteria),
+    getMessageThread: (accountId: string, threadId: string) => 
+      ipcRenderer.invoke('mail:get-message-thread', accountId, threadId),
+    
+    // Email scheduling
+    scheduleMessage: (accountId: string, message: any, scheduledDate: Date) => 
+      ipcRenderer.invoke('mail:schedule-message', accountId, message, scheduledDate),
+    getScheduledMessages: (accountId: string) => 
+      ipcRenderer.invoke('mail:get-scheduled-messages', accountId),
+    cancelScheduledMessage: (accountId: string, messageId: string) => 
+      ipcRenderer.invoke('mail:cancel-scheduled-message', accountId, messageId),
+    
+    // Email aliases
+    getEmailAliases: (accountId: string) => 
+      ipcRenderer.invoke('mail:get-email-aliases', accountId),
+    addEmailAlias: (accountId: string, address: string, name: string) => 
+      ipcRenderer.invoke('mail:add-email-alias', accountId, address, name),
+    removeEmailAlias: (accountId: string, aliasAddress: string) => 
+      ipcRenderer.invoke('mail:remove-email-alias', accountId, aliasAddress),
     
     // Search and sync (exact Redux signatures)
     searchMessages: (query: string, options?: any) => 
@@ -332,6 +436,56 @@ const flowDeskAPI: FlowDeskAPI = {
       ipcRenderer.invoke('mail:start-sync'),
     stopSync: () => 
       ipcRenderer.invoke('mail:stop-sync'),
+    
+    // Real-time sync (IDLE)
+    startIdle: (accountId: string) => 
+      ipcRenderer.invoke('mail:start-idle', accountId),
+    stopIdle: (accountId: string) => 
+      ipcRenderer.invoke('mail:stop-idle', accountId),
+    
+    // Attachment operations
+    downloadAttachment: (attachment: { filename: string; data: string; mimeType: string }) => 
+      ipcRenderer.invoke('mail:download-attachment', attachment),
+    
+    // Email template operations
+    getAllTemplates: () => ipcRenderer.invoke('email-templates:get-all'),
+    getTemplatesByCategory: (category: string) => ipcRenderer.invoke('email-templates:get-by-category', category),
+    getTemplate: (templateId: string) => ipcRenderer.invoke('email-templates:get', templateId),
+    saveTemplate: (template: any) => ipcRenderer.invoke('email-templates:save', template),
+    updateTemplate: (templateId: string, updates: any) => ipcRenderer.invoke('email-templates:update', templateId, updates),
+    deleteTemplate: (templateId: string) => ipcRenderer.invoke('email-templates:delete', templateId),
+    useTemplate: (templateId: string) => ipcRenderer.invoke('email-templates:use', templateId),
+    searchTemplates: (query: string) => ipcRenderer.invoke('email-templates:search', query),
+    processTemplateVariables: (template: any, variables: any) => ipcRenderer.invoke('email-templates:process-variables', template, variables),
+    
+    // Email scheduling operations (using correct IPC handler names)
+    scheduleEmail: (emailData: any, scheduledTime: Date) => ipcRenderer.invoke('email-scheduler:schedule', emailData, scheduledTime),
+    cancelScheduledEmail: (emailId: string) => ipcRenderer.invoke('email-scheduler:cancel', emailId),
+    getScheduledEmails: () => ipcRenderer.invoke('email-scheduler:get-scheduled'),
+    snoozeEmail: (messageId: string, accountId: string, snoozeUntil: Date, reason: string) => 
+      ipcRenderer.invoke('email-scheduler:snooze', messageId, accountId, snoozeUntil, reason),
+    getSnoozedEmails: () => ipcRenderer.invoke('email-scheduler:get-snoozed'),
+    getSchedulerStats: () => ipcRenderer.invoke('email-scheduler:get-stats'),
+    
+    // Email rules operations
+    getAllRules: () => ipcRenderer.invoke('email-rules:get-all'),
+    getRulesByAccount: (accountId: string) => ipcRenderer.invoke('email-rules:get-by-account', accountId),
+    createRule: (ruleData: any) => ipcRenderer.invoke('email-rules:create', ruleData),
+    updateRule: (ruleId: string, updates: any) => ipcRenderer.invoke('email-rules:update', ruleId, updates),
+    deleteRule: (ruleId: string) => ipcRenderer.invoke('email-rules:delete', ruleId),
+    testRule: (ruleId: string, testMessage: any) => ipcRenderer.invoke('email-rules:test', ruleId, testMessage),
+    getRuleStats: () => ipcRenderer.invoke('email-rules:get-stats'),
+    processMessage: (message: any) => ipcRenderer.invoke('email-rules:process-message', message),
+    
+    // Text snippet operations
+    getAllSnippets: () => ipcRenderer.invoke('snippets:get-all'),
+    getSnippetsByCategory: (category: string) => ipcRenderer.invoke('snippets:get-by-category', category),
+    saveSnippet: (snippet: any) => ipcRenderer.invoke('snippets:save', snippet),
+    updateSnippet: (snippetId: string, updates: any) => ipcRenderer.invoke('snippets:update', snippetId, updates),
+    deleteSnippet: (snippetId: string) => ipcRenderer.invoke('snippets:delete', snippetId),
+    useSnippet: (snippetId: string) => ipcRenderer.invoke('snippets:use', snippetId),
+    searchSnippets: (query: string) => ipcRenderer.invoke('snippets:search', query),
+    getSnippetByShortcut: (shortcut: string) => ipcRenderer.invoke('snippets:get-by-shortcut', shortcut),
     
     // Event callbacks for real-time updates
     onSyncStarted: (callback: (data: { accountId: string }) => void) => {
