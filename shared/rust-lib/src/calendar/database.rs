@@ -460,10 +460,7 @@ impl CalendarDatabase {
         );
 
         let mut query_builder = sqlx::query(&query);
-        // TODO: Fix trait object issue and properly bind parameters
-        // for arg in args {
-        //     query_builder = query_builder.bind(arg);
-        // }
+        // Properly bind parameters for cleanup query
         query_builder = query_builder.bind(now.naive_utc()).bind(account_id);
         
         query_builder.execute(&*self.pool).await?;

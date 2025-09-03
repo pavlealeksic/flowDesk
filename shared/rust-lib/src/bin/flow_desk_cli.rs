@@ -111,12 +111,20 @@ async fn get_mail_database_stats(db: &MailDatabase) -> Result<HashMap<String, se
     Ok(stats)
 }
 
-async fn get_calendar_database_stats(_db: &CalendarDatabase) -> Result<HashMap<String, serde_json::Value>, Box<dyn std::error::Error + Send + Sync>> {
+async fn get_calendar_database_stats(db: &CalendarDatabase) -> Result<HashMap<String, serde_json::Value>, Box<dyn std::error::Error + Send + Sync>> {
     let mut stats = HashMap::new();
     
-    // Get account count - using a mock implementation since we need the actual database connection
-    // In a real implementation, you would add a method to CalendarDatabase to get stats
-    stats.insert("calendar_accounts".to_string(), json!("stats_not_implemented"));
+    // Get actual calendar account count from database
+    match db.get_all_calendar_accounts().await {
+        Ok(accounts) => {
+            stats.insert("calendar_accounts".to_string(), json!(accounts.len()));
+            stats.insert("enabled_accounts".to_string(), json!(accounts.iter().filter(|a| a.is_enabled).count()));
+        }
+        Err(_) => {
+            stats.insert("calendar_accounts".to_string(), json!(0));
+            stats.insert("enabled_accounts".to_string(), json!(0));
+        }
+    }
     
     Ok(stats)
 }
@@ -1099,10 +1107,24 @@ async fn process_command(input: &str) -> Value {
                     }
                 }
                 "generate_encryption_key_pair" => {
-                    json!({
-                        "success": true,
-                        "result": "{\"publicKey\":\"mock-public-key-base64\",\"privateKey\":\"mock-private-key-base64\"}"
-                    })
+                    // Generate real encryption key pair using crypto module
+                    match flow_desk_shared::crypto::generate_key_pair() {
+                        Ok((public_key, private_key)) => {
+                            let public_key_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &public_key);
+                            let private_key_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &private_key);
+                            
+                            json!({
+                                "success": true,
+                                "result": format!("{{\"publicKey\":\"{}\",\"privateKey\":\"{}\"}}", public_key_b64, private_key_b64)
+                            })
+                        }
+                        Err(e) => {
+                            json!({
+                                "success": false,
+                                "error": format!("Failed to generate key pair: {}", e)
+                            })
+                        }
+                    }
                 }
                 "add_mail_account" => {
                     match get_mail_engine().await {

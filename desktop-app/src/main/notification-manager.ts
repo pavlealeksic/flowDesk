@@ -14,9 +14,29 @@ export interface NotificationOptions {
 
 export class DesktopNotificationManager {
   private activeNotifications: Map<string, Notification> = new Map();
+  private mainWindow?: any; // BrowserWindow type
 
-  constructor() {
+  constructor(mainWindow?: any) {
+    this.mainWindow = mainWindow;
     this.setupNotificationHandlers();
+  }
+
+  async initialize(): Promise<void> {
+    // Setup notification permissions and preferences
+    log.info('Desktop notification manager initializing...');
+    
+    // Test notification capability
+    try {
+      const testNotification = new Notification({
+        title: 'Flow Desk',
+        body: 'Notification system ready',
+        silent: true,
+      });
+      testNotification.show();
+      testNotification.close();
+    } catch (error) {
+      log.warn('Notification test failed:', error);
+    }
   }
 
   private setupNotificationHandlers(): void {
@@ -38,7 +58,6 @@ export class DesktopNotificationManager {
       const notification = new Notification({
         title: options.title,
         body: options.body,
-        tag: options.tag,
         urgency: options.priority === 'high' ? 'critical' : 'normal',
       });
 
@@ -102,5 +121,10 @@ export class DesktopNotificationManager {
       notification.close();
       this.activeNotifications.delete(tag);
     }
+  }
+
+  async cleanup(): Promise<void> {
+    this.clearAllNotifications();
+    log.info('Desktop notification manager cleaned up');
   }
 }

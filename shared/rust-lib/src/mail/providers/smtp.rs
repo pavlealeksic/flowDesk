@@ -684,11 +684,19 @@ impl MessageBuilder {
         Ok(MultiPart::mixed().singlepart(single_part))
     }
 
-    /// Estimate message size (rough approximation)
-    fn estimate_message_size(&self, _message: &Message) -> u64 {
-        // In a real implementation, we would serialize the message and get its actual size
-        // For now, return a placeholder
-        1024 // 1KB placeholder
+    /// Estimate message size by serializing to bytes
+    fn estimate_message_size(&self, message: &Message) -> u64 {
+        // Serialize the message to get actual size
+        match message.formatted() {
+            Ok(formatted) => formatted.len() as u64,
+            Err(_) => {
+                // Fallback estimation based on content
+                let subject_size = message.get_headers().get_all("Subject")
+                    .map(|h| h.as_str().len()).sum::<usize>();
+                let body_size = 1000; // Estimate 1KB for body if we can't get exact size
+                (subject_size + body_size + 500) as u64 // Add 500 bytes for headers
+            }
+        }
     }
 }
 

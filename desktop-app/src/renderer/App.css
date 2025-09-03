@@ -1,3 +1,12 @@
+/* Import Tailwind base first */
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* Import accessibility styles */
+@import './styles/accessibility.css';
+
+/* Flow Desk App Styles */
 .App {
   text-align: center;
   min-height: 100vh;
@@ -53,14 +62,6 @@
   opacity: 0.8;
   font-size: 0.9rem;
 }
-
-/* Import Tailwind base */
-@import 'tailwindcss/base';
-@import 'tailwindcss/components';
-@import 'tailwindcss/utilities';
-
-/* Import accessibility styles */
-@import './styles/accessibility.css';
 
 /* Flow Desk specific accessibility enhancements */
 :root {

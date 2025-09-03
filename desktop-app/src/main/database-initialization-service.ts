@@ -11,6 +11,33 @@ import { promises as fs, constants, existsSync } from 'fs';
 import log from 'electron-log';
 import { spawn } from 'child_process';
 
+// SQLite3 type definitions
+interface SQLite3Database {
+  exec(sql: string, callback?: (err: Error | null) => void): void;
+  get(sql: string, callback?: (err: Error | null, row?: SQLiteRow) => void): void;
+  close(callback?: (err: Error | null) => void): void;
+}
+
+interface SQLiteRow {
+  [key: string]: string | number | null;
+}
+
+interface IntegrityCheckRow {
+  integrity_check?: string;
+  [key: string]: string | number | null | undefined;
+}
+
+interface VersionRow {
+  version?: number;
+  [key: string]: string | number | null | undefined;
+}
+
+interface SQLite3Module {
+  Database: new (filename: string, mode?: number, callback?: (err: Error | null) => void) => SQLite3Database;
+  OPEN_READONLY: number;
+  verbose(): SQLite3Module;
+}
+
 export interface DatabaseInitializationConfig {
   userDataPath: string;
   mailDbPath: string;
@@ -335,14 +362,14 @@ export class DatabaseInitializationService {
     const sqlite3 = await this.loadSQLite3();
     
     return new Promise((resolve, reject) => {
-      const db = new sqlite3.Database(dbPath, (err) => {
+      const db = new sqlite3.Database(dbPath, (err: Error | null) => {
         if (err) {
           reject(new Error(`Failed to create database ${dbPath}: ${err.message}`));
           return;
         }
 
         // Execute schema
-        db.exec(schema, (err) => {
+        db.exec(schema, (err: Error | null) => {
           db.close();
           if (err) {
             reject(new Error(`Failed to create schema: ${err.message}`));
@@ -614,7 +641,7 @@ export class DatabaseInitializationService {
     // Future migrations will be handled here
     // For now, just ensure schema version is set correctly
     
-    const migrations = [
+    const migrations: string[] = [
       // Migration 1 is handled by initial schema creation
     ];
 
@@ -660,18 +687,18 @@ export class DatabaseInitializationService {
     const sqlite3 = await this.loadSQLite3();
     
     return new Promise((resolve, reject) => {
-      const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY, (err) => {
+      const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY, (err: Error | null) => {
         if (err) {
           reject(new Error(`Cannot open database ${dbPath}: ${err.message}`));
           return;
         }
 
         // Run PRAGMA integrity_check
-        db.get('PRAGMA integrity_check', (err, row) => {
+        db.get('PRAGMA integrity_check', (err: Error | null, row?: IntegrityCheckRow) => {
           db.close();
           if (err) {
             reject(new Error(`Integrity check failed: ${err.message}`));
-          } else if (row && (row as any).integrity_check === 'ok') {
+          } else if (row && row.integrity_check === 'ok') {
             resolve();
           } else {
             reject(new Error(`Database integrity check failed: ${JSON.stringify(row)}`));

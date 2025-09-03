@@ -292,18 +292,18 @@ export class DatabaseMigrationManager {
       const sqlite3 = require('sqlite3').verbose();
       
       return new Promise((resolve, reject) => {
-        const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY, (err) => {
+        const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY, (err: any) => {
           if (err) {
             reject(err);
             return;
           }
 
-          db.get('SELECT version FROM schema_version ORDER BY applied_at DESC LIMIT 1', (err, row) => {
+          db.get('SELECT version FROM schema_version ORDER BY applied_at DESC LIMIT 1', (err: Error | null, row?: { version?: number }) => {
             db.close();
             if (err) {
               reject(err);
             } else {
-              resolve((row as any)?.version || 1);
+              resolve(row?.version || 1);
             }
           });
         });
@@ -326,7 +326,7 @@ export class DatabaseMigrationManager {
       const sqlite3 = require('sqlite3').verbose();
       
       const applied = await new Promise<number[]>((resolve, reject) => {
-        const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY, (err) => {
+        const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READONLY, (err: any) => {
           if (err) {
             reject(err);
             return;

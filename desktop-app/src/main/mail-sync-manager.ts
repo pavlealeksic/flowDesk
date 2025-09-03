@@ -12,9 +12,16 @@ export interface SyncStatus {
 export class MailSyncManager extends EventEmitter {
   private syncStatuses: Map<string, SyncStatus> = new Map();
   private syncIntervals: Map<string, NodeJS.Timeout> = new Map();
+  private notificationManager: any; // Type would be DesktopNotificationManager
 
-  constructor() {
+  constructor(notificationManager?: any) {
     super();
+    this.notificationManager = notificationManager;
+  }
+
+  async initialize(): Promise<void> {
+    log.info('Mail sync manager initializing...');
+    // Any initialization logic would go here
   }
 
   async startSync(accountId: string): Promise<void> {
@@ -79,6 +86,10 @@ export class MailSyncManager extends EventEmitter {
 
   getAllSyncStatuses(): SyncStatus[] {
     return Array.from(this.syncStatuses.values());
+  }
+
+  async cleanup(): Promise<void> {
+    await this.shutdown();
   }
 
   async shutdown(): Promise<void> {

@@ -104,6 +104,9 @@ sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "chrono"
 # WebSocket support for real-time updates
 tokio-tungstenite = { version = "0.21", features = ["rustls-tls-native-roots"] }
 
+# Webhook server support
+warp = "0.3"
+
 # Rate limiting and retry
 governor = "0.6"
 nonzero_ext = "0.3"

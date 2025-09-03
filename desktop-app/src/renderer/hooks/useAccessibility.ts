@@ -264,8 +264,8 @@ export function useReducedMotion() {
   return {
     prefersReducedMotion: settings.reducedMotion,
     toggleReducedMotion: actions.toggleReducedMotion,
-    getAnimationClass: (animated: string, static: string = '') => 
-      settings.reducedMotion ? static : animated
+    getAnimationClass: (animated: string, staticClass: string = '') => 
+      settings.reducedMotion ? staticClass : animated
   }
 }
 

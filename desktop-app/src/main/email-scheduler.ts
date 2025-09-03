@@ -112,6 +112,43 @@ export class EmailScheduler extends EventEmitter {
     return this.scheduledEmails.get(id);
   }
 
+  async initialize(): Promise<void> {
+    // Initialize the scheduler
+    await this.loadScheduledEmails();
+    log.info('Email scheduler initialized');
+  }
+
+  async getSnoozedEmails(): Promise<ScheduledEmail[]> {
+    // Return emails that are snoozed (scheduled for later)
+    return Array.from(this.scheduledEmails.values()).filter(email => 
+      email.status === 'scheduled' && email.scheduledFor > new Date()
+    );
+  }
+
+  async snoozeEmail(
+    messageId: string, 
+    accountId: string, 
+    snoozeUntil: Date, 
+    reason?: string
+  ): Promise<ScheduledEmail | null> {
+    // This would integrate with the email engine to snooze an existing email
+    // For now, create a scheduled reminder
+    try {
+      const snoozeRecord: Omit<ScheduledEmail, 'id' | 'status' | 'createdAt'> = {
+        accountId,
+        to: [], // Would get from original email
+        subject: `Snoozed: ${reason || 'Email reminder'}`,
+        body: `Reminder for message: ${messageId}`,
+        scheduledFor: snoozeUntil,
+      };
+
+      return await this.scheduleEmail(snoozeRecord);
+    } catch (error) {
+      log.error('Failed to snooze email:', error);
+      return null;
+    }
+  }
+
   async shutdown(): Promise<void> {
     // Clear all timers
     for (const timer of this.timers.values()) {

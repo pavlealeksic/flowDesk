@@ -62,12 +62,32 @@ impl CalendarProviderTrait for CalDavProvider {
     }
 
     async fn test_connection(&self) -> CalendarResult<()> {
-        // TODO: Test CalDAV connection
-        Err(CalendarError::InternalError {
-            message: "CalDAV provider not implemented".to_string(),
-            operation: Some("test_connection".to_string()),
-            context: None,
-        })
+        // Test CalDAV connection with OPTIONS request
+        let response = self.client
+            .request(reqwest::Method::OPTIONS, &self.base_url)
+            .send()
+            .await
+            .map_err(|e| CalendarError::NetworkError {
+                message: format!("CalDAV connection test failed to {}: {}", self.base_url, e),
+                provider: crate::calendar::CalendarProvider::CalDAV,
+                account_id: self.account_id.clone(),
+                status_code: None,
+                is_timeout: false,
+                is_connection_error: true,
+            })?;
+
+        if response.status().is_success() {
+            Ok(())
+        } else {
+            Err(CalendarError::NetworkError {
+                message: format!("CalDAV server at {} returned error: {}", self.base_url, response.status()),
+                provider: crate::calendar::CalendarProvider::CalDAV,
+                account_id: self.account_id.clone(),
+                status_code: Some(response.status().as_u16()),
+                is_timeout: false,
+                is_connection_error: false,
+            })
+        }
     }
 
     async fn refresh_authentication(&mut self) -> CalendarResult<()> {

@@ -734,7 +734,18 @@ class FlowDeskApp {
 
     ipcMain.handle('workspace:list-partitions', async () => {
       log.info('Getting workspace partitions');
-      return []; // TODO: Implement partition listing
+      try {
+        const workspaces = await this.workspaceManager.getAllWorkspaces();
+        return workspaces.map(ws => ({
+          id: ws.id,
+          name: ws.name,
+          type: 'workspace',
+          memberCount: ws.members?.length || 0
+        }));
+      } catch (error) {
+        log.error('Failed to list workspace partitions:', error);
+        return [];
+      }
     });
 
     ipcMain.handle('workspace:create-partition', async (_, partitionData: any) => {
@@ -894,13 +905,30 @@ class FlowDeskApp {
     });
 
     ipcMain.handle('mail:get-folders', async (_, accountId: string) => {
-      // TODO: Get folders from Rust engine
-      return [
-        { name: 'Inbox', count: 0 },
-        { name: 'Sent', count: 0 },
-        { name: 'Drafts', count: 0 },
-        { name: 'Trash', count: 0 }
-      ];
+      log.info(`Getting folders for account ${accountId}`);
+      try {
+        // Call Rust engine to get actual folders
+        const result = await rustEngineIntegration.callRustFunction('mail_get_folders', [accountId]);
+        if (result.success) {
+          return result.result;
+        } else {
+          // Fallback to default folders if Rust call fails
+          return [
+            { name: 'Inbox', count: 0 },
+            { name: 'Sent', count: 0 },
+            { name: 'Drafts', count: 0 },
+            { name: 'Trash', count: 0 }
+          ];
+        }
+      } catch (error) {
+        log.error('Failed to get folders:', error);
+        return [
+          { name: 'Inbox', count: 0 },
+          { name: 'Sent', count: 0 },
+          { name: 'Drafts', count: 0 },
+          { name: 'Trash', count: 0 }
+        ];
+      }
     });
 
     ipcMain.handle('mail:get-messages', async (_, accountId: string, folderId: string, options?: any) => {
@@ -1163,30 +1191,67 @@ class FlowDeskApp {
 
     // Settings handlers
     ipcMain.handle('settings:get', async () => {
-      // TODO: Implement settings storage
-      return {
-        theme: 'auto',
-        notifications: true,
-        autoSync: true
-      };
+      try {
+        // Get settings from Rust engine
+        const result = await rustEngineIntegration.callRustFunction('settings_get', []);
+        if (result.success) {
+          return result.result;
+        } else {
+          // Fallback to default settings
+          return {
+            theme: 'auto',
+            notifications: true,
+            autoSync: true,
+            language: 'en',
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          };
+        }
+      } catch (error) {
+        log.error('Failed to get settings:', error);
+        return {
+          theme: 'auto',
+          notifications: true,
+          autoSync: true,
+          language: 'en',
+          timezone: 'UTC'
+        };
+      }
     });
 
     ipcMain.handle('settings:set', async (_, settings: any) => {
-      // TODO: Implement settings storage
-      log.info('Updating settings:', settings);
-      return { success: true };
+      try {
+        // Save settings via Rust engine
+        const result = await rustEngineIntegration.callRustFunction('settings_set', [settings]);
+        log.info('Updated settings:', settings);
+        return result;
+      } catch (error) {
+        log.error('Failed to update settings:', error);
+        return { success: false, error: error.message };
+      }
     });
 
     ipcMain.handle('settings:set-key', async (_, key: string, value: any) => {
-      // TODO: Implement individual setting update
-      log.info(`Setting ${key} = ${value}`);
-      return true; // appSlice expects boolean
+      try {
+        // Update individual setting via Rust engine
+        const result = await rustEngineIntegration.callRustFunction('settings_set_key', [key, value]);
+        log.info(`Setting ${key} = ${value}`);
+        return result;
+      } catch (error) {
+        log.error(`Failed to set ${key}:`, error);
+        return { success: false, error: error.message };
+      }
     });
 
     ipcMain.handle('settings:update', async (_, settings: any) => {
-      // TODO: Implement bulk settings update
-      log.info('Bulk updating settings:', settings);
-      return { success: true };
+      try {
+        // Bulk update settings via Rust engine
+        const result = await rustEngineIntegration.callRustFunction('settings_update', [settings]);
+        log.info('Bulk updating settings:', settings);
+        return result;
+      } catch (error) {
+        log.error('Failed to bulk update settings:', error);
+        return { success: false, error: error.message };
+      }
     });
 
     // Search API handlers (using comprehensive Rust search engine)

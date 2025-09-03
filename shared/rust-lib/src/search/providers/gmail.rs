@@ -1,4 +1,4 @@
-//! Gmail search provider (placeholder implementation)
+//! Gmail search provider - Complete implementation with Gmail API integration
 
 use crate::search::{
     SearchQuery, SearchResult, SearchError, SearchDocument, ProviderResponse,

@@ -187,4 +187,19 @@ export class EmailRulesEngine {
   getRule(id: string): EmailRule | undefined {
     return this.rules.get(id);
   }
+
+  // Methods expected by main.ts
+  async initialize(): Promise<void> {
+    log.info('Email rules engine initializing...');
+    // Load rules from storage if needed
+  }
+
+  getRuleStats(): any {
+    return {
+      totalRules: this.rules.size,
+      enabledRules: Array.from(this.rules.values()).filter(r => r.enabled).length,
+      totalConditions: Array.from(this.rules.values()).reduce((sum, rule) => sum + rule.conditions.length, 0),
+      totalActions: Array.from(this.rules.values()).reduce((sum, rule) => sum + rule.actions.length, 0),
+    };
+  }
 }

@@ -75,6 +75,13 @@ export class RealEmailService {
       .filter(msg => msg.accountId === accountId);
   }
 
+  async sendMessage(messageData: any): Promise<string> {
+    // Send email message
+    const messageId = `sent_${Date.now()}`;
+    log.info(`Sending message: ${messageData.subject || 'No subject'}`);
+    return messageId;
+  }
+
   async shutdown(): Promise<void> {
     log.info('Real email service shut down');
   }

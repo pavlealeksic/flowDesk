@@ -80,4 +80,40 @@ export class EmailTemplateManager {
       body: renderedBody,
     };
   }
+
+  // Additional methods expected by main.ts
+  getTemplatesByCategory(category: string): EmailTemplate[] {
+    return this.getAllTemplates().filter(template => 
+      template.tags.includes(category)
+    );
+  }
+
+  async saveTemplate(template: Omit<EmailTemplate, 'id' | 'createdAt' | 'updatedAt'>): Promise<EmailTemplate> {
+    return this.createTemplate(template);
+  }
+
+  async deleteTemplate(id: string): Promise<boolean> {
+    return this.templates.delete(id);
+  }
+
+  useTemplate(id: string): EmailTemplate | undefined {
+    return this.getTemplate(id);
+  }
+
+  searchTemplates(query: string): EmailTemplate[] {
+    const queryLower = query.toLowerCase();
+    return this.getAllTemplates().filter(template =>
+      template.name.toLowerCase().includes(queryLower) ||
+      template.subject.toLowerCase().includes(queryLower) ||
+      template.body.toLowerCase().includes(queryLower) ||
+      template.tags.some(tag => tag.toLowerCase().includes(queryLower))
+    );
+  }
+
+  processTemplateVariables(templateId: string, variables: Record<string, string>): { subject: string; body: string } | null {
+    const template = this.getTemplate(templateId);
+    if (!template) return null;
+    
+    return this.renderTemplate(template, variables);
+  }
 }

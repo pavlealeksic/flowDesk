@@ -341,7 +341,7 @@ impl PrivacySyncEngine {
         stats.events_processed = source_events.len() as u64;
 
         // Apply filters to source events (convert Vec<String> to PrivacyFilters)
-        let privacy_filters = None; // TODO: Convert rule.config.filters to PrivacyFilters
+        let privacy_filters = rule.config.filters.clone();
         let filtered_events = self.apply_event_filters(&source_events, &privacy_filters);
         
         debug!("Filtered {} events down to {} for rule {}", 
@@ -519,7 +519,7 @@ impl PrivacySyncEngine {
             } else { 
                 Some(source_event.attendees.clone()) 
             },
-            recurrence: None, // TODO: Convert EventRecurrence to RecurrenceRule
+            recurrence: source_event.recurrence.clone(), // Use source event recurrence
             recurring_event_id: None, // Will be set by provider
             original_start_time: source_event.original_start_time,
             reminders: Some(vec![]), // No reminders for privacy events

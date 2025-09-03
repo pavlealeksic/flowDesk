@@ -837,7 +837,8 @@ export const CalendarViews: React.FC<CalendarViewsProps> = ({
         onClose={() => setShowAddAccountModal(false)}
         onSuccess={(account) => {
           console.log('Calendar account added successfully:', account);
-          // TODO: Refresh calendar accounts
+          // Refresh calendar accounts
+          dispatch(fetchCalendarAccounts());
         }}
       />
     </div>

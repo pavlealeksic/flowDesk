@@ -100,4 +100,34 @@ export class SnippetManager {
 
     return expandedText;
   }
+
+  // Additional methods expected by main.ts
+  getSnippetsByCategory(category: string): TextSnippet[] {
+    return this.getAllSnippets().filter(snippet => 
+      snippet.tags.includes(category)
+    );
+  }
+
+  async saveSnippet(snippet: Omit<TextSnippet, 'id' | 'createdAt' | 'updatedAt'>): Promise<TextSnippet> {
+    return this.createSnippet(snippet);
+  }
+
+  useSnippet(id: string): TextSnippet | undefined {
+    return this.getSnippet(id);
+  }
+
+  searchSnippets(query: string): TextSnippet[] {
+    const queryLower = query.toLowerCase();
+    return this.getAllSnippets().filter(snippet =>
+      snippet.name.toLowerCase().includes(queryLower) ||
+      snippet.content.toLowerCase().includes(queryLower) ||
+      snippet.tags.some(tag => tag.toLowerCase().includes(queryLower))
+    );
+  }
+
+  getSnippetsByShortcut(shortcut: string): TextSnippet[] {
+    return this.getAllSnippets().filter(snippet => 
+      snippet.shortcut === shortcut
+    );
+  }
 }
