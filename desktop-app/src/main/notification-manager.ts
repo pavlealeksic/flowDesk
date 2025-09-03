@@ -1,4 +1,4 @@
-import { Notification } from 'electron';
+import { Notification, BrowserWindow } from 'electron';
 import log from 'electron-log';
 
 export interface NotificationOptions {
@@ -14,52 +14,100 @@ export interface NotificationOptions {
 
 export class DesktopNotificationManager {
   private activeNotifications: Map<string, Notification> = new Map();
-  private mainWindow?: any; // BrowserWindow type
+  private mainWindow?: BrowserWindow;
 
-  constructor(mainWindow?: any) {
+  constructor(mainWindow?: BrowserWindow) {
     this.mainWindow = mainWindow;
     this.setupNotificationHandlers();
   }
 
   async initialize(): Promise<void> {
-    // Setup notification permissions and preferences
     log.info('Desktop notification manager initializing...');
     
-    // Test notification capability
     try {
-      const testNotification = new Notification({
-        title: 'Flow Desk',
-        body: 'Notification system ready',
-        silent: true,
-      });
-      testNotification.show();
-      testNotification.close();
+      // Verify notification support
+      if (!Notification.isSupported()) {
+        log.warn('Notifications are not supported on this system');
+        return;
+      }
+
+      // On macOS, check notification permissions
+      if (process.platform === 'darwin') {
+        const { systemPreferences } = require('electron');
+        const permission = systemPreferences.getNotificationPermission?.();
+        
+        if (permission) {
+          log.info(`Notification permission status: ${permission}`);
+          if (permission === 'denied') {
+            log.warn('Notification permissions denied. Users can enable them in System Preferences.');
+          }
+        }
+      }
+      
+      log.info('Desktop notification manager initialized successfully');
     } catch (error) {
-      log.warn('Notification test failed:', error);
+      log.error('Failed to initialize notification manager:', error);
+      throw error;
     }
   }
 
   private setupNotificationHandlers(): void {
-    // Request notification permission on macOS
-    if (process.platform === 'darwin') {
-      try {
+    // Check and request notification permissions
+    try {
+      if (process.platform === 'darwin') {
         const { systemPreferences } = require('electron');
-        if (systemPreferences.getMediaAccessStatus('notifications') !== 'granted') {
-          systemPreferences.askForMediaAccess('notifications');
+        
+        // Check if we have notification permissions
+        const notificationPermission = systemPreferences.getNotificationPermission?.();
+        if (notificationPermission && notificationPermission !== 'granted') {
+          log.info('Requesting notification permissions...');
+          // Note: On macOS, permissions are requested when first notification is shown
         }
-      } catch (error) {
-        log.warn('Failed to request notification permission:', error);
       }
+      
+      // Test notification availability
+      if (!Notification.isSupported()) {
+        log.warn('Notifications are not supported on this system');
+        return;
+      }
+      
+      log.info('Notification system initialized successfully');
+    } catch (error) {
+      log.warn('Failed to setup notification handlers:', error);
     }
   }
 
   async showNotification(options: NotificationOptions): Promise<void> {
     try {
-      const notification = new Notification({
+      // Check if notifications are supported
+      if (!Notification.isSupported()) {
+        log.warn('Notifications not supported, skipping notification');
+        return;
+      }
+
+      // Check permissions on macOS
+      if (process.platform === 'darwin') {
+        const { systemPreferences } = require('electron');
+        const permission = systemPreferences.getNotificationPermission?.();
+        
+        if (permission === 'denied') {
+          log.warn('Notification permissions denied, skipping notification');
+          return;
+        }
+      }
+
+      const notificationConfig: Electron.NotificationConstructorOptions = {
         title: options.title,
         body: options.body,
-        urgency: options.priority === 'high' ? 'critical' : 'normal',
-      });
+        silent: false,
+      };
+
+      // Add urgency for Linux systems
+      if (process.platform === 'linux' && options.priority) {
+        notificationConfig.urgency = options.priority === 'high' ? 'critical' : 'normal';
+      }
+
+      const notification = new Notification(notificationConfig);
 
       if (options.tag) {
         // Close existing notification with same tag
@@ -73,6 +121,16 @@ export class DesktopNotificationManager {
       notification.on('close', () => {
         if (options.tag) {
           this.activeNotifications.delete(options.tag);
+        }
+      });
+
+      notification.on('click', () => {
+        // Focus main window when notification is clicked
+        if (this.mainWindow) {
+          if (this.mainWindow.isMinimized()) {
+            this.mainWindow.restore();
+          }
+          this.mainWindow.focus();
         }
       });
 
@@ -120,6 +178,24 @@ export class DesktopNotificationManager {
     if (notification) {
       notification.close();
       this.activeNotifications.delete(tag);
+    }
+  }
+
+  isNotificationSupported(): boolean {
+    return Notification.isSupported();
+  }
+
+  getNotificationPermissionStatus(): 'granted' | 'denied' | 'unknown' | 'not-determined' {
+    try {
+      if (process.platform === 'darwin') {
+        const { systemPreferences } = require('electron');
+        return systemPreferences.getNotificationPermission?.() || 'unknown';
+      }
+      // On Windows and Linux, permissions are typically granted by default
+      return 'granted';
+    } catch (error) {
+      log.warn('Failed to get notification permission status:', error);
+      return 'unknown';
     }
   }
 

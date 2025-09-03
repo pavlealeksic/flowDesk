@@ -3,7 +3,7 @@
  * Handles full-text search across all data sources
  */
 
-export interface SearchDocument {
+export interface LocalSearchDocument {
   id: string;
   title: string;
   content: string;
@@ -13,7 +13,7 @@ export interface SearchDocument {
   updatedAt: Date;
 }
 
-export interface SearchResult {
+export interface LocalSearchResult {
   id: string;
   title: string;
   content: string;
@@ -23,7 +23,7 @@ export interface SearchResult {
   metadata: Record<string, any>;
 }
 
-export interface SearchOptions {
+export interface LocalSearchOptions {
   limit?: number;
   offset?: number;
   sources?: string[];
@@ -31,16 +31,16 @@ export interface SearchOptions {
   sortOrder?: 'asc' | 'desc';
 }
 
-export class SearchEngine {
-  private documents: Map<string, SearchDocument> = new Map();
+export class LocalSearchEngine {
+  private documents: Map<string, LocalSearchDocument> = new Map();
   private index: Map<string, Set<string>> = new Map(); // word -> document IDs
 
   async initialize(): Promise<void> {
     // Mock initialization
-    console.log('Search engine initialized');
+    console.log('Local search engine initialized');
   }
 
-  addDocument(document: SearchDocument): void {
+  addDocument(document: LocalSearchDocument): void {
     this.documents.set(document.id, document);
     this.indexDocument(document);
   }
@@ -53,7 +53,7 @@ export class SearchEngine {
     }
   }
 
-  updateDocument(documentId: string, updates: Partial<SearchDocument>): void {
+  updateDocument(documentId: string, updates: Partial<LocalSearchDocument>): void {
     const document = this.documents.get(documentId);
     if (document) {
       // Remove old index entries
@@ -67,7 +67,7 @@ export class SearchEngine {
     }
   }
 
-  search(query: string, options: SearchOptions = {}): SearchResult[] {
+  search(query: string, options: LocalSearchOptions = {}): LocalSearchResult[] {
     const {
       limit = 10,
       offset = 0,
@@ -91,7 +91,7 @@ export class SearchEngine {
     }
 
     // Convert to results
-    let results: SearchResult[] = [];
+    let results: LocalSearchResult[] = [];
     for (const [docId, score] of documentScores.entries()) {
       const document = this.documents.get(docId);
       if (document && (!sources || sources.includes(document.source))) {
@@ -133,7 +133,7 @@ export class SearchEngine {
     return this.documents.size;
   }
 
-  getDocument(id: string): SearchDocument | undefined {
+  getDocument(id: string): LocalSearchDocument | undefined {
     return this.documents.get(id);
   }
 
@@ -167,7 +167,7 @@ export class SearchEngine {
     }));
   }
 
-  private indexDocument(document: SearchDocument): void {
+  private indexDocument(document: LocalSearchDocument): void {
     const words = [
       ...this.tokenize(document.title.toLowerCase()),
       ...this.tokenize(document.content.toLowerCase())
@@ -181,7 +181,7 @@ export class SearchEngine {
     }
   }
 
-  private removeFromIndex(document: SearchDocument): void {
+  private removeFromIndex(document: LocalSearchDocument): void {
     const words = [
       ...this.tokenize(document.title.toLowerCase()),
       ...this.tokenize(document.content.toLowerCase())
@@ -211,7 +211,7 @@ export class SearchEngine {
       : content;
   }
 
-  private getHighlights(document: SearchDocument, queryWords: string[]): string[] {
+  private getHighlights(document: LocalSearchDocument, queryWords: string[]): string[] {
     const highlights: string[] = [];
     const content = document.content.toLowerCase();
     
@@ -228,4 +228,4 @@ export class SearchEngine {
   }
 }
 
-export const searchEngine = new SearchEngine();
+export const searchEngine = new LocalSearchEngine();

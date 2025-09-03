@@ -76,7 +76,7 @@ export class CronJobManager extends EventEmitter {
       this.isInitialized = true;
       this.emit('initialized');
     } catch (error) {
-      throw new Error(`Failed to initialize CronJobManager: ${error.message}`);
+      throw new Error(`Failed to initialize CronJobManager: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -106,7 +106,7 @@ export class CronJobManager extends EventEmitter {
       this.isInitialized = false;
       this.emit('shutdown');
     } catch (error) {
-      throw new Error(`Error during CronJobManager shutdown: ${error.message}`);
+      throw new Error(`Error during CronJobManager shutdown: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -518,7 +518,7 @@ export class CronJobManager extends EventEmitter {
     } catch (error) {
       executionResult.success = false;
       executionResult.duration = Date.now() - startTime;
-      executionResult.error = error.message;
+      executionResult.error = error instanceof Error ? error.message : String(error);
       
       this.addExecutionResult(executionResult);
       throw error;
@@ -541,9 +541,8 @@ export class CronJobManager extends EventEmitter {
   ): Date {
     try {
       const task = cron.schedule(cronExpression, () => {}, {
-        scheduled: false,
         timezone: timezone || 'UTC'
-      });
+      } as any);
 
       // This is a simplified implementation
       // In a real implementation, you'd use a proper cron library
@@ -554,13 +553,13 @@ export class CronJobManager extends EventEmitter {
       task.destroy();
       return nextRun;
     } catch (error) {
-      throw new Error(`Failed to calculate next run: ${error.message}`);
+      throw new Error(`Failed to calculate next run: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   private isValidCronExpression(expression: string): boolean {
     try {
-      const task = cron.schedule(expression, () => {}, { scheduled: false });
+      const task = cron.schedule(expression, () => {}, {} as any);
       task.destroy();
       return true;
     } catch {

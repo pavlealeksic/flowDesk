@@ -363,7 +363,7 @@ export class VariableResolver {
       try {
         return transformer(currentValue, ...args);
       } catch (error) {
-        throw new Error(`Error applying transform '${transformName}': ${error.message}`);
+        throw new Error(`Error applying transform '${transformName}': ${error instanceof Error ? error.message : String(error)}`);
       }
     }, value);
   }
@@ -451,7 +451,7 @@ export class VariableResolver {
     try {
       return func(...args);
     } catch (error) {
-      throw new Error(`Error calling function ${functionName}: ${error.message}`);
+      throw new Error(`Error calling function ${functionName}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -626,7 +626,7 @@ export class VariableResolver {
             return `Variable '${variableName}' failed custom validation`;
           }
         } catch (error) {
-          return `Custom validation error for '${variableName}': ${error.message}`;
+          return `Custom validation error for '${variableName}': ${error instanceof Error ? error.message : String(error)}`;
         }
       }
     }

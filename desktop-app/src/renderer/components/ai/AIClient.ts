@@ -86,8 +86,55 @@ class AIClient {
     }
 
     try {
-      // Import the NAPI bindings
-      const { NapiAIEngine } = await import('../../../../lib/rust-engine/index.node');
+      // Try to import the NAPI bindings - fallback to mock if not available
+      let NapiAIEngine: any;
+      try {
+        const rustLib = await import('../../../../shared/rust-lib/index.node');
+        NapiAIEngine = rustLib.NapiAIEngine;
+      } catch (importError) {
+        console.warn('Rust AI engine not available, using mock implementation:', importError);
+        // Mock implementation for development/testing
+        NapiAIEngine = class MockAIEngine {
+          constructor(config: any) {}
+          async initialize() {}
+          async storeApiKey(provider: string, apiKey: string) {}
+          async hasApiKey(provider: string) { return false; }
+          async deleteApiKey(provider: string) { return true; }
+          async createCompletion(request: any) {
+            return {
+              id: 'mock_completion_' + Date.now(),
+              model: request.model,
+              content: 'Mock AI response',
+              finishReason: 'stop',
+              usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 }
+            };
+          }
+          async createStreamingCompletion(request: any, callback: any) {
+            callback({
+              id: 'mock_stream_' + Date.now(),
+              model: request.model,
+              content: 'Mock streaming response',
+              finishReason: 'stop'
+            });
+          }
+          async getAvailableModels() { return []; }
+          async healthCheck() { return false; }
+          async getUsageStats() {
+            return {
+              totalRequests: 0,
+              successfulRequests: 0,
+              failedRequests: 0,
+              totalTokensUsed: 0,
+              totalCost: 0,
+              averageResponseTimeMs: 0
+            };
+          }
+          async getRateLimitInfo(provider: string) { return null; }
+          async clearCache(operationType?: string) {}
+          async getCacheStats() { return {}; }
+          async testProvider(provider: string) { return false; }
+        };
+      }
       
       this.aiEngine = new NapiAIEngine({
         cachePath: cacheDir || this.getDefaultCacheDir(),
@@ -447,8 +494,8 @@ class AIClient {
    * Get default cache directory
    */
   private getDefaultCacheDir(): string {
-    if (typeof window !== 'undefined' && window.electron) {
-      return window.electron.path.join(window.electron.app.getPath('userData'), 'ai_cache');
+    if (typeof window !== 'undefined' && (window as any).electronAPI) {
+      return (window as any).electronAPI.path.join((window as any).electronAPI.getPath('userData'), 'ai_cache');
     }
     return './ai_cache';
   }

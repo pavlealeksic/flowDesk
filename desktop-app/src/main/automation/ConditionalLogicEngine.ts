@@ -180,7 +180,7 @@ export class ConditionalLogicEngine {
     try {
       return operatorHandler(fieldValue, expectedValue, context);
     } catch (error) {
-      throw new Error(`Error evaluating condition: ${error.message}`);
+      throw new Error(`Error evaluating condition: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -332,7 +332,7 @@ export class ConditionalLogicEngine {
     try {
       return func(...args);
     } catch (error) {
-      throw new Error(`Error calling function ${functionName}: ${error.message}`);
+      throw new Error(`Error calling function ${functionName}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

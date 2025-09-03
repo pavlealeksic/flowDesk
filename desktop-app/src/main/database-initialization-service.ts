@@ -397,6 +397,9 @@ export class DatabaseInitializationService {
    */
   private getMailSchema(): string {
     return `
+      -- Enable foreign key support
+      PRAGMA foreign_keys = ON;
+      
       -- Mail accounts table
       CREATE TABLE IF NOT EXISTS accounts (
         id TEXT PRIMARY KEY,
@@ -436,10 +439,10 @@ export class DatabaseInitializationService {
         labels TEXT NOT NULL DEFAULT '[]',
         message_id TEXT,
         in_reply_to TEXT,
-        references TEXT NOT NULL DEFAULT '[]',
+        message_references TEXT NOT NULL DEFAULT '[]',
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (account_id) REFERENCES accounts (id)
+        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
       );
 
       -- Mail folders table
@@ -462,8 +465,8 @@ export class DatabaseInitializationService {
         sync_error TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (account_id) REFERENCES accounts (id),
-        FOREIGN KEY (parent_id) REFERENCES folders (id)
+        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+        FOREIGN KEY (parent_id) REFERENCES folders(id) ON DELETE CASCADE
       );
 
       -- Mail threads table
@@ -481,7 +484,7 @@ export class DatabaseInitializationService {
         last_message_at DATETIME NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (account_id) REFERENCES accounts (id)
+        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
       );
 
       -- Create performance indexes
@@ -506,6 +509,9 @@ export class DatabaseInitializationService {
    */
   private getCalendarSchema(): string {
     return `
+      -- Enable foreign key support
+      PRAGMA foreign_keys = ON;
+      
       -- Calendar accounts table
       CREATE TABLE IF NOT EXISTS calendar_accounts (
         id TEXT PRIMARY KEY,
@@ -546,7 +552,7 @@ export class DatabaseInitializationService {
         sync_error TEXT,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (account_id) REFERENCES calendar_accounts (id) ON DELETE CASCADE,
+        FOREIGN KEY (account_id) REFERENCES calendar_accounts(id) ON DELETE CASCADE,
         UNIQUE(account_id, provider_id)
       );
 
@@ -584,8 +590,8 @@ export class DatabaseInitializationService {
         privacy_sync_marker TEXT,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (calendar_id) REFERENCES calendars (id) ON DELETE CASCADE,
-        FOREIGN KEY (recurring_event_id) REFERENCES calendar_events (id) ON DELETE CASCADE,
+        FOREIGN KEY (calendar_id) REFERENCES calendars(id) ON DELETE CASCADE,
+        FOREIGN KEY (recurring_event_id) REFERENCES calendar_events(id) ON DELETE CASCADE,
         UNIQUE(calendar_id, provider_id)
       );
 

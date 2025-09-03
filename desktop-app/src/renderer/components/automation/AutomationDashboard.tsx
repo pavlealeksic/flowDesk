@@ -26,7 +26,7 @@ import { AutomationSettings } from './AutomationSettings';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Input } from '../ui/Input';
-import { Dropdown } from '../ui/Dropdown';
+import { Select } from '../ui/Select';
 
 import { 
   setLoading,
@@ -342,7 +342,7 @@ export const AutomationDashboard: React.FC<AutomationDashboardProps> = ({
                           onChange={(e) => setSearchQuery(e.target.value)}
                           className="w-48"
                         />
-                        <Dropdown
+                        <Select
                           value={filterCategory}
                           onChange={setFilterCategory}
                           options={[
@@ -354,7 +354,7 @@ export const AutomationDashboard: React.FC<AutomationDashboardProps> = ({
                             { label: 'Communication', value: 'communication' }
                           ]}
                         />
-                        <Dropdown
+                        <Select
                           value={sortBy}
                           onChange={setSortBy}
                           options={[

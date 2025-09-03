@@ -133,7 +133,7 @@ export class AutomationTestRunner extends EventEmitter {
       this.isInitialized = true;
       this.emit('initialized');
     } catch (error) {
-      throw new Error(`Failed to initialize AutomationTestRunner: ${error.message}`);
+      throw new Error(`Failed to initialize AutomationTestRunner: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -262,7 +262,7 @@ export class AutomationTestRunner extends EventEmitter {
       testSuite.status = 'failed';
       testSuite.updatedAt = new Date();
       
-      this.emit('testSuiteFailed', { testSuite, error: error.message });
+      this.emit('testSuiteFailed', { testSuite, error: error instanceof Error ? error.message : String(error) });
       throw error;
     }
   }
@@ -283,7 +283,13 @@ export class AutomationTestRunner extends EventEmitter {
       log('info', `Starting test: ${test.name}`);
 
       // Set up mocks
-      const activeMocks = await this.setupTestMocks(test.config.mocks || []);
+      const mockConfigs: MockConfiguration[] = (test.config.mocks || []).map(mock => ({
+        type: mock.type as 'api' | 'plugin' | 'service',
+        target: mock.target,
+        behavior: 'return',
+        response: mock.response
+      }));
+      const activeMocks = await this.setupTestMocks(mockConfigs);
       
       // Run setup steps
       if (test.config.setup) {
@@ -331,7 +337,7 @@ export class AutomationTestRunner extends EventEmitter {
       return report;
 
     } catch (error) {
-      log('error', `Test error: ${error.message}`);
+      log('error', `Test error: ${error instanceof Error ? error.message : String(error)}`);
 
       const report: TestReport = {
         testId: test.id,
@@ -340,7 +346,7 @@ export class AutomationTestRunner extends EventEmitter {
         executionTime: Date.now() - startTime,
         assertions,
         logs,
-        error: error.message
+        error: error instanceof Error ? error.message : String(error)
       };
 
       this.testResults.set(test.id, report);
@@ -602,10 +608,9 @@ export class AutomationTestRunner extends EventEmitter {
           timeout: 30000,
           mocks: [
             {
-              type: 'action',
+              type: 'service',
               target: action.id,
-              behavior: 'throw',
-              error: 'Test error'
+              response: { success: false, error: 'Test error' }
             }
           ]
         },
@@ -887,7 +892,7 @@ export class AutomationTestRunner extends EventEmitter {
         results.totalExecutions++;
         results.failedExecutions++;
         
-        const errorMessage = error.message || 'Unknown error';
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         errors.set(errorMessage, (errors.get(errorMessage) || 0) + 1);
       }
       

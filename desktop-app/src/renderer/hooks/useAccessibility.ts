@@ -247,7 +247,18 @@ export function useScreenReader() {
 
 // Hook for managing high contrast mode
 export function useHighContrast() {
-  const { settings, actions } = useAccessibilityContext()
+  const context = useAccessibilityContext()
+  
+  if (!context) {
+    // Return safe defaults when context is unavailable
+    return {
+      isHighContrast: false,
+      toggleHighContrast: () => {},
+      getContrastClass: (lowContrast: string, highContrast: string) => lowContrast
+    }
+  }
+
+  const { settings, actions } = context
 
   return {
     isHighContrast: settings.highContrast,
@@ -259,19 +270,44 @@ export function useHighContrast() {
 
 // Hook for managing reduced motion
 export function useReducedMotion() {
-  const { settings, actions } = useAccessibilityContext()
+  const context = useAccessibilityContext()
+  
+  if (!context) {
+    // Return safe defaults when context is unavailable
+    return {
+      prefersReducedMotion: false,
+      toggleReducedMotion: () => {},
+      getAnimationClass: (animated: string, staticClassName: string = '') => animated
+    }
+  }
+
+  const { settings, actions } = context
 
   return {
     prefersReducedMotion: settings.reducedMotion,
     toggleReducedMotion: actions.toggleReducedMotion,
-    getAnimationClass: (animated: string, staticClass: string = '') => 
-      settings.reducedMotion ? staticClass : animated
+    getAnimationClass: (animated: string, staticClassName: string = '') => 
+      settings.reducedMotion ? staticClassName : animated
   }
 }
 
 // Hook for managing text scaling
 export function useTextScaling() {
-  const { settings, actions } = useAccessibilityContext()
+  const context = useAccessibilityContext()
+  
+  if (!context) {
+    // Return safe defaults when context is unavailable
+    return {
+      textScale: 1.0,
+      setTextScale: () => {},
+      increaseTextSize: () => {},
+      decreaseTextSize: () => {},
+      resetTextSize: () => {},
+      getScaledSize: (baseSize: number) => baseSize
+    }
+  }
+
+  const { settings, actions } = context
 
   return {
     textScale: settings.textScale,
@@ -285,7 +321,19 @@ export function useTextScaling() {
 
 // Hook for managing color accessibility
 export function useColorAccessibility() {
-  const { settings, actions } = useAccessibilityContext()
+  const context = useAccessibilityContext()
+  
+  if (!context) {
+    // Return safe defaults when context is unavailable
+    return {
+      colorBlindnessMode: 'none' as const,
+      setColorBlindnessMode: () => {},
+      getColorClass: (baseClass: string) => baseClass,
+      isColorBlind: false
+    }
+  }
+
+  const { settings, actions } = context
 
   const getColorClass = useCallback((baseClass: string): string => {
     if (settings.colorBlindnessMode === 'none') return baseClass
@@ -342,9 +390,23 @@ export function useColorAccessibility() {
 
 // Hook for managing voice navigation
 export function useVoiceNavigation() {
-  const { settings, actions } = useAccessibilityContext()
+  const context = useAccessibilityContext()
   const [isListening, setIsListening] = useState(false)
   const [lastCommand, setLastCommand] = useState<string>('')
+  
+  if (!context) {
+    // Return safe defaults when context is unavailable
+    return {
+      isVoiceNavigationEnabled: false,
+      toggleVoiceNavigation: () => {},
+      isListening: false,
+      lastCommand: '',
+      startListening: () => null,
+      stopListening: () => {},
+    }
+  }
+
+  const { settings, actions } = context
 
   const startListening = useCallback(() => {
     if (!settings.voiceNavigation || !('webkitSpeechRecognition' in window)) return
@@ -384,7 +446,17 @@ export function useVoiceNavigation() {
 
 // Hook for managing keyboard-only navigation
 export function useKeyboardOnly() {
-  const { settings, actions } = useAccessibilityContext()
+  const context = useAccessibilityContext()
+  
+  if (!context) {
+    // Return safe defaults when context is unavailable
+    return {
+      isKeyboardOnly: false,
+      toggleKeyboardOnly: () => {}
+    }
+  }
+
+  const { settings, actions } = context
 
   useEffect(() => {
     if (settings.keyboardOnly) {
@@ -418,7 +490,17 @@ export function useKeyboardOnly() {
 
 // Hook for managing enhanced focus indicators
 export function useEnhancedFocus() {
-  const { settings } = useAccessibilityContext()
+  const context = useAccessibilityContext()
+  
+  if (!context) {
+    // Return safe defaults when context is unavailable
+    return {
+      isEnhancedFocus: false,
+      getFocusClasses: () => ''
+    }
+  }
+
+  const { settings } = context
 
   const getFocusClasses = useCallback((element: 'button' | 'input' | 'link' | 'general' = 'general') => {
     if (!settings.enhancedFocus) return ''

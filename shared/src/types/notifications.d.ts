@@ -636,8 +636,8 @@ export declare const NotificationSchema: z.ZodObject<{
         }>>;
     }, "strip", z.ZodTypeAny, {
         source: string;
-        icon?: string | undefined;
         url?: string | undefined;
+        icon?: string | undefined;
         context?: {
             accountId?: string | undefined;
             calendarId?: string | undefined;
@@ -650,8 +650,8 @@ export declare const NotificationSchema: z.ZodObject<{
         payload?: Record<string, any> | undefined;
     }, {
         source: string;
-        icon?: string | undefined;
         url?: string | undefined;
+        icon?: string | undefined;
         context?: {
             accountId?: string | undefined;
             calendarId?: string | undefined;
@@ -755,8 +755,8 @@ export declare const NotificationSchema: z.ZodObject<{
         type: "button" | "inline" | "quick_reply";
         label: string;
         dismissOnAction: boolean;
-        icon?: string | undefined;
         url?: string | undefined;
+        icon?: string | undefined;
         command?: string | undefined;
         payload?: Record<string, any> | undefined;
         style?: "primary" | "secondary" | "destructive" | undefined;
@@ -765,8 +765,8 @@ export declare const NotificationSchema: z.ZodObject<{
         type: "button" | "inline" | "quick_reply";
         label: string;
         dismissOnAction: boolean;
-        icon?: string | undefined;
         url?: string | undefined;
+        icon?: string | undefined;
         command?: string | undefined;
         payload?: Record<string, any> | undefined;
         style?: "primary" | "secondary" | "destructive" | undefined;
@@ -779,24 +779,24 @@ export declare const NotificationSchema: z.ZodObject<{
     createdAt: z.ZodDate;
     updatedAt: z.ZodDate;
 }, "strip", z.ZodTypeAny, {
+    id: string;
+    type: string;
+    createdAt: Date;
+    updatedAt: Date;
     title: string;
+    status: "read" | "sent" | "failed" | "pending" | "expired" | "delivered" | "dismissed";
     actions: {
         id: string;
         type: "button" | "inline" | "quick_reply";
         label: string;
         dismissOnAction: boolean;
-        icon?: string | undefined;
         url?: string | undefined;
+        icon?: string | undefined;
         command?: string | undefined;
         payload?: Record<string, any> | undefined;
         style?: "primary" | "secondary" | "destructive" | undefined;
     }[];
-    id: string;
-    createdAt: Date;
-    updatedAt: Date;
-    status: "sent" | "failed" | "pending" | "expired" | "delivered" | "read" | "dismissed";
     priority: "normal" | "high" | "low" | "critical" | "urgent";
-    type: string;
     message: string;
     userId: string;
     metadata: {
@@ -820,8 +820,8 @@ export declare const NotificationSchema: z.ZodObject<{
     };
     data: {
         source: string;
-        icon?: string | undefined;
         url?: string | undefined;
+        icon?: string | undefined;
         context?: {
             accountId?: string | undefined;
             calendarId?: string | undefined;
@@ -841,24 +841,24 @@ export declare const NotificationSchema: z.ZodObject<{
     readAt?: Date | undefined;
     dismissedAt?: Date | undefined;
 }, {
+    id: string;
+    type: string;
+    createdAt: Date;
+    updatedAt: Date;
     title: string;
+    status: "read" | "sent" | "failed" | "pending" | "expired" | "delivered" | "dismissed";
     actions: {
         id: string;
         type: "button" | "inline" | "quick_reply";
         label: string;
         dismissOnAction: boolean;
-        icon?: string | undefined;
         url?: string | undefined;
+        icon?: string | undefined;
         command?: string | undefined;
         payload?: Record<string, any> | undefined;
         style?: "primary" | "secondary" | "destructive" | undefined;
     }[];
-    id: string;
-    createdAt: Date;
-    updatedAt: Date;
-    status: "sent" | "failed" | "pending" | "expired" | "delivered" | "read" | "dismissed";
     priority: "normal" | "high" | "low" | "critical" | "urgent";
-    type: string;
     message: string;
     userId: string;
     metadata: {
@@ -882,8 +882,8 @@ export declare const NotificationSchema: z.ZodObject<{
     };
     data: {
         source: string;
-        icon?: string | undefined;
         url?: string | undefined;
+        icon?: string | undefined;
         context?: {
             accountId?: string | undefined;
             calendarId?: string | undefined;
@@ -956,20 +956,20 @@ export declare const NotificationRuleSchema: z.ZodObject<{
     createdAt: z.ZodDate;
     updatedAt: z.ZodDate;
 }, "strip", z.ZodTypeAny, {
-    actions: {
-        type: string;
-        params: Record<string, any>;
-    }[];
     id: string;
+    name: string;
     createdAt: Date;
     updatedAt: Date;
-    name: string;
     enabled: boolean;
     conditions: {
         field: string;
         operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in";
         value?: any;
         caseSensitive?: boolean | undefined;
+    }[];
+    actions: {
+        type: string;
+        params: Record<string, any>;
     }[];
     priority: number;
     userId: string;
@@ -982,20 +982,20 @@ export declare const NotificationRuleSchema: z.ZodObject<{
     description?: string | undefined;
     workspaceId?: string | undefined;
 }, {
-    actions: {
-        type: string;
-        params: Record<string, any>;
-    }[];
     id: string;
+    name: string;
     createdAt: Date;
     updatedAt: Date;
-    name: string;
     enabled: boolean;
     conditions: {
         field: string;
         operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in";
         value?: any;
         caseSensitive?: boolean | undefined;
+    }[];
+    actions: {
+        type: string;
+        params: Record<string, any>;
     }[];
     priority: number;
     userId: string;
@@ -1024,8 +1024,8 @@ export declare const NotificationDigestSchema: z.ZodObject<{
         batchTimeout: z.ZodOptional<z.ZodNumber>;
         timezone: z.ZodString;
     }, "strip", z.ZodTypeAny, {
-        type: "scheduled" | "immediate" | "batch";
         timezone: string;
+        type: "scheduled" | "immediate" | "batch";
         frequency?: "monthly" | "hourly" | "daily" | "weekly" | undefined;
         batchSize?: number | undefined;
         timeOfDay?: string | undefined;
@@ -1033,8 +1033,8 @@ export declare const NotificationDigestSchema: z.ZodObject<{
         dayOfMonth?: number | undefined;
         batchTimeout?: number | undefined;
     }, {
-        type: "scheduled" | "immediate" | "batch";
         timezone: string;
+        type: "scheduled" | "immediate" | "batch";
         frequency?: "monthly" | "hourly" | "daily" | "weekly" | undefined;
         batchSize?: number | undefined;
         timeOfDay?: string | undefined;
@@ -1070,11 +1070,11 @@ export declare const NotificationDigestSchema: z.ZodObject<{
             maxGroups: z.ZodNumber;
         }, "strip", z.ZodTypeAny, {
             enabled: boolean;
-            groupBy: "priority" | "type" | "date" | "source";
+            groupBy: "type" | "priority" | "date" | "source";
             maxGroups: number;
         }, {
             enabled: boolean;
-            groupBy: "priority" | "type" | "date" | "source";
+            groupBy: "type" | "priority" | "date" | "source";
             maxGroups: number;
         }>>;
         styling: z.ZodOptional<z.ZodObject<{
@@ -1098,7 +1098,7 @@ export declare const NotificationDigestSchema: z.ZodObject<{
         footer?: string | undefined;
         grouping?: {
             enabled: boolean;
-            groupBy: "priority" | "type" | "date" | "source";
+            groupBy: "type" | "priority" | "date" | "source";
             maxGroups: number;
         } | undefined;
         styling?: {
@@ -1114,7 +1114,7 @@ export declare const NotificationDigestSchema: z.ZodObject<{
         footer?: string | undefined;
         grouping?: {
             enabled: boolean;
-            groupBy: "priority" | "type" | "date" | "source";
+            groupBy: "type" | "priority" | "date" | "source";
             maxGroups: number;
         } | undefined;
         styling?: {
@@ -1150,9 +1150,9 @@ export declare const NotificationDigestSchema: z.ZodObject<{
     updatedAt: z.ZodDate;
 }, "strip", z.ZodTypeAny, {
     id: string;
+    name: string;
     createdAt: Date;
     updatedAt: Date;
-    name: string;
     enabled: boolean;
     userId: string;
     filters: {
@@ -1171,8 +1171,8 @@ export declare const NotificationDigestSchema: z.ZodObject<{
     };
     channels: string[];
     schedule: {
-        type: "scheduled" | "immediate" | "batch";
         timezone: string;
+        type: "scheduled" | "immediate" | "batch";
         frequency?: "monthly" | "hourly" | "daily" | "weekly" | undefined;
         batchSize?: number | undefined;
         timeOfDay?: string | undefined;
@@ -1188,7 +1188,7 @@ export declare const NotificationDigestSchema: z.ZodObject<{
         footer?: string | undefined;
         grouping?: {
             enabled: boolean;
-            groupBy: "priority" | "type" | "date" | "source";
+            groupBy: "type" | "priority" | "date" | "source";
             maxGroups: number;
         } | undefined;
         styling?: {
@@ -1200,9 +1200,9 @@ export declare const NotificationDigestSchema: z.ZodObject<{
     description?: string | undefined;
 }, {
     id: string;
+    name: string;
     createdAt: Date;
     updatedAt: Date;
-    name: string;
     enabled: boolean;
     userId: string;
     filters: {
@@ -1221,8 +1221,8 @@ export declare const NotificationDigestSchema: z.ZodObject<{
     };
     channels: string[];
     schedule: {
-        type: "scheduled" | "immediate" | "batch";
         timezone: string;
+        type: "scheduled" | "immediate" | "batch";
         frequency?: "monthly" | "hourly" | "daily" | "weekly" | undefined;
         batchSize?: number | undefined;
         timeOfDay?: string | undefined;
@@ -1238,7 +1238,7 @@ export declare const NotificationDigestSchema: z.ZodObject<{
         footer?: string | undefined;
         grouping?: {
             enabled: boolean;
-            groupBy: "priority" | "type" | "date" | "source";
+            groupBy: "type" | "priority" | "date" | "source";
             maxGroups: number;
         } | undefined;
         styling?: {

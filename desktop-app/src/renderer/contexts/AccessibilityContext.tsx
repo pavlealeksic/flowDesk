@@ -4,11 +4,16 @@ import React, { createContext, useContext, useReducer, useEffect, ReactNode } fr
 interface AccessibilitySettings {
   highContrast: boolean;
   textScaling: number;
+  textScale: number; // Alias for textScaling
   reduceMotion: boolean;
+  reducedMotion: boolean; // Alias for reduceMotion
   screenReader: boolean;
   keyboardNavigation: boolean;
+  keyboardOnly: boolean;
   focusIndicators: boolean;
+  enhancedFocus: boolean;
   colorBlindMode: 'none' | 'protanopia' | 'deuteranopia' | 'tritanopia' | 'monochrome';
+  colorBlindnessMode: 'none' | 'protanopia' | 'deuteranopia' | 'tritanopia' | 'monochrome' | 'achromatopsia'; // Extended alias
   voiceNavigation: boolean;
 }
 
@@ -19,8 +24,11 @@ type AccessibilityAction =
   | { type: 'TOGGLE_REDUCE_MOTION' }
   | { type: 'TOGGLE_SCREEN_READER' }
   | { type: 'TOGGLE_KEYBOARD_NAVIGATION' }
+  | { type: 'TOGGLE_KEYBOARD_ONLY' }
   | { type: 'TOGGLE_FOCUS_INDICATORS' }
+  | { type: 'TOGGLE_ENHANCED_FOCUS' }
   | { type: 'SET_COLOR_BLIND_MODE'; payload: AccessibilitySettings['colorBlindMode'] }
+  | { type: 'SET_COLOR_BLINDNESS_MODE'; payload: AccessibilitySettings['colorBlindnessMode'] }
   | { type: 'TOGGLE_VOICE_NAVIGATION' }
   | { type: 'RESET_SETTINGS' };
 
@@ -28,18 +36,39 @@ type AccessibilityAction =
 const defaultSettings: AccessibilitySettings = {
   highContrast: false,
   textScaling: 1.0,
+  textScale: 1.0,
   reduceMotion: false,
+  reducedMotion: false,
   screenReader: false,
   keyboardNavigation: true,
+  keyboardOnly: false,
   focusIndicators: true,
+  enhancedFocus: false,
   colorBlindMode: 'none',
+  colorBlindnessMode: 'none',
   voiceNavigation: false,
 };
+
+// Accessibility actions interface
+interface AccessibilityActions {
+  toggleHighContrast: () => void;
+  setTextScale: (scale: number) => void;
+  toggleReducedMotion: () => void;
+  toggleScreenReader: () => void;
+  toggleKeyboardNavigation: () => void;
+  toggleFocusIndicators: () => void;
+  setColorBlindnessMode: (mode: AccessibilitySettings['colorBlindnessMode']) => void;
+  toggleVoiceNavigation: () => void;
+  toggleKeyboardOnly: () => void;
+  toggleEnhancedFocus: () => void;
+  resetSettings: () => void;
+}
 
 // Accessibility context interface
 interface AccessibilityContextType {
   settings: AccessibilitySettings;
   updateSetting: (action: AccessibilityAction) => void;
+  actions: AccessibilityActions;
   isAccessibilityModeActive: boolean;
 }
 
@@ -50,18 +79,36 @@ function accessibilityReducer(state: AccessibilitySettings, action: Accessibilit
   switch (action.type) {
     case 'TOGGLE_HIGH_CONTRAST':
       return { ...state, highContrast: !state.highContrast };
-    case 'SET_TEXT_SCALING':
-      return { ...state, textScaling: Math.max(0.75, Math.min(2.0, action.payload)) };
-    case 'TOGGLE_REDUCE_MOTION':
-      return { ...state, reduceMotion: !state.reduceMotion };
+    case 'SET_TEXT_SCALING': {
+      const scaling = Math.max(0.75, Math.min(2.0, action.payload));
+      return { ...state, textScaling: scaling, textScale: scaling };
+    }
+    case 'TOGGLE_REDUCE_MOTION': {
+      const newValue = !state.reduceMotion;
+      return { ...state, reduceMotion: newValue, reducedMotion: newValue };
+    }
     case 'TOGGLE_SCREEN_READER':
       return { ...state, screenReader: !state.screenReader };
     case 'TOGGLE_KEYBOARD_NAVIGATION':
       return { ...state, keyboardNavigation: !state.keyboardNavigation };
+    case 'TOGGLE_KEYBOARD_ONLY':
+      return { ...state, keyboardOnly: !state.keyboardOnly };
     case 'TOGGLE_FOCUS_INDICATORS':
       return { ...state, focusIndicators: !state.focusIndicators };
+    case 'TOGGLE_ENHANCED_FOCUS':
+      return { ...state, enhancedFocus: !state.enhancedFocus };
     case 'SET_COLOR_BLIND_MODE':
       return { ...state, colorBlindMode: action.payload };
+    case 'SET_COLOR_BLINDNESS_MODE': {
+      const mode = action.payload;
+      // Map extended modes back to basic modes
+      const basicMode = mode === 'achromatopsia' ? 'monochrome' : mode;
+      return { 
+        ...state, 
+        colorBlindnessMode: mode,
+        colorBlindMode: basicMode as AccessibilitySettings['colorBlindMode']
+      };
+    }
     case 'TOGGLE_VOICE_NAVIGATION':
       return { ...state, voiceNavigation: !state.voiceNavigation };
     case 'RESET_SETTINGS':
@@ -163,9 +210,26 @@ export function AccessibilityProvider({ children }: AccessibilityProviderProps) 
     dispatch(action);
   };
 
+  // Create actions object
+  const actions: AccessibilityActions = {
+    toggleHighContrast: () => dispatch({ type: 'TOGGLE_HIGH_CONTRAST' }),
+    setTextScale: (scale: number) => dispatch({ type: 'SET_TEXT_SCALING', payload: scale }),
+    toggleReducedMotion: () => dispatch({ type: 'TOGGLE_REDUCE_MOTION' }),
+    toggleScreenReader: () => dispatch({ type: 'TOGGLE_SCREEN_READER' }),
+    toggleKeyboardNavigation: () => dispatch({ type: 'TOGGLE_KEYBOARD_NAVIGATION' }),
+    toggleKeyboardOnly: () => dispatch({ type: 'TOGGLE_KEYBOARD_ONLY' }),
+    toggleFocusIndicators: () => dispatch({ type: 'TOGGLE_FOCUS_INDICATORS' }),
+    toggleEnhancedFocus: () => dispatch({ type: 'TOGGLE_ENHANCED_FOCUS' }),
+    setColorBlindnessMode: (mode: AccessibilitySettings['colorBlindnessMode']) => 
+      dispatch({ type: 'SET_COLOR_BLINDNESS_MODE', payload: mode }),
+    toggleVoiceNavigation: () => dispatch({ type: 'TOGGLE_VOICE_NAVIGATION' }),
+    resetSettings: () => dispatch({ type: 'RESET_SETTINGS' }),
+  };
+
   const contextValue: AccessibilityContextType = {
     settings,
     updateSetting,
+    actions,
     isAccessibilityModeActive,
   };
 
@@ -236,4 +300,4 @@ export function useScreenReaderAnnouncements() {
   };
 }
 
-export type { AccessibilitySettings, AccessibilityAction };
+export type { AccessibilitySettings, AccessibilityAction, AccessibilityActions };

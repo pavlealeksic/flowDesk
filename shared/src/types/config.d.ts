@@ -942,15 +942,13 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
         tags: z.ZodArray<z.ZodString, "many">;
     }, "strip", z.ZodTypeAny, {
         id: string;
-        createdAt: Date;
         name: string;
-        tags: string[];
         type: "team" | "personal" | "organization";
+        createdAt: Date;
+        tags: string[];
         ownerId: string;
         icon?: string | undefined;
         description?: string | undefined;
-        organizationId?: string | undefined;
-        teamId?: string | undefined;
         members?: {
             role: "owner" | "admin" | "member" | "viewer";
             userId: string;
@@ -958,17 +956,17 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             joinedAt: Date;
             invitedBy?: string | undefined;
         }[] | undefined;
+        organizationId?: string | undefined;
+        teamId?: string | undefined;
     }, {
         id: string;
-        createdAt: Date;
         name: string;
-        tags: string[];
         type: "team" | "personal" | "organization";
+        createdAt: Date;
+        tags: string[];
         ownerId: string;
         icon?: string | undefined;
         description?: string | undefined;
-        organizationId?: string | undefined;
-        teamId?: string | undefined;
         members?: {
             role: "owner" | "admin" | "member" | "viewer";
             userId: string;
@@ -976,6 +974,8 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             joinedAt: Date;
             invitedBy?: string | undefined;
         }[] | undefined;
+        organizationId?: string | undefined;
+        teamId?: string | undefined;
     }>;
     preferences: z.ZodObject<{
         theme: z.ZodObject<{
@@ -987,7 +987,7 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             highContrast: z.ZodBoolean;
             colorBlindFriendly: z.ZodBoolean;
         }, "strip", z.ZodTypeAny, {
-            mode: "light" | "dark" | "auto";
+            mode: "auto" | "light" | "dark";
             accentColor: string;
             fontFamily: string;
             fontSize: "small" | "medium" | "large";
@@ -995,7 +995,7 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             colorBlindFriendly: boolean;
             customTheme?: string | undefined;
         }, {
-            mode: "light" | "dark" | "auto";
+            mode: "auto" | "light" | "dark";
             accentColor: string;
             fontFamily: string;
             fontSize: "small" | "medium" | "large";
@@ -1098,8 +1098,8 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
                 days: number[];
             }>;
         }, "strip", z.ZodTypeAny, {
-            sound: boolean;
             push: boolean;
+            sound: boolean;
             desktop: boolean;
             emailDigest: boolean;
             soundFile: string;
@@ -1110,8 +1110,8 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
                 days: number[];
             };
         }, {
-            sound: boolean;
             push: boolean;
+            sound: boolean;
             desktop: boolean;
             emailDigest: boolean;
             soundFile: string;
@@ -1130,24 +1130,33 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             autoSync: z.ZodBoolean;
             checkUpdates: z.ZodBoolean;
         }, "strip", z.ZodTypeAny, {
+            autoSync: boolean;
             autoStart: boolean;
             restoreWorkspace: boolean;
             defaultApps: string[];
             layout: string;
-            autoSync: boolean;
             checkUpdates: boolean;
         }, {
+            autoSync: boolean;
             autoStart: boolean;
             restoreWorkspace: boolean;
             defaultApps: string[];
             layout: string;
-            autoSync: boolean;
             checkUpdates: boolean;
         }>;
     }, "strip", z.ZodTypeAny, {
+        theme: {
+            mode: "auto" | "light" | "dark";
+            accentColor: string;
+            fontFamily: string;
+            fontSize: "small" | "medium" | "large";
+            highContrast: boolean;
+            colorBlindFriendly: boolean;
+            customTheme?: string | undefined;
+        };
         notifications: {
-            sound: boolean;
             push: boolean;
+            sound: boolean;
             desktop: boolean;
             emailDigest: boolean;
             soundFile: string;
@@ -1157,15 +1166,6 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
                 endTime: string;
                 days: number[];
             };
-        };
-        theme: {
-            mode: "light" | "dark" | "auto";
-            accentColor: string;
-            fontFamily: string;
-            fontSize: "small" | "medium" | "large";
-            highContrast: boolean;
-            colorBlindFriendly: boolean;
-            customTheme?: string | undefined;
         };
         language: {
             timezone: string;
@@ -1194,17 +1194,26 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             voiceCommands: boolean;
         };
         startup: {
+            autoSync: boolean;
             autoStart: boolean;
             restoreWorkspace: boolean;
             defaultApps: string[];
             layout: string;
-            autoSync: boolean;
             checkUpdates: boolean;
         };
     }, {
+        theme: {
+            mode: "auto" | "light" | "dark";
+            accentColor: string;
+            fontFamily: string;
+            fontSize: "small" | "medium" | "large";
+            highContrast: boolean;
+            colorBlindFriendly: boolean;
+            customTheme?: string | undefined;
+        };
         notifications: {
-            sound: boolean;
             push: boolean;
+            sound: boolean;
             desktop: boolean;
             emailDigest: boolean;
             soundFile: string;
@@ -1214,15 +1223,6 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
                 endTime: string;
                 days: number[];
             };
-        };
-        theme: {
-            mode: "light" | "dark" | "auto";
-            accentColor: string;
-            fontFamily: string;
-            fontSize: "small" | "medium" | "large";
-            highContrast: boolean;
-            colorBlindFriendly: boolean;
-            customTheme?: string | undefined;
         };
         language: {
             timezone: string;
@@ -1251,11 +1251,11 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             voiceCommands: boolean;
         };
         startup: {
+            autoSync: boolean;
             autoStart: boolean;
             restoreWorkspace: boolean;
             defaultApps: string[];
             layout: string;
-            autoSync: boolean;
             checkUpdates: boolean;
         };
     }>;
@@ -1271,8 +1271,8 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             lastUpdateCheck: z.ZodOptional<z.ZodDate>;
             autoUpdate: z.ZodBoolean;
         }, "strip", z.ZodTypeAny, {
-            enabled: boolean;
             settings: Record<string, any>;
+            enabled: boolean;
             version: string;
             permissions: string[];
             pluginId: string;
@@ -1280,8 +1280,8 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             data: Record<string, any>;
             lastUpdateCheck?: Date | undefined;
         }, {
-            enabled: boolean;
             settings: Record<string, any>;
+            enabled: boolean;
             version: string;
             permissions: string[];
             pluginId: string;
@@ -1307,8 +1307,8 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
         }>;
     }, "strip", z.ZodTypeAny, {
         plugins: Record<string, {
-            enabled: boolean;
             settings: Record<string, any>;
+            enabled: boolean;
             version: string;
             permissions: string[];
             pluginId: string;
@@ -1324,8 +1324,8 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
         };
     }, {
         plugins: Record<string, {
-            enabled: boolean;
             settings: Record<string, any>;
+            enabled: boolean;
             version: string;
             permissions: string[];
             pluginId: string;
@@ -1533,6 +1533,7 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             encrypt: boolean;
         }>;
     }, "strip", z.ZodTypeAny, {
+        autoSync: boolean;
         enabled: boolean;
         encryption: {
             algorithm: "chacha20poly1305" | "aes256gcm";
@@ -1549,7 +1550,6 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
                 lastRotation?: Date | undefined;
             };
         };
-        autoSync: boolean;
         intervalMinutes: number;
         conflictResolution: "manual" | "latest" | "merge";
         excludePatterns: string[];
@@ -1563,6 +1563,7 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
         };
         transport?: any;
     }, {
+        autoSync: boolean;
         enabled: boolean;
         encryption: {
             algorithm: "chacha20poly1305" | "aes256gcm";
@@ -1579,7 +1580,6 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
                 lastRotation?: Date | undefined;
             };
         };
-        autoSync: boolean;
         intervalMinutes: number;
         conflictResolution: "manual" | "latest" | "merge";
         excludePatterns: string[];
@@ -1611,9 +1611,18 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     notifications: Record<string, any>;
     preferences: {
+        theme: {
+            mode: "auto" | "light" | "dark";
+            accentColor: string;
+            fontFamily: string;
+            fontSize: "small" | "medium" | "large";
+            highContrast: boolean;
+            colorBlindFriendly: boolean;
+            customTheme?: string | undefined;
+        };
         notifications: {
-            sound: boolean;
             push: boolean;
+            sound: boolean;
             desktop: boolean;
             emailDigest: boolean;
             soundFile: string;
@@ -1623,15 +1632,6 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
                 endTime: string;
                 days: number[];
             };
-        };
-        theme: {
-            mode: "light" | "dark" | "auto";
-            accentColor: string;
-            fontFamily: string;
-            fontSize: "small" | "medium" | "large";
-            highContrast: boolean;
-            colorBlindFriendly: boolean;
-            customTheme?: string | undefined;
         };
         language: {
             timezone: string;
@@ -1660,11 +1660,11 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             voiceCommands: boolean;
         };
         startup: {
+            autoSync: boolean;
             autoStart: boolean;
             restoreWorkspace: boolean;
             defaultApps: string[];
             layout: string;
-            autoSync: boolean;
             checkUpdates: boolean;
         };
     };
@@ -1672,8 +1672,8 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
     automations: Record<string, any>;
     plugins: {
         plugins: Record<string, {
-            enabled: boolean;
             settings: Record<string, any>;
+            enabled: boolean;
             version: string;
             permissions: string[];
             pluginId: string;
@@ -1689,6 +1689,7 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
         };
     };
     sync: {
+        autoSync: boolean;
         enabled: boolean;
         encryption: {
             algorithm: "chacha20poly1305" | "aes256gcm";
@@ -1705,7 +1706,6 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
                 lastRotation?: Date | undefined;
             };
         };
-        autoSync: boolean;
         intervalMinutes: number;
         conflictResolution: "manual" | "latest" | "merge";
         excludePatterns: string[];
@@ -1721,15 +1721,13 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
     };
     workspace: {
         id: string;
-        createdAt: Date;
         name: string;
-        tags: string[];
         type: "team" | "personal" | "organization";
+        createdAt: Date;
+        tags: string[];
         ownerId: string;
         icon?: string | undefined;
         description?: string | undefined;
-        organizationId?: string | undefined;
-        teamId?: string | undefined;
         members?: {
             role: "owner" | "admin" | "member" | "viewer";
             userId: string;
@@ -1737,6 +1735,8 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             joinedAt: Date;
             invitedBy?: string | undefined;
         }[] | undefined;
+        organizationId?: string | undefined;
+        teamId?: string | undefined;
     };
     apps: Record<string, any>;
     keybindings: {
@@ -1771,9 +1771,18 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
 }, {
     notifications: Record<string, any>;
     preferences: {
+        theme: {
+            mode: "auto" | "light" | "dark";
+            accentColor: string;
+            fontFamily: string;
+            fontSize: "small" | "medium" | "large";
+            highContrast: boolean;
+            colorBlindFriendly: boolean;
+            customTheme?: string | undefined;
+        };
         notifications: {
-            sound: boolean;
             push: boolean;
+            sound: boolean;
             desktop: boolean;
             emailDigest: boolean;
             soundFile: string;
@@ -1783,15 +1792,6 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
                 endTime: string;
                 days: number[];
             };
-        };
-        theme: {
-            mode: "light" | "dark" | "auto";
-            accentColor: string;
-            fontFamily: string;
-            fontSize: "small" | "medium" | "large";
-            highContrast: boolean;
-            colorBlindFriendly: boolean;
-            customTheme?: string | undefined;
         };
         language: {
             timezone: string;
@@ -1820,11 +1820,11 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             voiceCommands: boolean;
         };
         startup: {
+            autoSync: boolean;
             autoStart: boolean;
             restoreWorkspace: boolean;
             defaultApps: string[];
             layout: string;
-            autoSync: boolean;
             checkUpdates: boolean;
         };
     };
@@ -1832,8 +1832,8 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
     automations: Record<string, any>;
     plugins: {
         plugins: Record<string, {
-            enabled: boolean;
             settings: Record<string, any>;
+            enabled: boolean;
             version: string;
             permissions: string[];
             pluginId: string;
@@ -1849,6 +1849,7 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
         };
     };
     sync: {
+        autoSync: boolean;
         enabled: boolean;
         encryption: {
             algorithm: "chacha20poly1305" | "aes256gcm";
@@ -1865,7 +1866,6 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
                 lastRotation?: Date | undefined;
             };
         };
-        autoSync: boolean;
         intervalMinutes: number;
         conflictResolution: "manual" | "latest" | "merge";
         excludePatterns: string[];
@@ -1881,15 +1881,13 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
     };
     workspace: {
         id: string;
-        createdAt: Date;
         name: string;
-        tags: string[];
         type: "team" | "personal" | "organization";
+        createdAt: Date;
+        tags: string[];
         ownerId: string;
         icon?: string | undefined;
         description?: string | undefined;
-        organizationId?: string | undefined;
-        teamId?: string | undefined;
         members?: {
             role: "owner" | "admin" | "member" | "viewer";
             userId: string;
@@ -1897,6 +1895,8 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             joinedAt: Date;
             invitedBy?: string | undefined;
         }[] | undefined;
+        organizationId?: string | undefined;
+        teamId?: string | undefined;
     };
     apps: Record<string, any>;
     keybindings: {

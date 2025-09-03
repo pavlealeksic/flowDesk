@@ -710,10 +710,10 @@ export declare const EmailMessageSchema: z.ZodObject<{
     createdAt: z.ZodDate;
     updatedAt: z.ZodDate;
 }, "strip", z.ZodTypeAny, {
-    accountId: string;
     id: string;
     createdAt: Date;
     updatedAt: Date;
+    accountId: string;
     subject: string;
     to: {
         address: string;
@@ -784,10 +784,10 @@ export declare const EmailMessageSchema: z.ZodObject<{
         } | undefined;
     } | undefined;
 }, {
-    accountId: string;
     id: string;
     createdAt: Date;
     updatedAt: Date;
+    accountId: string;
     subject: string;
     to: {
         address: string;
@@ -872,15 +872,15 @@ export declare const MailAccountSchema: z.ZodObject<{
         password: z.ZodOptional<z.ZodString>;
         additionalTokens: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
     }, "strip", z.ZodTypeAny, {
-        password?: string | undefined;
         accessToken?: string | undefined;
         refreshToken?: string | undefined;
+        password?: string | undefined;
         tokenExpiresAt?: Date | undefined;
         additionalTokens?: Record<string, string> | undefined;
     }, {
-        password?: string | undefined;
         accessToken?: string | undefined;
         refreshToken?: string | undefined;
+        password?: string | undefined;
         tokenExpiresAt?: Date | undefined;
         additionalTokens?: Record<string, string> | undefined;
     }>>;
@@ -892,42 +892,42 @@ export declare const MailAccountSchema: z.ZodObject<{
     createdAt: z.ZodDate;
     updatedAt: z.ZodDate;
 }, "strip", z.ZodTypeAny, {
-    email: string;
     id: string;
+    email: string;
+    provider: "gmail" | "outlook" | "yahoo" | "imap" | "fastmail" | "exchange" | "proton" | "aol";
+    isEnabled: boolean;
+    name: string;
     createdAt: Date;
     updatedAt: Date;
-    name: string;
     status: "error" | "active" | "auth_error" | "quota_exceeded" | "suspended" | "disabled";
-    provider: "gmail" | "outlook" | "imap" | "yahoo" | "fastmail" | "exchange" | "proton" | "aol";
-    isEnabled: boolean;
     userId: string;
     syncIntervalMinutes: number;
     config?: any;
     credentials?: {
-        password?: string | undefined;
         accessToken?: string | undefined;
         refreshToken?: string | undefined;
+        password?: string | undefined;
         tokenExpiresAt?: Date | undefined;
         additionalTokens?: Record<string, string> | undefined;
     } | undefined;
     lastSyncAt?: Date | undefined;
     nextSyncAt?: Date | undefined;
 }, {
-    email: string;
     id: string;
+    email: string;
+    provider: "gmail" | "outlook" | "yahoo" | "imap" | "fastmail" | "exchange" | "proton" | "aol";
+    isEnabled: boolean;
+    name: string;
     createdAt: Date;
     updatedAt: Date;
-    name: string;
     status: "error" | "active" | "auth_error" | "quota_exceeded" | "suspended" | "disabled";
-    provider: "gmail" | "outlook" | "imap" | "yahoo" | "fastmail" | "exchange" | "proton" | "aol";
-    isEnabled: boolean;
     userId: string;
     syncIntervalMinutes: number;
     config?: any;
     credentials?: {
-        password?: string | undefined;
         accessToken?: string | undefined;
         refreshToken?: string | undefined;
+        password?: string | undefined;
         tokenExpiresAt?: Date | undefined;
         additionalTokens?: Record<string, string> | undefined;
     } | undefined;

@@ -11,9 +11,11 @@ export * from './mail';
 export * from './calendar';
 export * from './plugin';
 export * from './billing';
-export * from './security';
 export * from './errors';
 export * from './api';
+
+// Export specific types from security to avoid conflicts
+export type { DeviceInfo } from './security';
 
 // Export specific types from config to avoid conflicts
 export type {
@@ -57,7 +59,11 @@ export type {
   SearchResult as SearchResultType,
   SearchOptions as SearchQueryOptions,
   SearchResponse,
-  SearchAnalytics
+  SearchAnalytics,
+  SearchConfiguration,
+  ContentType,
+  ProviderType,
+  SearchDocument
 } from './search';
 
 // Export specific types from notifications
@@ -71,10 +77,18 @@ export type {
 
 // Export specific types from automations
 export type {
-  AutomationTrigger as AutomationTriggerType,
-  AutomationCondition as AutomationConditionType,
-  AutomationAction as AutomationActionType,
-  AutomationExecution
+  AutomationTriggerType,
+  AutomationActionType,
+  AutomationCondition,
+  AutomationAction,
+  AutomationTrigger,
+  AutomationExecution,
+  AutomationExecutionStatus,
+  AutomationTest,
+  AutomationVariable,
+  AutomationVariableContext,
+  AutomationRecipe,
+  ConditionOperator
 } from './automations';
 
 // Legacy types have been removed to prevent duplicate exports

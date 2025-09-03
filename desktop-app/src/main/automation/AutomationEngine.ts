@@ -13,27 +13,24 @@
 
 import { EventEmitter } from 'events';
 import { 
-  AutomationRecipe,
   AutomationExecution,
-  AutomationTrigger,
-  AutomationAction,
-  AutomationCondition,
+  AutomationTest,
   AutomationVariable,
   AutomationVariableContext,
-  AutomationEngineConfig,
-  AutomationScheduler,
-  AutomationTest,
   AutomationExecutionStatus,
+  AutomationRecipe,
   AutomationTriggerType,
+  AutomationCondition,
   AutomationActionType,
-  ConditionOperator
+  AutomationAction,
+  AutomationTrigger
 } from '@flow-desk/shared';
 
-import { PluginManager } from '../plugin-runtime/PluginManager';
-import { SearchEngine } from '../../search/SearchEngine';
-import { EmailEngine } from '../../email/EmailEngine';
-import { CalendarEngine } from '../../calendar/CalendarEngine';
-import { NotificationService } from '../../notifications/NotificationService';
+// import { PluginManager } from '../plugin-runtime/PluginManager';
+// import { SearchEngine } from '../../search/SearchEngine';
+// import { EmailEngine } from '../../email/EmailEngine';
+// import { CalendarEngine } from '../../calendar/CalendarEngine';
+// import { NotificationService } from '../../notifications/NotificationService';
 import { CronJobManager } from './CronJobManager';
 import { VariableResolver } from './VariableResolver';
 import { ConditionalLogicEngine } from './ConditionalLogicEngine';
@@ -42,12 +39,12 @@ import { ActionRegistry } from './ActionRegistry';
 import { AutomationLogger } from './AutomationLogger';
 
 export class AutomationEngine extends EventEmitter {
-  private readonly config: AutomationEngineConfig;
-  private readonly pluginManager: PluginManager;
-  private readonly searchEngine: SearchEngine;
-  private readonly emailEngine: EmailEngine;
-  private readonly calendarEngine: CalendarEngine;
-  private readonly notificationService: NotificationService;
+  private readonly config: any; // AutomationEngineConfig;
+  private readonly pluginManager: any; // PluginManager;
+  private readonly searchEngine: any; // SearchEngine;
+  private readonly emailEngine: any; // EmailEngine;
+  private readonly calendarEngine: any; // CalendarEngine;
+  private readonly notificationService: any; // NotificationService;
   private readonly cronJobManager: CronJobManager;
   private readonly variableResolver: VariableResolver;
   private readonly conditionalLogicEngine: ConditionalLogicEngine;
@@ -57,9 +54,9 @@ export class AutomationEngine extends EventEmitter {
 
   private readonly recipes = new Map<string, AutomationRecipe>();
   private readonly executions = new Map<string, AutomationExecution>();
-  private readonly schedulers = new Map<string, AutomationScheduler>();
-  private readonly tests = new Map<string, AutomationTest>();
-  private readonly variables = new Map<string, AutomationVariable>();
+  private readonly schedulers = new Map<string, any>(); // AutomationScheduler
+  private readonly tests = new Map<string, any>(); // AutomationTest
+  private readonly variables = new Map<string, any>(); // AutomationVariable
   
   private readonly executionQueue: AutomationExecution[] = [];
   private readonly activeExecutions = new Set<string>();
@@ -67,12 +64,12 @@ export class AutomationEngine extends EventEmitter {
   private isShuttingDown = false;
 
   constructor(
-    config: AutomationEngineConfig,
-    pluginManager: PluginManager,
-    searchEngine: SearchEngine,
-    emailEngine: EmailEngine,
-    calendarEngine: CalendarEngine,
-    notificationService: NotificationService
+    config: any, // AutomationEngineConfig,
+    pluginManager: any, // PluginManager,
+    searchEngine: any, // SearchEngine,
+    emailEngine: any, // EmailEngine,
+    calendarEngine: any, // CalendarEngine,
+    notificationService: any // NotificationService
   ) {
     super();
     
@@ -257,7 +254,7 @@ export class AutomationEngine extends EventEmitter {
 
     try {
       // Cancel running executions for this recipe
-      for (const execution of this.executions.values()) {
+      for (const execution of Array.from(this.executions.values())) {
         if (execution.recipeId === recipeId && execution.status === 'running') {
           await this.cancelExecution(execution.id);
         }
@@ -300,7 +297,7 @@ export class AutomationEngine extends EventEmitter {
       recipeId,
       userId: recipe.ownerId,
       trigger: {
-        type: 'manual',
+        type: 'custom_event',
         data: context,
         timestamp: new Date()
       },
@@ -416,11 +413,11 @@ export class AutomationEngine extends EventEmitter {
         startedAt: new Date(),
         completedAt: new Date(),
         output: null,
-        error: error.message,
+        error: error instanceof Error ? error.message : String(error),
         assertions: []
       };
       
-      this.logger.error(`Test failed for recipe ${recipe.name}`, error);
+      this.logger.error(`Test failed for recipe ${recipe.name}`, error instanceof Error ? error : new Error(String(error)));
       this.emit('testFailed', test);
       
       return test;
@@ -461,14 +458,14 @@ export class AutomationEngine extends EventEmitter {
    * Get available triggers
    */
   getAvailableTriggers(): Array<{ type: AutomationTriggerType; name: string; description: string; schema: any }> {
-    return this.triggerRegistry.getAllTriggers();
+    return this.triggerRegistry.getAllTriggers() as Array<{ type: AutomationTriggerType; name: string; description: string; schema: any }>;
   }
 
   /**
    * Get available actions
    */
   getAvailableActions(): Array<{ type: AutomationActionType; name: string; description: string; schema: any }> {
-    return this.actionRegistry.getAllActions();
+    return this.actionRegistry.getAllActions() as Array<{ type: AutomationActionType; name: string; description: string; schema: any }>;
   }
 
   /**
@@ -504,22 +501,22 @@ export class AutomationEngine extends EventEmitter {
 
   private setupEventListeners(): void {
     // Email events
-    this.emailEngine.on('emailReceived', (data) => this.handleTriggerEvent('email_received', data));
-    this.emailEngine.on('emailStarred', (data) => this.handleTriggerEvent('email_starred', data));
-    this.emailEngine.on('emailArchived', (data) => this.handleTriggerEvent('email_archived', data));
+    this.emailEngine.on('emailReceived', (data: any) => this.handleTriggerEvent('email_received', data));
+    this.emailEngine.on('emailStarred', (data: any) => this.handleTriggerEvent('email_starred', data));
+    this.emailEngine.on('emailArchived', (data: any) => this.handleTriggerEvent('email_archived', data));
     
     // Calendar events
-    this.calendarEngine.on('eventCreated', (data) => this.handleTriggerEvent('event_created', data));
-    this.calendarEngine.on('eventStarting', (data) => this.handleTriggerEvent('event_starting', data));
-    this.calendarEngine.on('eventEnded', (data) => this.handleTriggerEvent('event_ended', data));
+    this.calendarEngine.on('eventCreated', (data: any) => this.handleTriggerEvent('event_created', data));
+    this.calendarEngine.on('eventStarting', (data: any) => this.handleTriggerEvent('event_starting', data));
+    this.calendarEngine.on('eventEnded', (data: any) => this.handleTriggerEvent('event_ended', data));
     
     // Search events
-    this.searchEngine.on('searchPerformed', (data) => this.handleTriggerEvent('search_performed', data));
-    this.searchEngine.on('contentIndexed', (data) => this.handleTriggerEvent('content_indexed', data));
+    this.searchEngine.on('searchPerformed', (data: any) => this.handleTriggerEvent('search_performed', data));
+    this.searchEngine.on('contentIndexed', (data: any) => this.handleTriggerEvent('content_indexed', data));
     
     // Plugin events
-    this.pluginManager.on('pluginInstalled', (data) => this.handleTriggerEvent('plugin_installed', data));
-    this.pluginManager.on('pluginEvent', (data) => this.handleTriggerEvent('plugin_event', data));
+    this.pluginManager.on('pluginInstalled', (data: any) => this.handleTriggerEvent('plugin_installed', data));
+    this.pluginManager.on('pluginEvent', (data: any) => this.handleTriggerEvent('plugin_event', data));
   }
 
   private async handleTriggerEvent(triggerType: AutomationTriggerType, data: any): Promise<void> {
@@ -549,7 +546,13 @@ export class AutomationEngine extends EventEmitter {
       return this.conditionalLogicEngine.evaluateConditions(
         recipe.trigger.conditions || [],
         data,
-        {}
+        {
+          global: {},
+          recipe: recipe.settings.variables || {},
+          execution: {},
+          step: {},
+          computed: {}
+        }
       );
     });
   }
@@ -668,7 +671,7 @@ export class AutomationEngine extends EventEmitter {
       execution.endedAt = new Date();
       execution.duration = execution.endedAt.getTime() - execution.startedAt.getTime();
       execution.error = {
-        message: error.message,
+        message: error instanceof Error ? error.message : String(error),
         code: 'EXECUTION_FAILED',
         timestamp: new Date()
       };
@@ -692,8 +695,16 @@ export class AutomationEngine extends EventEmitter {
       type: action.type,
       status: 'running' as AutomationExecutionStatus,
       input: action.config,
-      retries: [],
-      startedAt: new Date()
+      output: undefined as any,
+      error: undefined as any,
+      retries: [] as Array<{
+        attempt: number;
+        timestamp: Date;
+        error?: string;
+      }>,
+      startedAt: new Date(),
+      endedAt: undefined as Date | undefined,
+      duration: undefined as number | undefined
     };
 
     try {
@@ -718,7 +729,7 @@ export class AutomationEngine extends EventEmitter {
         attempts++;
         
         try {
-          const result = await this.actionRegistry.executeAction(action.type, resolvedConfig, execution.context);
+          const result = await this.actionRegistry.executeAction(action.type as any, resolvedConfig, execution.context);
           
           actionExecution.status = 'completed';
           actionExecution.output = result;
@@ -728,7 +739,7 @@ export class AutomationEngine extends EventEmitter {
           return actionExecution;
           
         } catch (error) {
-          lastError = error;
+          lastError = error instanceof Error ? error : new Error(String(error));
           
           if (attempts < maxAttempts && action.retry) {
             const delay = this.calculateRetryDelay(attempts, action.retry);
@@ -737,10 +748,10 @@ export class AutomationEngine extends EventEmitter {
             actionExecution.retries.push({
               attempt: attempts,
               timestamp: new Date(),
-              error: error.message
+              error: error instanceof Error ? error.message : String(error)
             });
             
-            this.logger.warn(`Action retry ${attempts}/${maxAttempts} for ${action.type}`, error);
+            this.logger.warn(`Action retry ${attempts}/${maxAttempts} for ${action.type}`);
           }
         }
       }
@@ -750,7 +761,7 @@ export class AutomationEngine extends EventEmitter {
     } catch (error) {
       actionExecution.status = 'failed';
       actionExecution.error = {
-        message: error.message,
+        message: error instanceof Error ? error.message : String(error),
         code: 'ACTION_FAILED',
         details: error
       };
@@ -782,7 +793,7 @@ export class AutomationEngine extends EventEmitter {
   private async getGlobalVariables(): Promise<Record<string, any>> {
     const globalVars: Record<string, any> = {};
     
-    for (const variable of this.variables.values()) {
+    for (const variable of Array.from(this.variables.values())) {
       if (variable.scope === 'global') {
         globalVars[variable.name] = variable.value;
       }
@@ -826,7 +837,7 @@ export class AutomationEngine extends EventEmitter {
     // Update recent executions
     recipe.stats.recentExecutions.unshift({
       timestamp: execution.startedAt,
-      status: execution.status,
+      status: execution.status === 'completed' ? 'success' : (execution.status as any),
       duration: execution.duration || 0,
       error: execution.error?.message
     });
@@ -839,7 +850,7 @@ export class AutomationEngine extends EventEmitter {
 
   private async validateRecipe(recipe: Partial<AutomationRecipe>): Promise<void> {
     // Validate trigger
-    if (!this.triggerRegistry.isValidTrigger(recipe.trigger?.type)) {
+    if (!recipe.trigger?.type || !this.triggerRegistry.isValidTrigger(recipe.trigger.type)) {
       throw new Error(`Invalid trigger type: ${recipe.trigger?.type}`);
     }
     

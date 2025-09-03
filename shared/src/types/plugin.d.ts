@@ -763,6 +763,7 @@ export declare const PluginManifestSchema: z.ZodObject<{
         realTime: z.ZodOptional<z.ZodBoolean>;
         offline: z.ZodOptional<z.ZodBoolean>;
     }, "strip", z.ZodTypeAny, {
+        offline?: boolean | undefined;
         notifications?: boolean | undefined;
         oauth?: boolean | undefined;
         search?: boolean | undefined;
@@ -772,8 +773,8 @@ export declare const PluginManifestSchema: z.ZodObject<{
         quickActions?: boolean | undefined;
         contextualData?: boolean | undefined;
         realTime?: boolean | undefined;
-        offline?: boolean | undefined;
     }, {
+        offline?: boolean | undefined;
         notifications?: boolean | undefined;
         oauth?: boolean | undefined;
         search?: boolean | undefined;
@@ -783,7 +784,6 @@ export declare const PluginManifestSchema: z.ZodObject<{
         quickActions?: boolean | undefined;
         contextualData?: boolean | undefined;
         realTime?: boolean | undefined;
-        offline?: boolean | undefined;
     }>;
     marketplace: z.ZodOptional<z.ZodObject<{
         published: z.ZodBoolean;
@@ -893,10 +893,10 @@ export declare const PluginManifestSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     id: string;
     name: string;
-    tags: string[];
     type: "theme" | "connector" | "panel" | "view" | "automation" | "widget" | "integration";
     description: string;
-    category: "communication" | "productivity" | "meetings" | "development" | "storage" | "crm" | "support" | "marketing" | "finance" | "ai" | "utilities" | "themes" | "other";
+    tags: string[];
+    category: "communication" | "productivity" | "development" | "crm" | "meetings" | "storage" | "support" | "marketing" | "finance" | "ai" | "utilities" | "themes" | "other";
     version: string;
     author: string;
     license: string;
@@ -910,6 +910,7 @@ export declare const PluginManifestSchema: z.ZodObject<{
         platforms?: Record<string, string> | undefined;
     }[];
     capabilities: {
+        offline?: boolean | undefined;
         notifications?: boolean | undefined;
         oauth?: boolean | undefined;
         search?: boolean | undefined;
@@ -919,7 +920,6 @@ export declare const PluginManifestSchema: z.ZodObject<{
         quickActions?: boolean | undefined;
         contextualData?: boolean | undefined;
         realTime?: boolean | undefined;
-        offline?: boolean | undefined;
     };
     build: {
         buildTime: string;
@@ -970,10 +970,10 @@ export declare const PluginManifestSchema: z.ZodObject<{
 }, {
     id: string;
     name: string;
-    tags: string[];
     type: "theme" | "connector" | "panel" | "view" | "automation" | "widget" | "integration";
     description: string;
-    category: "communication" | "productivity" | "meetings" | "development" | "storage" | "crm" | "support" | "marketing" | "finance" | "ai" | "utilities" | "themes" | "other";
+    tags: string[];
+    category: "communication" | "productivity" | "development" | "crm" | "meetings" | "storage" | "support" | "marketing" | "finance" | "ai" | "utilities" | "themes" | "other";
     version: string;
     author: string;
     license: string;
@@ -987,6 +987,7 @@ export declare const PluginManifestSchema: z.ZodObject<{
         platforms?: Record<string, string> | undefined;
     }[];
     capabilities: {
+        offline?: boolean | undefined;
         notifications?: boolean | undefined;
         oauth?: boolean | undefined;
         search?: boolean | undefined;
@@ -996,7 +997,6 @@ export declare const PluginManifestSchema: z.ZodObject<{
         quickActions?: boolean | undefined;
         contextualData?: boolean | undefined;
         realTime?: boolean | undefined;
-        offline?: boolean | undefined;
     };
     build: {
         buildTime: string;
@@ -1128,8 +1128,6 @@ export declare const PluginInstallationSchema: z.ZodObject<{
     }>>;
 }, "strip", z.ZodTypeAny, {
     id: string;
-    updatedAt: Date;
-    status: "error" | "active" | "disabled" | "installing" | "updating" | "uninstalling";
     config: Record<string, any>;
     settings: {
         notifications: {
@@ -1141,6 +1139,8 @@ export declare const PluginInstallationSchema: z.ZodObject<{
         visible: boolean;
         order: number;
     };
+    updatedAt: Date;
+    status: "error" | "active" | "disabled" | "installing" | "updating" | "uninstalling";
     userId: string;
     version: string;
     pluginId: string;
@@ -1161,8 +1161,6 @@ export declare const PluginInstallationSchema: z.ZodObject<{
     } | undefined;
 }, {
     id: string;
-    updatedAt: Date;
-    status: "error" | "active" | "disabled" | "installing" | "updating" | "uninstalling";
     config: Record<string, any>;
     settings: {
         notifications: {
@@ -1174,6 +1172,8 @@ export declare const PluginInstallationSchema: z.ZodObject<{
         visible: boolean;
         order: number;
     };
+    updatedAt: Date;
+    status: "error" | "active" | "disabled" | "installing" | "updating" | "uninstalling";
     userId: string;
     version: string;
     pluginId: string;

@@ -13,10 +13,10 @@ import {
   SyncResult, 
   SyncConflict,
   SyncState,
-  UserPreferences,
   PluginConfig,
   WorkspaceConfig 
 } from '../types';
+import type { UserPreferences } from '../types/config';
 
 export interface SyncCoordinatorConfig {
   deviceInfo: DeviceInfo;
@@ -188,7 +188,7 @@ export class CrossPlatformSyncCoordinator extends EventEmitter {
     } catch (error) {
       session.endTime = Date.now();
       session.status = 'failed';
-      session.errors.push(error.message);
+      session.errors.push(error instanceof Error ? error.message : String(error));
       this.statistics.failedSessions++;
 
       this.emit('syncFailed', { error, sessionId });
@@ -482,21 +482,21 @@ export class CrossPlatformSyncCoordinator extends EventEmitter {
       plugins: {}, // Get from plugin manager
       preferences: {
         theme: {
-          mode: 'light',
+          mode: 'light' as const,
           accentColor: '#007acc',
           fontFamily: 'Inter',
-          fontSize: 'medium',
+          fontSize: 'medium' as const,
           highContrast: false,
           colorBlindFriendly: false
         },
         language: {
           locale: 'en-US',
           dateFormat: 'MM/dd/yyyy',
-          timeFormat: '12h',
+          timeFormat: '12h' as const,
           numberFormat: 'en-US',
           currency: 'USD',
           timezone: 'America/New_York',
-          firstDayOfWeek: 0
+          firstDayOfWeek: 0 as const
         },
         privacy: {
           analytics: false,
@@ -536,7 +536,7 @@ export class CrossPlatformSyncCoordinator extends EventEmitter {
           autoSync: true,
           checkUpdates: true
         }
-      } as UserPreferences, // Get from preferences manager
+      }, // Get from preferences manager
       version: this.generateVersion(),
       timestamp: Date.now(),
       deviceId: this.config.deviceInfo.deviceId,

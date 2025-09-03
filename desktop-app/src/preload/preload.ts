@@ -5,6 +5,25 @@
  */
 
 import { contextBridge, ipcRenderer } from 'electron';
+import type { 
+  Workspace, 
+  WorkspaceService, 
+  MailAccount, 
+  MailFolder, 
+  EmailMessage, 
+  CalendarAccount, 
+  CalendarEvent, 
+  CreateWorkspaceData,
+  CreatePartitionData,
+  CreateWindowData,
+  GetMessagesOptions,
+  EmailTemplate,
+  EmailRule,
+  TextSnippet,
+  SearchOptions,
+  APIResponse,
+  SyncStatus
+} from '../types/preload';
 
 // Define the complete Flow Desk API
 interface FlowDeskAPI {
@@ -27,20 +46,20 @@ interface FlowDeskAPI {
     list(): Promise<Workspace[]>;
     getById(workspaceId: string): Promise<Workspace | null>;
     getCurrent(): Promise<Workspace | null>;
-    create(workspaceData: any): Promise<string>;
-    update(workspaceId: string, updates: any): Promise<void>;
+    create(workspaceData: CreateWorkspaceData): Promise<string>;
+    update(workspaceId: string, updates: Partial<Workspace>): Promise<void>;
     delete(workspaceId: string): Promise<void>;
     switch(workspaceId: string): Promise<void>;
     
     // Partition management (Redux slice methods)
-    listPartitions(): Promise<any[]>;
-    createPartition(partitionData: any): Promise<any>;
-    updatePartition(partitionId: string, updates: any): Promise<any>;
+    listPartitions(): Promise<unknown[]>;
+    createPartition(partitionData: CreatePartitionData): Promise<unknown>;
+    updatePartition(partitionId: string, updates: Partial<CreatePartitionData>): Promise<unknown>;
     
     // Window management (Redux slice methods)
-    getWindows(workspaceId: string): Promise<any[]>;
-    createWindow(windowData: any): Promise<any>;
-    clearData(workspaceId: string): Promise<any>;
+    getWindows(workspaceId: string): Promise<unknown[]>;
+    createWindow(windowData: CreateWindowData): Promise<unknown>;
+    clearData(workspaceId: string): Promise<unknown>;
     
     // Service management within workspaces
     addService(workspaceId: string, serviceName: string, serviceType: string, url: string): Promise<string>;
@@ -57,16 +76,16 @@ interface FlowDeskAPI {
   mail: {
     // Account management (Redux slice signatures)
     getAccounts(): Promise<MailAccount[]>;
-    addAccount(account: any): Promise<MailAccount>;
-    updateAccount(accountId: string, updates: any): Promise<MailAccount | null>;
+    addAccount(account: Partial<MailAccount>): Promise<MailAccount>;
+    updateAccount(accountId: string, updates: Partial<MailAccount>): Promise<MailAccount | null>;
     removeAccount(accountId: string): Promise<boolean>;
     
     // Folder operations
     getFolders(accountId: string): Promise<MailFolder[]>;
     
     // Message operations (Redux slice signatures)
-    getMessages(accountId: string, folderId?: string, options?: any): Promise<EmailMessage[]>;
-    sendMessage(accountId: string, message: any): Promise<boolean>;
+    getMessages(accountId: string, folderId?: string, options?: GetMessagesOptions): Promise<EmailMessage[]>;
+    sendMessage(accountId: string, message: Partial<EmailMessage>): Promise<boolean>;
     markMessageRead(accountId: string, messageId: string, read: boolean): Promise<boolean>;
     markMessageStarred(accountId: string, messageId: string, starred: boolean): Promise<boolean>;
     deleteMessage(accountId: string, messageId: string): Promise<boolean>;
@@ -233,64 +252,11 @@ interface FlowDeskAPI {
   };
 
   // Event listeners
-  on(channel: string, callback: (...args: any[]) => void): void;
-  off(channel: string, callback: (...args: any[]) => void): void;
+  on(channel: string, callback: (...args: unknown[]) => void): void;
+  off(channel: string, callback: (...args: unknown[]) => void): void;
 }
 
-// Type definitions for the renderer
-interface Workspace {
-  id: string;
-  name: string;
-  abbreviation: string;
-  color: string;
-  services: WorkspaceService[];
-  created: Date;
-  lastAccessed: Date;
-  isActive: boolean;
-}
-
-interface WorkspaceService {
-  id: string;
-  name: string;
-  type: string;
-  url: string;
-  iconUrl?: string;
-  isEnabled: boolean;
-  config: Record<string, unknown>;
-}
-
-interface MailAccount {
-  id: string;
-  email: string;
-  displayName: string;
-  provider: string;
-  isEnabled: boolean;
-}
-
-interface MailFolder {
-  id: string;
-  name: string;
-  unreadCount: number;
-  type: 'inbox' | 'sent' | 'drafts' | 'trash' | 'custom';
-}
-
-interface EmailMessage {
-  id: string;
-  subject: string;
-  from: { name: string; address: string };
-  to: { name: string; address: string }[];
-  date: Date;
-  bodyText: string;
-  bodyHtml: string;
-  snippet?: string;
-  flags: {
-    isRead: boolean;
-    isStarred: boolean;
-    hasAttachments: boolean;
-  };
-  attachments?: EmailAttachment[];
-}
-
+// Import the EmailAttachment and Calendar types locally if needed
 interface EmailAttachment {
   id: string;
   filename: string;
@@ -301,14 +267,6 @@ interface EmailAttachment {
   data?: string;
 }
 
-interface CalendarAccount {
-  id: string;
-  email: string;
-  displayName: string;
-  provider: string;
-  isEnabled: boolean;
-}
-
 interface Calendar {
   id: string;
   accountId: string;
@@ -316,18 +274,6 @@ interface Calendar {
   color: string;
   isPrimary: boolean;
   isWritable: boolean;
-}
-
-interface CalendarEvent {
-  id: string;
-  calendarId: string; // Required by Redux slices
-  title: string;
-  description?: string;
-  startTime: Date;
-  endTime: Date;
-  location?: string;
-  attendees: string[];
-  isAllDay: boolean;
 }
 
 // Implement the Flow Desk API
@@ -360,11 +306,11 @@ const flowDeskAPI: FlowDeskAPI = {
     // Redux slice compatibility methods
     list: () => ipcRenderer.invoke('workspace:get-all'),
     listPartitions: () => ipcRenderer.invoke('workspace:list-partitions'),
-    createPartition: (partitionData: Record<string, unknown>) => ipcRenderer.invoke('workspace:create-partition', partitionData),
-    updatePartition: (partitionId: string, updates: Record<string, unknown>) => ipcRenderer.invoke('workspace:update-partition', partitionId, updates),
+    createPartition: (partitionData: CreatePartitionData) => ipcRenderer.invoke('workspace:create-partition', partitionData),
+    updatePartition: (partitionId: string, updates: Partial<CreatePartitionData>) => ipcRenderer.invoke('workspace:update-partition', partitionId, updates),
     clearData: (workspaceId: string) => ipcRenderer.invoke('workspace:clear-data', workspaceId),
     getWindows: (workspaceId: string) => ipcRenderer.invoke('workspace:get-windows', workspaceId),
-    createWindow: (windowData: Record<string, unknown>) => ipcRenderer.invoke('workspace:create-window', windowData),
+    createWindow: (windowData: CreateWindowData) => ipcRenderer.invoke('workspace:create-window', windowData),
     
     // Service management within workspaces
     addService: (workspaceId: string, serviceName: string, serviceType: string, url: string) => 
@@ -657,12 +603,12 @@ const flowDeskAPI: FlowDeskAPI = {
   },
 
   // Event handling
-  on: (channel: string, callback: (...args: any[]) => void) => {
-    const subscription = (_event: Electron.IpcRendererEvent, ...args: any[]) => callback(...args);
+  on: (channel: string, callback: (...args: unknown[]) => void) => {
+    const subscription = (_event: Electron.IpcRendererEvent, ...args: unknown[]) => callback(...args);
     ipcRenderer.on(channel, subscription);
   },
 
-  off: (channel: string, callback: (...args: any[]) => void) => {
+  off: (channel: string, callback: (...args: unknown[]) => void) => {
     ipcRenderer.removeListener(channel, callback);
   }
 };
@@ -671,13 +617,7 @@ const flowDeskAPI: FlowDeskAPI = {
 contextBridge.exposeInMainWorld('flowDesk', flowDeskAPI);
 contextBridge.exposeInMainWorld('searchAPI', flowDeskAPI.searchAPI);
 
-// Add global type declaration for TypeScript
-declare global {
-  interface Window {
-    flowDesk: FlowDeskAPI;
-    searchAPI: FlowDeskAPI['searchAPI'];
-  }
-}
+// Global type declaration is in src/types/global.d.ts
 
 console.log('Flow Desk preload script loaded successfully!');
 console.log('flowDesk API exposed to window:', !!window.flowDesk);

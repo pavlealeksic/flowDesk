@@ -267,7 +267,7 @@ export class AutomationAnalytics extends EventEmitter {
       this.isInitialized = true;
       this.emit('initialized');
     } catch (error) {
-      throw new Error(`Failed to initialize AutomationAnalytics: ${error.message}`);
+      throw new Error(`Failed to initialize AutomationAnalytics: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -284,7 +284,7 @@ export class AutomationAnalytics extends EventEmitter {
       this.isInitialized = false;
       this.emit('shutdown');
     } catch (error) {
-      throw new Error(`Failed to shutdown AutomationAnalytics: ${error.message}`);
+      throw new Error(`Failed to shutdown AutomationAnalytics: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

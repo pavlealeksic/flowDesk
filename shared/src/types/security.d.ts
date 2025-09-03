@@ -752,22 +752,22 @@ export declare const AuthTokenSchema: z.ZodObject<{
         registeredAt: z.ZodOptional<z.ZodDate>;
         lastSeenAt: z.ZodDate;
     }, "strip", z.ZodTypeAny, {
+        browser: string;
         type: "unknown" | "desktop" | "mobile" | "tablet";
         lastSeenAt: Date;
         os: string;
         fingerprint: string;
         osVersion: string;
-        browser: string;
         browserVersion: string;
         trustLevel: "unknown" | "trusted" | "known" | "suspicious";
         registeredAt?: Date | undefined;
     }, {
+        browser: string;
         type: "unknown" | "desktop" | "mobile" | "tablet";
         lastSeenAt: Date;
         os: string;
         fingerprint: string;
         osVersion: string;
-        browser: string;
         browserVersion: string;
         trustLevel: "unknown" | "trusted" | "known" | "suspicious";
         registeredAt?: Date | undefined;
@@ -808,10 +808,11 @@ export declare const AuthTokenSchema: z.ZodObject<{
     lastUsedAt: z.ZodOptional<z.ZodDate>;
 }, "strip", z.ZodTypeAny, {
     id: string;
+    scope: string[];
+    type: "refresh_token" | "access_token" | "id_token" | "api_token" | "session_token" | "device_token" | "verification_token" | "password_reset_token" | "invitation_token";
     createdAt: Date;
     updatedAt: Date;
     status: "active" | "expired" | "suspended" | "revoked" | "blacklisted";
-    type: "access_token" | "refresh_token" | "id_token" | "api_token" | "session_token" | "device_token" | "verification_token" | "password_reset_token" | "invitation_token";
     expiresAt: Date;
     userId: string;
     usage: {
@@ -836,7 +837,6 @@ export declare const AuthTokenSchema: z.ZodObject<{
         purpose?: string | undefined;
     };
     tokenHash: string;
-    scope: string[];
     organizationId?: string | undefined;
     lastUsedAt?: Date | undefined;
     location?: {
@@ -851,22 +851,23 @@ export declare const AuthTokenSchema: z.ZodObject<{
         isp?: string | undefined;
     } | undefined;
     device?: {
+        browser: string;
         type: "unknown" | "desktop" | "mobile" | "tablet";
         lastSeenAt: Date;
         os: string;
         fingerprint: string;
         osVersion: string;
-        browser: string;
         browserVersion: string;
         trustLevel: "unknown" | "trusted" | "known" | "suspicious";
         registeredAt?: Date | undefined;
     } | undefined;
 }, {
     id: string;
+    scope: string[];
+    type: "refresh_token" | "access_token" | "id_token" | "api_token" | "session_token" | "device_token" | "verification_token" | "password_reset_token" | "invitation_token";
     createdAt: Date;
     updatedAt: Date;
     status: "active" | "expired" | "suspended" | "revoked" | "blacklisted";
-    type: "access_token" | "refresh_token" | "id_token" | "api_token" | "session_token" | "device_token" | "verification_token" | "password_reset_token" | "invitation_token";
     expiresAt: Date;
     userId: string;
     usage: {
@@ -891,7 +892,6 @@ export declare const AuthTokenSchema: z.ZodObject<{
         purpose?: string | undefined;
     };
     tokenHash: string;
-    scope: string[];
     organizationId?: string | undefined;
     lastUsedAt?: Date | undefined;
     location?: {
@@ -906,12 +906,12 @@ export declare const AuthTokenSchema: z.ZodObject<{
         isp?: string | undefined;
     } | undefined;
     device?: {
+        browser: string;
         type: "unknown" | "desktop" | "mobile" | "tablet";
         lastSeenAt: Date;
         os: string;
         fingerprint: string;
         osVersion: string;
-        browser: string;
         browserVersion: string;
         trustLevel: "unknown" | "trusted" | "known" | "suspicious";
         registeredAt?: Date | undefined;
@@ -1028,22 +1028,22 @@ export declare const AuditLogEntrySchema: z.ZodObject<{
         registeredAt: z.ZodOptional<z.ZodDate>;
         lastSeenAt: z.ZodDate;
     }, "strip", z.ZodTypeAny, {
+        browser: string;
         type: "unknown" | "desktop" | "mobile" | "tablet";
         lastSeenAt: Date;
         os: string;
         fingerprint: string;
         osVersion: string;
-        browser: string;
         browserVersion: string;
         trustLevel: "unknown" | "trusted" | "known" | "suspicious";
         registeredAt?: Date | undefined;
     }, {
+        browser: string;
         type: "unknown" | "desktop" | "mobile" | "tablet";
         lastSeenAt: Date;
         os: string;
         fingerprint: string;
         osVersion: string;
-        browser: string;
         browserVersion: string;
         trustLevel: "unknown" | "trusted" | "known" | "suspicious";
         registeredAt?: Date | undefined;
@@ -1084,6 +1084,7 @@ export declare const AuditLogEntrySchema: z.ZodObject<{
     metadata: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
 }, "strip", z.ZodTypeAny, {
     id: string;
+    result: "success" | "failure" | "partial" | "denied";
     description: string;
     category: "system" | "authentication" | "authorization" | "data" | "security";
     context: {
@@ -1097,7 +1098,7 @@ export declare const AuditLogEntrySchema: z.ZodObject<{
         correlationId?: string | undefined;
     };
     eventType: string;
-    severity: "critical" | "error" | "info" | "warning";
+    severity: "error" | "critical" | "info" | "warning";
     riskLevel: "high" | "low" | "critical" | "medium";
     details: {
         action: string;
@@ -1115,7 +1116,6 @@ export declare const AuditLogEntrySchema: z.ZodObject<{
         newValues?: Record<string, any> | undefined;
         additional?: Record<string, any> | undefined;
     };
-    result: "success" | "failure" | "partial" | "denied";
     timestamp: Date;
     organizationId?: string | undefined;
     userId?: string | undefined;
@@ -1132,12 +1132,12 @@ export declare const AuditLogEntrySchema: z.ZodObject<{
     } | undefined;
     metadata?: Record<string, any> | undefined;
     device?: {
+        browser: string;
         type: "unknown" | "desktop" | "mobile" | "tablet";
         lastSeenAt: Date;
         os: string;
         fingerprint: string;
         osVersion: string;
-        browser: string;
         browserVersion: string;
         trustLevel: "unknown" | "trusted" | "known" | "suspicious";
         registeredAt?: Date | undefined;
@@ -1145,6 +1145,7 @@ export declare const AuditLogEntrySchema: z.ZodObject<{
     relatedEvents?: string[] | undefined;
 }, {
     id: string;
+    result: "success" | "failure" | "partial" | "denied";
     description: string;
     category: "system" | "authentication" | "authorization" | "data" | "security";
     context: {
@@ -1158,7 +1159,7 @@ export declare const AuditLogEntrySchema: z.ZodObject<{
         correlationId?: string | undefined;
     };
     eventType: string;
-    severity: "critical" | "error" | "info" | "warning";
+    severity: "error" | "critical" | "info" | "warning";
     riskLevel: "high" | "low" | "critical" | "medium";
     details: {
         action: string;
@@ -1176,7 +1177,6 @@ export declare const AuditLogEntrySchema: z.ZodObject<{
         newValues?: Record<string, any> | undefined;
         additional?: Record<string, any> | undefined;
     };
-    result: "success" | "failure" | "partial" | "denied";
     timestamp: Date;
     organizationId?: string | undefined;
     userId?: string | undefined;
@@ -1193,12 +1193,12 @@ export declare const AuditLogEntrySchema: z.ZodObject<{
     } | undefined;
     metadata?: Record<string, any> | undefined;
     device?: {
+        browser: string;
         type: "unknown" | "desktop" | "mobile" | "tablet";
         lastSeenAt: Date;
         os: string;
         fingerprint: string;
         osVersion: string;
-        browser: string;
         browserVersion: string;
         trustLevel: "unknown" | "trusted" | "known" | "suspicious";
         registeredAt?: Date | undefined;
@@ -1296,13 +1296,13 @@ export declare const SecurityPolicySchema: z.ZodObject<{
         enabled: z.ZodBoolean;
         priority: z.ZodNumber;
     }, "strip", z.ZodTypeAny, {
+        id: string;
+        name: string;
         action: {
             type: "custom" | "allow" | "deny" | "require_mfa" | "log" | "alert" | "block_ip" | "quarantine";
             parameters: Record<string, any>;
             message?: string | undefined;
         };
-        id: string;
-        name: string;
         enabled: boolean;
         priority: number;
         condition: {
@@ -1313,13 +1313,13 @@ export declare const SecurityPolicySchema: z.ZodObject<{
         };
         description?: string | undefined;
     }, {
+        id: string;
+        name: string;
         action: {
             type: "custom" | "allow" | "deny" | "require_mfa" | "log" | "alert" | "block_ip" | "quarantine";
             parameters: Record<string, any>;
             message?: string | undefined;
         };
-        id: string;
-        name: string;
         enabled: boolean;
         priority: number;
         condition: {
@@ -1372,14 +1372,6 @@ export declare const SecurityPolicySchema: z.ZodObject<{
     lastEvaluatedAt: z.ZodOptional<z.ZodDate>;
 }, "strip", z.ZodTypeAny, {
     id: string;
-    createdAt: Date;
-    updatedAt: Date;
-    name: string;
-    status: "active" | "inactive" | "draft";
-    priority: number;
-    type: "password" | "custom" | "encryption" | "location" | "device" | "authentication" | "authorization" | "session" | "rate_limiting" | "data_access" | "compliance";
-    description: string;
-    metadata: Record<string, any>;
     scope: {
         global: boolean;
         conditions?: {
@@ -1394,14 +1386,22 @@ export declare const SecurityPolicySchema: z.ZodObject<{
         roles?: string[] | undefined;
         resourceTypes?: string[] | undefined;
     };
+    name: string;
+    type: "password" | "custom" | "encryption" | "location" | "device" | "authentication" | "authorization" | "session" | "rate_limiting" | "data_access" | "compliance";
+    description: string;
+    createdAt: Date;
+    updatedAt: Date;
+    status: "active" | "inactive" | "draft";
+    priority: number;
+    metadata: Record<string, any>;
     rules: {
+        id: string;
+        name: string;
         action: {
             type: "custom" | "allow" | "deny" | "require_mfa" | "log" | "alert" | "block_ip" | "quarantine";
             parameters: Record<string, any>;
             message?: string | undefined;
         };
-        id: string;
-        name: string;
         enabled: boolean;
         priority: number;
         condition: {
@@ -1425,14 +1425,6 @@ export declare const SecurityPolicySchema: z.ZodObject<{
     lastEvaluatedAt?: Date | undefined;
 }, {
     id: string;
-    createdAt: Date;
-    updatedAt: Date;
-    name: string;
-    status: "active" | "inactive" | "draft";
-    priority: number;
-    type: "password" | "custom" | "encryption" | "location" | "device" | "authentication" | "authorization" | "session" | "rate_limiting" | "data_access" | "compliance";
-    description: string;
-    metadata: Record<string, any>;
     scope: {
         global: boolean;
         conditions?: {
@@ -1447,14 +1439,22 @@ export declare const SecurityPolicySchema: z.ZodObject<{
         roles?: string[] | undefined;
         resourceTypes?: string[] | undefined;
     };
+    name: string;
+    type: "password" | "custom" | "encryption" | "location" | "device" | "authentication" | "authorization" | "session" | "rate_limiting" | "data_access" | "compliance";
+    description: string;
+    createdAt: Date;
+    updatedAt: Date;
+    status: "active" | "inactive" | "draft";
+    priority: number;
+    metadata: Record<string, any>;
     rules: {
+        id: string;
+        name: string;
         action: {
             type: "custom" | "allow" | "deny" | "require_mfa" | "log" | "alert" | "block_ip" | "quarantine";
             parameters: Record<string, any>;
             message?: string | undefined;
         };
-        id: string;
-        name: string;
         enabled: boolean;
         priority: number;
         condition: {

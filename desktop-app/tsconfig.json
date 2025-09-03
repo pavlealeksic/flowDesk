@@ -2,7 +2,7 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": "..",
     "baseUrl": ".",
     "typeRoots": ["./src/types/@types", "./node_modules/@types"],
     "paths": {
@@ -14,17 +14,36 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "moduleResolution": "node",
-    "noEmit": false
+    "noEmit": false,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "target": "ES2020",
+    "downlevelIteration": true
   },
   "include": [
-    "src/**/*", 
+    "src/renderer/**/*",
     "src/types/**/*"
+  ],
+  "types": [
+    "node",
+    "electron"
   ],
   "exclude": [
     "node_modules", 
     "dist", 
     "build", 
     "**/*.test.*",
-    "src/lib/rust-engine/src/typescript-ffi-wrapper.ts"
+    "**/*.spec.*",
+    "src/__tests__/**/*",
+    "src/test/**/*",
+    "src/lib/**/*",
+    "src/main/automation/**/*",
+    "src/main/plugin-runtime/**/*",
+    "src/main/providers/**/*",
+    "src/main/**/test*",
+    "../shared/**/*"
   ]
 }

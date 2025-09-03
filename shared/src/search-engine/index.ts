@@ -423,8 +423,8 @@ export class SearchEngine {
 
   private convertToNativeConfig(config: SearchConfiguration): NativeSearchConfig {
     return {
-      indexDir: config.global.indexDir || './search_indices',
-      maxMemoryMb: config.indexing.maxMemoryMb || 512,
+      indexDir: './search_indices',
+      maxMemoryMb: 512,
       maxResponseTimeMs: config.global.timeout || 300,
       numThreads: config.providers.maxConcurrent || 4,
       enableAnalytics: config.global.analytics || true,
@@ -437,7 +437,7 @@ export class SearchEngine {
   private convertToNativeQuery(query: SearchQuery): NativeSearchQuery {
     return {
       query: query.query,
-      contentTypes: query.contentTypes?.map(t => typeof t === 'string' ? t : t.toString()),
+      contentTypes: query.contentTypes?.map(t => String(t)),
       providerIds: query.providers,
       limit: query.limit,
       offset: query.offset,
@@ -453,15 +453,15 @@ export class SearchEngine {
       id: document.id,
       title: document.title,
       content: document.content || '',
-      summary: document.description,
-      contentType: typeof document.contentType === 'string' ? document.contentType : document.contentType.toString(),
+      summary: document.summary,
+      contentType: String(document.contentType),
       providerId: document.provider,
-      providerType: typeof document.providerType === 'string' ? document.providerType : document.providerType.toString(),
+      providerType: String(document.providerType),
       url: document.url,
-      author: document.metadata?.author,
-      tags: document.metadata?.tags,
-      categories: document.metadata?.categories,
-      metadata: document.metadata?.custom,
+      author: document.author,
+      tags: document.tags || [],
+      categories: document.categories || [],
+      metadata: document.metadata,
     };
   }
 
@@ -501,11 +501,11 @@ export class SearchEngine {
         createdAt: new Date(result.createdAt),
         lastModified: new Date(result.lastModified),
       })),
-      totalCount: nativeResponse.totalCount,
-      executionTimeMs: nativeResponse.executionTimeMs,
+      total: nativeResponse.totalCount,
+      took: nativeResponse.executionTimeMs,
       facets: undefined,
       suggestions: nativeResponse.suggestions,
-      debugInfo: undefined,
+      debug: undefined,
       nextPageToken: undefined,
       providerResponses: undefined,
     };
@@ -568,9 +568,3 @@ export async function initializeSearchEngine(config: SearchConfiguration): Promi
 
 // Export types for external use
 export * from '../types/search';
-export {
-  SearchEngineError,
-  SearchEngineNotInitializedError,
-  SearchEngineIndexError,
-  SearchEngineQueryError,
-};

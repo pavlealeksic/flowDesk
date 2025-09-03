@@ -876,6 +876,13 @@ export const SearchProviderSchema = z.object({
 });
 
 /**
+ * Type aliases for compatibility with existing code
+ */
+export type ContentType = SearchContentType;
+export type ProviderType = SearchProviderType;
+export type SearchDocument = SearchIndexDocument;
+
+/**
  * Utility types for search operations
  */
 export type CreateSearchProviderInput = Omit<SearchProvider, 'id' | 'stats' | 'createdAt' | 'updatedAt'>;

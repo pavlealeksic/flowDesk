@@ -10,13 +10,13 @@
 
 import { EventEmitter } from 'events';
 import { AutomationActionType } from '@flow-desk/shared';
-import type { AutomationAction } from '@flow-desk/shared/types/automations';
+import type { AutomationAction } from '@flow-desk/shared';
 import { AutomationEngine } from './AutomationEngine';
-import { EmailEngine } from '../email/EmailEngine';
-import { CalendarEngine } from '../calendar/CalendarEngine';
-import { NotificationService } from '../notifications/NotificationService';
-import { SearchEngine } from '../search/SearchEngine';
-import { PluginManager } from '../plugin-runtime/PluginManager';
+// import { EmailEngine } from '../email/EmailEngine';
+// import { CalendarEngine } from '../calendar/CalendarEngine';
+// import { NotificationService } from '../notifications/NotificationService';
+// import { SearchEngine } from '../search/SearchEngine';
+// import { PluginManager } from '../plugin-runtime/PluginManager';
 import { getErrorMessage, createErrorResponse } from './ErrorUtils';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -32,13 +32,13 @@ interface ActionDefinition {
 }
 
 export class ActionRegistry extends EventEmitter {
-  private readonly actions = new Map<string, ActionDefinition>();
+  private readonly actions = new Map<AutomationActionType, ActionDefinition>();
   private readonly automationEngine: AutomationEngine;
-  private readonly emailEngine: EmailEngine;
-  private readonly calendarEngine: CalendarEngine;
-  private readonly notificationService: NotificationService;
-  private readonly searchEngine: SearchEngine;
-  private readonly pluginManager: PluginManager;
+  private readonly emailEngine: any; // EmailEngine;
+  private readonly calendarEngine: any; // CalendarEngine;
+  private readonly notificationService: any; // NotificationService;
+  private readonly searchEngine: any; // SearchEngine;
+  private readonly pluginManager: any; // PluginManager;
 
   constructor(automationEngine: AutomationEngine) {
     super();
@@ -859,7 +859,7 @@ export class ActionRegistry extends EventEmitter {
         success: true,
         query: config.query,
         resultCount: results.length,
-        results: results.map(r => ({
+        results: results.map((r: any) => ({
           id: r.id,
           title: r.title,
           description: r.description,

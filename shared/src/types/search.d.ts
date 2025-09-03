@@ -760,15 +760,15 @@ export declare const SearchResultSchema: z.ZodObject<{
             workspace: z.ZodOptional<z.ZodString>;
             project: z.ZodOptional<z.ZodString>;
         }, "strip", z.ZodTypeAny, {
+            project?: string | undefined;
             path?: string | undefined;
             folder?: string | undefined;
             workspace?: string | undefined;
-            project?: string | undefined;
         }, {
+            project?: string | undefined;
             path?: string | undefined;
             folder?: string | undefined;
             workspace?: string | undefined;
-            project?: string | undefined;
         }>>;
         collaboration: z.ZodOptional<z.ZodObject<{
             shared: z.ZodBoolean;
@@ -806,10 +806,10 @@ export declare const SearchResultSchema: z.ZodObject<{
         size?: number | undefined;
         mimeType?: string | undefined;
         location?: {
+            project?: string | undefined;
             path?: string | undefined;
             folder?: string | undefined;
             workspace?: string | undefined;
-            project?: string | undefined;
         } | undefined;
         author?: string | undefined;
         fileType?: string | undefined;
@@ -831,10 +831,10 @@ export declare const SearchResultSchema: z.ZodObject<{
         size?: number | undefined;
         mimeType?: string | undefined;
         location?: {
+            project?: string | undefined;
             path?: string | undefined;
             folder?: string | undefined;
             workspace?: string | undefined;
-            project?: string | undefined;
         } | undefined;
         author?: string | undefined;
         fileType?: string | undefined;
@@ -891,36 +891,36 @@ export declare const SearchResultSchema: z.ZodObject<{
         id: string;
         type: "delete" | "custom" | "open" | "download" | "share" | "edit";
         label: string;
+        url?: string | undefined;
         icon?: string | undefined;
         params?: Record<string, any> | undefined;
-        url?: string | undefined;
         handler?: string | undefined;
     }, {
         id: string;
         type: "delete" | "custom" | "open" | "download" | "share" | "edit";
         label: string;
+        url?: string | undefined;
         icon?: string | undefined;
         params?: Record<string, any> | undefined;
-        url?: string | undefined;
         handler?: string | undefined;
     }>, "many">>;
     createdAt: z.ZodDate;
     lastModified: z.ZodDate;
 }, "strip", z.ZodTypeAny, {
-    title: string;
     id: string;
-    createdAt: Date;
     provider: string;
+    createdAt: Date;
+    title: string;
     metadata: {
         tags?: string[] | undefined;
         custom?: Record<string, any> | undefined;
         size?: number | undefined;
         mimeType?: string | undefined;
         location?: {
+            project?: string | undefined;
             path?: string | undefined;
             folder?: string | undefined;
             workspace?: string | undefined;
-            project?: string | undefined;
         } | undefined;
         author?: string | undefined;
         fileType?: string | undefined;
@@ -941,19 +941,19 @@ export declare const SearchResultSchema: z.ZodObject<{
     contentType: string;
     providerType: string;
     score: number;
+    url?: string | undefined;
     icon?: string | undefined;
+    description?: string | undefined;
     actions?: {
         id: string;
         type: "delete" | "custom" | "open" | "download" | "share" | "edit";
         label: string;
+        url?: string | undefined;
         icon?: string | undefined;
         params?: Record<string, any> | undefined;
-        url?: string | undefined;
         handler?: string | undefined;
     }[] | undefined;
     content?: string | undefined;
-    description?: string | undefined;
-    url?: string | undefined;
     thumbnail?: string | undefined;
     highlights?: {
         field: string;
@@ -964,20 +964,20 @@ export declare const SearchResultSchema: z.ZodObject<{
         }[] | undefined;
     }[] | undefined;
 }, {
-    title: string;
     id: string;
-    createdAt: Date;
     provider: string;
+    createdAt: Date;
+    title: string;
     metadata: {
         tags?: string[] | undefined;
         custom?: Record<string, any> | undefined;
         size?: number | undefined;
         mimeType?: string | undefined;
         location?: {
+            project?: string | undefined;
             path?: string | undefined;
             folder?: string | undefined;
             workspace?: string | undefined;
-            project?: string | undefined;
         } | undefined;
         author?: string | undefined;
         fileType?: string | undefined;
@@ -998,19 +998,19 @@ export declare const SearchResultSchema: z.ZodObject<{
     contentType: string;
     providerType: string;
     score: number;
+    url?: string | undefined;
     icon?: string | undefined;
+    description?: string | undefined;
     actions?: {
         id: string;
         type: "delete" | "custom" | "open" | "download" | "share" | "edit";
         label: string;
+        url?: string | undefined;
         icon?: string | undefined;
         params?: Record<string, any> | undefined;
-        url?: string | undefined;
         handler?: string | undefined;
     }[] | undefined;
     content?: string | undefined;
-    description?: string | undefined;
-    url?: string | undefined;
     thumbnail?: string | undefined;
     highlights?: {
         field: string;
@@ -1308,10 +1308,7 @@ export declare const SearchProviderSchema: z.ZodObject<{
     updatedAt: z.ZodDate;
 }, "strip", z.ZodTypeAny, {
     id: string;
-    createdAt: Date;
-    updatedAt: Date;
     name: string;
-    enabled: boolean;
     type: string;
     config: {
         settings: Record<string, any>;
@@ -1353,6 +1350,9 @@ export declare const SearchProviderSchema: z.ZodObject<{
             retentionDays: number;
         } | undefined;
     };
+    createdAt: Date;
+    updatedAt: Date;
+    enabled: boolean;
     capabilities: {
         realTime: boolean;
         avgResponseTime: number;
@@ -1381,10 +1381,7 @@ export declare const SearchProviderSchema: z.ZodObject<{
     description?: string | undefined;
 }, {
     id: string;
-    createdAt: Date;
-    updatedAt: Date;
     name: string;
-    enabled: boolean;
     type: string;
     config: {
         settings: Record<string, any>;
@@ -1426,6 +1423,9 @@ export declare const SearchProviderSchema: z.ZodObject<{
             retentionDays: number;
         } | undefined;
     };
+    createdAt: Date;
+    updatedAt: Date;
+    enabled: boolean;
     capabilities: {
         realTime: boolean;
         avgResponseTime: number;

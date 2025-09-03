@@ -12,7 +12,15 @@
 import { EventEmitter } from 'events';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { AutomationEngineConfig } from '@flow-desk/shared';
+// Use a local config type to avoid import issues
+interface AutomationEngineConfig {
+  logging: {
+    level: string;
+    retentionDays: number;
+    maxLogSize: number;
+    enableMetrics: boolean;
+  };
+}
 
 interface LogEntry {
   id: string;

@@ -377,8 +377,8 @@ export class SecurityManager {
       throw new Error('Encryption key not found');
     }
     
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipher(key.algorithm, key.key);
+    const iv = crypto.randomBytes(12); // 12 bytes for GCM
+    const cipher = crypto.createCipheriv(key.algorithm, key.key, iv) as crypto.CipherGCM;
     cipher.setAAD(Buffer.from(keyId || key.id, 'utf8'));
     
     let encrypted = cipher.update(data, 'utf8', 'hex');
@@ -412,7 +412,11 @@ export class SecurityManager {
       throw new Error('Decryption key not found');
     }
     
-    const decipher = crypto.createDecipheriv(key.algorithm, Buffer.from(key.key, 'hex'), Buffer.from(encryptedData.iv, 'hex'));
+    const decipher = crypto.createDecipheriv(
+      key.algorithm, 
+      key.key, 
+      Buffer.from(encryptedData.iv, 'hex')
+    ) as crypto.DecipherGCM;
     decipher.setAAD(Buffer.from(encryptedData.keyId, 'utf8'));
     decipher.setAuthTag(Buffer.from(encryptedData.authTag, 'hex'));
     

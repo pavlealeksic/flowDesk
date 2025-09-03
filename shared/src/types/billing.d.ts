@@ -861,8 +861,8 @@ export declare const SubscriptionSchema: z.ZodObject<{
         promoCode: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
         id: string;
-        value: number;
         type: "percentage" | "fixed" | "free_trial";
+        value: number;
         duration: "once" | "repeating" | "forever";
         startDate: Date;
         durationInMonths?: number | undefined;
@@ -870,8 +870,8 @@ export declare const SubscriptionSchema: z.ZodObject<{
         promoCode?: string | undefined;
     }, {
         id: string;
-        value: number;
         type: "percentage" | "fixed" | "free_trial";
+        value: number;
         duration: "once" | "repeating" | "forever";
         startDate: Date;
         durationInMonths?: number | undefined;
@@ -972,8 +972,8 @@ export declare const SubscriptionSchema: z.ZodObject<{
     cancelationReason?: string | undefined;
     discount?: {
         id: string;
-        value: number;
         type: "percentage" | "fixed" | "free_trial";
+        value: number;
         duration: "once" | "repeating" | "forever";
         startDate: Date;
         durationInMonths?: number | undefined;
@@ -1049,8 +1049,8 @@ export declare const SubscriptionSchema: z.ZodObject<{
     cancelationReason?: string | undefined;
     discount?: {
         id: string;
-        value: number;
         type: "percentage" | "fixed" | "free_trial";
+        value: number;
         duration: "once" | "repeating" | "forever";
         startDate: Date;
         durationInMonths?: number | undefined;
@@ -1154,10 +1154,10 @@ export declare const LicenseSchema: z.ZodObject<{
     updatedAt: z.ZodDate;
 }, "strip", z.ZodTypeAny, {
     id: string;
+    type: "subscription" | "plugin" | "addon";
     createdAt: Date;
     updatedAt: Date;
     status: "active" | "expired" | "suspended" | "revoked";
-    type: "subscription" | "plugin" | "addon";
     plan: "free" | "pro" | "team" | "enterprise";
     organizationId: string;
     features: string[];
@@ -1196,10 +1196,10 @@ export declare const LicenseSchema: z.ZodObject<{
     };
 }, {
     id: string;
+    type: "subscription" | "plugin" | "addon";
     createdAt: Date;
     updatedAt: Date;
     status: "active" | "expired" | "suspended" | "revoked";
-    type: "subscription" | "plugin" | "addon";
     plan: "free" | "pro" | "team" | "enterprise";
     organizationId: string;
     features: string[];
@@ -1298,11 +1298,11 @@ export declare const LicenseDeviceSchema: z.ZodObject<{
     updatedAt: z.ZodDate;
 }, "strip", z.ZodTypeAny, {
     id: string;
+    name: string;
+    type: "desktop" | "mobile" | "web";
     createdAt: Date;
     updatedAt: Date;
-    name: string;
     status: "active" | "suspended" | "revoked" | "inactive";
-    type: "desktop" | "mobile" | "web";
     organizationId: string;
     userId: string;
     metadata: Record<string, string>;
@@ -1329,11 +1329,11 @@ export declare const LicenseDeviceSchema: z.ZodObject<{
     ipAddress?: string | undefined;
 }, {
     id: string;
+    name: string;
+    type: "desktop" | "mobile" | "web";
     createdAt: Date;
     updatedAt: Date;
-    name: string;
     status: "active" | "suspended" | "revoked" | "inactive";
-    type: "desktop" | "mobile" | "web";
     organizationId: string;
     userId: string;
     metadata: Record<string, string>;

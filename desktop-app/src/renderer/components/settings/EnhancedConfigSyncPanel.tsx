@@ -12,7 +12,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { useConfigSync } from '../../hooks/useConfigSync';
-import { cn } from '../../utils';
+import { cn } from '../ui/utils';
 
 interface ConfigSyncPanelProps {
   className?: string;

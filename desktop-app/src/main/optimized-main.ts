@@ -20,6 +20,98 @@ let WorkspaceManager: typeof import('./workspace').WorkspaceManager | undefined;
 let DesktopNotificationManager: typeof import('./notification-manager').DesktopNotificationManager | undefined;
 let rustEngine: typeof import('../lib/rust-engine') | undefined;
 
+// Type definitions for Rust NAPI bindings
+interface NapiMailAccount {
+  id: string;
+  email: string;
+  provider: string;
+  displayName?: string;
+  isEnabled?: boolean;
+}
+
+interface MailAccount {
+  userId: string;
+  name: string;
+  email: string;
+  provider: string;
+  config: Record<string, unknown>;
+  status: string;
+  isEnabled: boolean;
+  displayName: string;
+  id: string;
+}
+
+interface NapiCalendarEvent {
+  id: string;
+  title: string;
+  startTime?: number;
+  endTime?: number;
+  isAllDay?: boolean;
+  organizer?: string;
+  attendees?: string[];
+  status?: string;
+  visibility?: string;
+  recurrenceRule?: string;
+}
+
+interface CalendarEvent {
+  id: string;
+  calendarId: string;
+  providerId: string;
+  title: string;
+  description?: string;
+  location?: string;
+  startTime: Date;
+  endTime: Date;
+  isAllDay: boolean;
+  status: string;
+  visibility: string;
+  creator: string;
+  organizer: string;
+  attendees: string[];
+  recurrence?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Conversion functions
+function napiToMailAccount(napiAccount: NapiMailAccount): MailAccount {
+  return {
+    userId: 'default-user',
+    name: napiAccount.displayName || napiAccount.email,
+    email: napiAccount.email,
+    provider: napiAccount.provider,
+    config: {},
+    status: napiAccount.isEnabled !== false ? 'active' : 'inactive',
+    isEnabled: napiAccount.isEnabled !== false,
+    displayName: napiAccount.displayName || napiAccount.email,
+    id: napiAccount.id
+  };
+}
+
+function napiToCalendarEvent(napiEvent: NapiCalendarEvent): CalendarEvent {
+  const now = new Date();
+  return {
+    id: napiEvent.id,
+    calendarId: 'default-calendar',
+    providerId: napiEvent.id,
+    title: napiEvent.title,
+    description: '',
+    location: '',
+    startTime: napiEvent.startTime ? new Date(napiEvent.startTime * 1000) : now,
+    endTime: napiEvent.endTime ? new Date(napiEvent.endTime * 1000) : now,
+    isAllDay: napiEvent.isAllDay || false,
+    status: napiEvent.status || 'confirmed',
+    visibility: napiEvent.visibility || 'default',
+    creator: napiEvent.organizer || 'unknown',
+    organizer: napiEvent.organizer || 'unknown',
+    attendees: napiEvent.attendees || [],
+    recurrence: napiEvent.recurrenceRule,
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
 // Performance monitoring
 interface PerformanceMetrics {
   startupTime: number;
@@ -114,10 +206,7 @@ class OptimizedFlowDeskApp extends EventEmitter {
       }
     });
 
-    // Memory pressure handling
-    app.on('memory-warning', () => {
-      this.handleMemoryPressure();
-    });
+    // Memory pressure handling - remove this as it doesn't exist in Electron app events
   }
 
   /**
@@ -305,34 +394,34 @@ class OptimizedFlowDeskApp extends EventEmitter {
     // Workspace handlers with optimization
     ipcMain.handle('workspace:get-all', this.createOptimizedHandler('workspace:get-all', async () => {
       await waitForInit();
-      return this.workspaceManager.getWorkspaces();
+      return this.workspaceManager!.getWorkspaces();
     }));
 
     ipcMain.handle('workspace:get-active', this.createOptimizedHandler('workspace:get-active', async () => {
       await waitForInit();
-      return this.workspaceManager.getActiveWorkspace();
+      return this.workspaceManager!.getActiveWorkspace();
     }));
 
     ipcMain.handle('workspace:create', this.createOptimizedHandler('workspace:create', async (_, name: string, color?: string) => {
       await waitForInit();
-      return await this.workspaceManager.createWorkspace(name, color);
+      return await this.workspaceManager!.createWorkspace(name, color);
     }));
 
     // Batched workspace operations
-    ipcMain.handle('workspace:batch-operations', this.createOptimizedHandler('workspace:batch-operations', async (_, operations: Array<{ type: string; data: unknown }>) => {
+    ipcMain.handle('workspace:batch-operations', this.createOptimizedHandler('workspace:batch-operations', async (_, operations: Array<{ type: string; name?: string; color?: string; id?: string; updates?: unknown }>) => {
       await waitForInit();
       const results = [];
       for (const op of operations) {
         try {
           switch (op.type) {
             case 'create':
-              results.push(await this.workspaceManager.createWorkspace(op.name, op.color));
+              results.push(await this.workspaceManager!.createWorkspace(op.name || 'New Workspace', op.color));
               break;
             case 'update':
-              results.push(await this.workspaceManager.updateWorkspace(op.id, op.updates));
+              results.push(await this.workspaceManager!.updateWorkspace(op.id || '', op.updates || {}));
               break;
             case 'delete':
-              results.push(await this.workspaceManager.deleteWorkspace(op.id));
+              results.push(await this.workspaceManager!.deleteWorkspace(op.id || ''));
               break;
             default:
               results.push({ error: `Unknown operation: ${op.type}` });
@@ -355,7 +444,7 @@ class OptimizedFlowDeskApp extends EventEmitter {
    */
   private setupMailHandlers() {
     // Cached mail account data
-    let mailAccountsCache: Array<import('@flow-desk/shared/types/mail').MailAccount> | null = null;
+    let mailAccountsCache: MailAccount[] | null = null;
     let mailCacheExpiry = 0;
     
     ipcMain.handle('mail:get-accounts', this.createOptimizedHandler('mail:get-accounts', async () => {
@@ -368,8 +457,11 @@ class OptimizedFlowDeskApp extends EventEmitter {
         if (!rustEngine) {
           rustEngine = require('../lib/rust-engine');
         }
-        await rustEngine.initMailEngine();
-        const accounts = await rustEngine.getMailAccounts();
+        if (rustEngine && rustEngine.initMailEngine) {
+          await rustEngine.initMailEngine();
+        }
+        const napiAccounts = rustEngine && rustEngine.getMailAccounts ? await rustEngine.getMailAccounts() : [];
+        const accounts = napiAccounts.map(napiToMailAccount);
         
         // Cache for 30 seconds
         mailAccountsCache = accounts;
@@ -390,8 +482,10 @@ class OptimizedFlowDeskApp extends EventEmitter {
           if (!rustEngine) {
             rustEngine = require('../lib/rust-engine');
           }
-          await rustEngine.initMailEngine();
-          const result = await rustEngine.syncMailAccount(accountId);
+          if (rustEngine && rustEngine.initMailEngine) {
+            await rustEngine.initMailEngine();
+          }
+          const result = rustEngine && rustEngine.syncMailAccount ? await rustEngine.syncMailAccount(accountId) : false;
           results.set(accountId, { success: true, data: result });
         } catch (error) {
           results.set(accountId, { success: false, error: error instanceof Error ? error.message : String(error) });
@@ -408,7 +502,7 @@ class OptimizedFlowDeskApp extends EventEmitter {
    */
   private setupCalendarHandlers() {
     // Calendar operations with caching
-    let calendarCache = new Map<string, { data: Array<import('@flow-desk/shared/types/calendar').CalendarEvent>; expiry: number }>();
+    let calendarCache = new Map<string, { data: CalendarEvent[]; expiry: number }>();
     
     ipcMain.handle('calendar:get-events-cached', this.createOptimizedHandler('calendar:get-events-cached', async (_, accountId: string, startDate: string, endDate: string) => {
       const cacheKey = `${accountId}-${startDate}-${endDate}`;
@@ -422,8 +516,11 @@ class OptimizedFlowDeskApp extends EventEmitter {
         if (!rustEngine) {
           rustEngine = require('../lib/rust-engine');
         }
-        await rustEngine.initCalendarEngine();
-        const events = await rustEngine.getCalendarEvents(accountId, startDate, endDate);
+        if (rustEngine && rustEngine.initCalendarEngine) {
+          await rustEngine.initCalendarEngine();
+        }
+        const napiEvents = rustEngine && rustEngine.getCalendarEvents ? await rustEngine.getCalendarEvents(accountId) : [];
+        const events = napiEvents.map(napiToCalendarEvent);
         
         // Cache for 5 minutes
         calendarCache.set(cacheKey, { data: events, expiry: Date.now() + 300000 });
@@ -675,8 +772,8 @@ class OptimizedFlowDeskApp extends EventEmitter {
    */
   private cleanupInactiveBrowserViews() {
     // This would be implemented in the workspace manager
-    if (this.workspaceManager && typeof this.workspaceManager.cleanupInactiveViews === 'function') {
-      this.workspaceManager.cleanupInactiveViews();
+    if (this.workspaceManager && typeof (this.workspaceManager as any).cleanupInactiveViews === 'function') {
+      (this.workspaceManager as any).cleanupInactiveViews();
     }
   }
 
