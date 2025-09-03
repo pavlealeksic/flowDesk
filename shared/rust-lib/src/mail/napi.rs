@@ -6,8 +6,10 @@
 use napi::{
     bindgen_prelude::*,
     Result as NapiResult,
-    Env, JsObject,
+    Env, JsObject, Error,
 };
+#[cfg(feature = "napi")]
+use napi_derive::napi;
 
 #[cfg(feature = "napi")]
 use crate::mail::{
@@ -246,8 +248,13 @@ impl MailEngineWrapper {
             .as_ref()
             .ok_or_else(|| Error::from_reason("Engine not initialized"))?;
 
+        // TODO: Provider should be passed as parameter or determined from account
+        // For now, defaulting to Gmail as the most common provider
+        let provider = crate::mail::types::MailProvider::Gmail;
+        let redirect_uri = "http://localhost:8080/auth/callback";
+        
         let credentials = engine
-            .handle_oauth_callback(&code, &state, account_uuid)
+            .handle_oauth_callback(&code, &state, account_uuid, provider, redirect_uri)
             .await
             .map_err(|e| Error::from_reason(e.to_string()))?;
 
@@ -580,11 +587,4 @@ impl MailEngineWrapper {
 }
 
 // Export NAPI module for Node.js
-#[cfg(feature = "napi")]
-#[napi_derive::module_exports]
-fn init(mut exports: napi::JsObject) -> napi::Result<()> {
-    exports.create_named_method("MailEngine", |env, this| {
-        MailEngineWrapper::new().into_instance(env)
-    })?;
-    Ok(())
-}
+// Note: NAPI exports are handled automatically by the #[napi] derive macro

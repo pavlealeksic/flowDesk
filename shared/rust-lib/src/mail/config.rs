@@ -32,7 +32,7 @@ pub struct AuthConfig {
 }
 
 /// Synchronization engine configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SyncConfig {
     /// Default sync interval in seconds
     pub sync_interval_seconds: u64,

@@ -16,7 +16,7 @@ pub use slack::*;
 pub use notion::*;
 pub use github::*;
 
-use crate::search::{SearchError, SearchResult as SearchResultType, ProviderConfig, ProviderType};
+use crate::search::{SearchError, SearchResult, ProviderType, ProviderConfig};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
@@ -104,7 +104,7 @@ pub struct AuthRequirements {
 }
 
 /// Authentication types
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthType {
     None,
@@ -138,7 +138,7 @@ impl ProviderFactory {
     /// Create a provider instance from configuration
     pub async fn create_provider(
         config: &ProviderConfig,
-    ) -> SearchResultType<Box<dyn SearchProvider + Send + Sync>> {
+    ) -> SearchResult<Box<dyn SearchProvider + Send + Sync>> {
         match config.provider_type.as_str() {
             "local_files" => {
                 let provider = LocalFilesProvider::new(config.config.clone()).await?;

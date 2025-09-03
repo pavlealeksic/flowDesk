@@ -1,7 +1,7 @@
 //! Notion search provider (placeholder implementation)
 
 use crate::search::{
-    SearchQuery, SearchResult as SearchResultType, SearchError, SearchDocument, ProviderResponse,
+    SearchQuery, SearchResult as SearchResult, SearchError, SearchDocument, ProviderResponse,
     ContentType, ProviderType,
 };
 use super::{
@@ -19,7 +19,7 @@ pub struct NotionProvider {
 }
 
 impl NotionProvider {
-    pub async fn new(config: Value) -> SearchResultType<Self> {
+    pub async fn new(config: Value) -> SearchResult<Self> {
         let info = Self::get_provider_info();
         let base = BaseProvider::new(info);
         
@@ -69,16 +69,27 @@ impl NotionProvider {
 
 #[async_trait]
 impl SearchProvider for NotionProvider {
-    crate::impl_base_provider!(NotionProvider);
+    async fn get_stats(&self) -> SearchResult<ProviderStats> {
+        Ok(self.base.stats.clone())
+    }
     
-    async fn initialize(&mut self, config: Value) -> SearchResultType<()> {
+    fn get_info(&self) -> &ProviderInfo {
+        &self.base.info
+    }
+    
+    async fn is_ready(&self) -> bool {
+        self.base.initialized && 
+        (self.base.info.auth_requirements.auth_type == super::AuthType::None || self.base.is_authenticated())
+    }
+    
+    async fn initialize(&mut self, config: Value) -> SearchResult<()> {
         info!("Initializing Notion provider");
         self.base.config = config;
         self.base.initialized = true;
         Ok(())
     }
     
-    async fn search(&self, query: &SearchQuery) -> SearchResultType<ProviderResponse> {
+    async fn search(&self, query: &SearchQuery) -> SearchResult<ProviderResponse> {
         debug!("Notion search: {}", query.query);
         
         Ok(ProviderResponse {
@@ -91,11 +102,11 @@ impl SearchProvider for NotionProvider {
         })
     }
     
-    async fn get_documents(&self, _last_sync: Option<DateTime<Utc>>) -> SearchResultType<Vec<SearchDocument>> {
+    async fn get_documents(&self, _last_sync: Option<DateTime<Utc>>) -> SearchResult<Vec<SearchDocument>> {
         Ok(Vec::new())
     }
     
-    async fn health_check(&self) -> SearchResultType<ProviderHealth> {
+    async fn health_check(&self) -> SearchResult<ProviderHealth> {
         Ok(ProviderHealth {
             provider_id: self.base.info.id.clone(),
             status: HealthStatus::Healthy,
@@ -106,7 +117,7 @@ impl SearchProvider for NotionProvider {
         })
     }
     
-    async fn authenticate(&mut self, _auth_data: HashMap<String, String>) -> SearchResultType<ProviderAuth> {
+    async fn authenticate(&mut self, _auth_data: HashMap<String, String>) -> SearchResult<ProviderAuth> {
         Ok(ProviderAuth {
             provider_id: self.base.info.id.clone(),
             status: super::AuthStatus::NotAuthenticated,
@@ -118,7 +129,12 @@ impl SearchProvider for NotionProvider {
         })
     }
     
-    async fn refresh_auth(&mut self) -> SearchResultType<()> {
+    async fn refresh_auth(&mut self) -> SearchResult<()> {
+        Ok(())
+    }
+    
+    async fn shutdown(&mut self) -> SearchResult<()> {
+        self.base.initialized = false;
         Ok(())
     }
 }

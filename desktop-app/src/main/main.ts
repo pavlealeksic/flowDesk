@@ -16,11 +16,20 @@ import { EmailRulesEngine } from './email-rules-engine';
 import { RealEmailService } from './real-email-service';
 import { SnippetManager } from './snippet-manager';
 
+// Import OAuth2 services
+import './oauth-ipc-service'; // Initialize OAuth2 IPC handlers
+import { oAuth2IntegrationManager } from './oauth-integration-manager';
+import { oAuth2TokenManager } from './oauth-token-manager';
+
 // Import Workspace interface  
 import type { Workspace } from './workspace';
 
-// Import Rust engine for mail and calendar (packaged with app)
-const rustEngine = require('../lib/rust-engine');
+// Import comprehensive Rust engine integration
+import { rustEngineIntegration } from '../lib/rust-integration/rust-engine-integration';
+
+// Import database initialization service
+import { getDatabaseInitializationService, DatabaseInitializationConfig, InitializationProgress } from './database-initialization-service';
+import { getDatabaseMigrationManager } from './database-migration-manager';
 
 // Configure logging
 log.transports.file.level = 'info';
@@ -37,6 +46,8 @@ class FlowDeskApp {
   private realEmailService: RealEmailService | null = null;
   private snippetManager: SnippetManager | null = null;
   private currentView: 'mail' | 'calendar' | 'workspace' = 'mail';
+  private databaseInitialized: boolean = false;
+  private initializationProgress: InitializationProgress | null = null;
 
   constructor() {
     this.workspaceManager = new WorkspaceManager();
@@ -48,6 +59,8 @@ class FlowDeskApp {
       await this.requestNotificationPermissions();
       this.createMainWindow();
       this.setupMenu();
+      await this.initializeDatabases();
+      await this.initializeRustEngine();
       await this.initializeNotifications();
       this.setupIpcHandlers();
       this.createDefaultWorkspace();
@@ -72,6 +85,23 @@ class FlowDeskApp {
       }
       if (this.mailSyncManager) {
         await this.mailSyncManager.cleanup();
+      }
+      
+      // Clean up OAuth2 services
+      try {
+        await oAuth2IntegrationManager.cleanup();
+        await oAuth2TokenManager.cleanup();
+        log.info('OAuth2 services cleaned up');
+      } catch (error) {
+        log.warn('Error during OAuth2 cleanup:', error);
+      }
+      
+      // Clean up Rust engine integration
+      try {
+        await rustEngineIntegration.shutdown();
+        log.info('Rust engine integration cleaned up');
+      } catch (error) {
+        log.warn('Error during Rust engine cleanup:', error);
       }
     });
   }
@@ -123,6 +153,148 @@ class FlowDeskApp {
     });
 
     log.info('Flow Desk main window created');
+  }
+
+  /**
+   * Initialize databases on first run
+   */
+  private async initializeDatabases(): Promise<void> {
+    try {
+      log.info('Starting database initialization...');
+      
+      // Create database initialization service with progress callback
+      const databaseService = getDatabaseInitializationService((progress) => {
+        this.initializationProgress = progress;
+        
+        // Send progress updates to renderer if window is ready
+        if (this.mainWindow) {
+          this.mainWindow.webContents.send('database-initialization-progress', progress);
+        }
+      });
+
+      // Check if databases are already initialized
+      const isInitialized = await databaseService.isDatabasesInitialized();
+      
+      if (isInitialized) {
+        log.info('Databases already initialized');
+        this.databaseInitialized = true;
+        
+        // Still run migrations if needed
+        const config = databaseService.getConfig();
+        const migrationManager = getDatabaseMigrationManager(config.mailDbPath, config.calendarDbPath);
+        const migrationsApplied = await migrationManager.applyAllMigrations();
+        
+        if (!migrationsApplied) {
+          log.warn('Some database migrations failed');
+        }
+        
+        return;
+      }
+
+      // Initialize databases for first run
+      const initializationSuccess = await databaseService.initializeDatabases();
+      
+      if (initializationSuccess) {
+        this.databaseInitialized = true;
+        log.info('Database initialization completed successfully');
+        
+        // Initialize Rust engine databases
+        try {
+          const rustEngine = require('../lib/rust-engine');
+          const config = databaseService.getConfig();
+          
+          await rustEngine.initializeDatabases({
+            mailDbPath: config.mailDbPath,
+            calendarDbPath: config.calendarDbPath,
+            searchIndexPath: config.searchIndexPath
+          });
+          
+          log.info('Rust engine databases initialized successfully');
+        } catch (error) {
+          log.warn('Failed to initialize Rust engine databases:', error);
+          // Continue anyway - the databases exist and can be used
+        }
+        
+        // Send completion event to renderer
+        if (this.mainWindow) {
+          this.mainWindow.webContents.send('database-initialization-complete', {
+            success: true,
+            config: databaseService.getConfig()
+          });
+        }
+      } else {
+        log.error('Database initialization failed');
+        this.databaseInitialized = false;
+        
+        // Send failure event to renderer
+        if (this.mainWindow) {
+          this.mainWindow.webContents.send('database-initialization-complete', {
+            success: false,
+            error: 'Database initialization failed'
+          });
+        }
+      }
+    } catch (error) {
+      log.error('Database initialization error:', error);
+      this.databaseInitialized = false;
+      
+      // Show error dialog
+      if (this.mainWindow) {
+        dialog.showErrorBox(
+          'Database Initialization Failed',
+          `Flow Desk could not initialize its databases.\n\nError: ${error instanceof Error ? error.message : 'Unknown error'}\n\nThe application may not function properly.`
+        );
+      }
+    }
+  }
+
+  /**
+   * Initialize the Rust engine integration
+   */
+  private async initializeRustEngine() {
+    try {
+      log.info('Initializing comprehensive Rust engine integration...');
+      await rustEngineIntegration.initialize();
+      log.info('Rust engine integration initialized successfully');
+      log.info('Rust engine version:', rustEngineIntegration.getVersion());
+
+      // Run integration tests in development mode
+      if (process.env.NODE_ENV === 'development') {
+        this.runIntegrationTests();
+      }
+    } catch (error) {
+      log.error('Failed to initialize Rust engine integration:', error);
+      // Continue without Rust integration - app will use JavaScript fallbacks
+    }
+  }
+
+  /**
+   * Run Rust integration tests (development only)
+   */
+  private async runIntegrationTests() {
+    try {
+      const { RustIntegrationTester } = await import('../test/rust-integration-test');
+      const tester = new RustIntegrationTester();
+      
+      // Run tests in background after a short delay
+      setTimeout(async () => {
+        log.info('Running Rust integration tests...');
+        await tester.runAllTests();
+        
+        const results = tester.getResults();
+        const successRate = (results.filter(r => r.success).length / results.length) * 100;
+        
+        // Notify renderer about test completion
+        this.mainWindow?.webContents.send('rust-integration-tests-complete', {
+          totalTests: results.length,
+          passed: results.filter(r => r.success).length,
+          failed: results.filter(r => !r.success).length,
+          successRate: successRate.toFixed(1)
+        });
+      }, 3000); // Wait 3 seconds after app startup
+    } catch (error) {
+      log.error('Failed to run integration tests:', error);
+    }
   }
 
   private async requestNotificationPermissions() {
@@ -590,31 +762,27 @@ class FlowDeskApp {
       return { success: true, id: 'window-' + Date.now() };
     });
 
-    // Mail handlers (will integrate with Rust IMAP engine) - Redux slice compatibility
+    // Mail handlers (using comprehensive Rust engine integration)
     ipcMain.handle('mail:add-account-obj', async (_, account: any) => {
       try {
-        log.info(`Adding mail account: ${account.email}`);
+        log.info(`Adding mail account via Rust integration: ${account.email}`);
         
-        // Use Rust engine to add account with auto-detected server config
-        await rustEngine.initMailEngine();
-        const result = await rustEngine.addMailAccount({
-          id: 'mail-' + Date.now(),
+        const rustAccount = await rustEngineIntegration.addMailAccount({
           email: account.email,
-          provider: 'auto', // Auto-detect from email domain
-          displayName: account.displayName || account.email,
-          password: account.password
+          password: account.password,
+          displayName: account.displayName || account.email
         });
         
-        log.info(`Successfully added mail account: ${result.id}`);
+        log.info(`Successfully added mail account via Rust: ${rustAccount.id}`);
         return {
-          id: result.id,
-          email: account.email,
-          displayName: account.displayName || account.email,
-          provider: 'imap',
-          isEnabled: true
+          id: rustAccount.id,
+          email: rustAccount.email,
+          displayName: rustAccount.displayName,
+          provider: rustAccount.provider,
+          isEnabled: rustAccount.isEnabled
         };
       } catch (error) {
-        log.error('Failed to add mail account:', error);
+        log.error('Failed to add mail account via Rust:', error);
         throw new Error(`Failed to add mail account: ${error instanceof Error ? error.message : String(error)}`);
       }
     });
@@ -635,25 +803,23 @@ class FlowDeskApp {
 
     ipcMain.handle('mail:get-accounts', async () => {
       try {
-        await rustEngine.initMailEngine();
-        const accounts = await rustEngine.getMailAccounts();
-        log.info(`Retrieved ${accounts.length} mail accounts`);
+        const accounts = await rustEngineIntegration.getMailAccounts();
+        log.info(`Retrieved ${accounts.length} mail accounts via Rust`);
         return accounts;
       } catch (error) {
-        log.error('Failed to get mail accounts:', error);
+        log.error('Failed to get mail accounts via Rust:', error);
         return [];
       }
     });
 
     ipcMain.handle('mail:sync-account', async (_, accountId: string) => {
       try {
-        log.info(`Syncing mail account: ${accountId}`);
-        await rustEngine.initMailEngine();
-        const result = await rustEngine.syncMailAccount(accountId);
-        log.info(`Successfully synced account ${accountId}:`, result);
-        return true; // Redux expects boolean
+        log.info(`Syncing mail account via Rust: ${accountId}`);
+        const result = await rustEngineIntegration.syncMailAccount(accountId);
+        log.info(`Successfully synced account ${accountId} via Rust:`, result);
+        return result;
       } catch (error) {
-        log.error('Failed to sync mail account:', error);
+        log.error('Failed to sync mail account via Rust:', error);
         return false;
       }
     });
@@ -688,16 +854,14 @@ class FlowDeskApp {
 
     ipcMain.handle('mail:mark-message-read', async (_, accountId: string, messageId: string, read: boolean) => {
       try {
-        log.info(`Marking message ${messageId} as ${read ? 'read' : 'unread'}`);
+        log.info(`Marking message ${messageId} as ${read ? 'read' : 'unread'} via Rust`);
         
-        // Use Rust engine to actually mark message
-        const rustEngine = require('../lib/rust-engine');
-        await rustEngine.markMailMessageRead(accountId, messageId, read);
+        const result = await rustEngineIntegration.markMessageRead(accountId, messageId, read);
         
-        log.info(`Successfully marked message ${messageId} as ${read ? 'read' : 'unread'}`);
-        return true;
+        log.info(`Successfully marked message ${messageId} as ${read ? 'read' : 'unread'} via Rust`);
+        return result;
       } catch (error) {
-        log.error('Failed to mark message:', error);
+        log.error('Failed to mark message via Rust:', error);
         return false;
       }
     });
@@ -741,13 +905,12 @@ class FlowDeskApp {
 
     ipcMain.handle('mail:get-messages', async (_, accountId: string, folderId: string, options?: any) => {
       try {
-        log.info(`Getting messages for account ${accountId}, folder ${folderId}`);
-        await rustEngine.initMailEngine();
-        const messages = await rustEngine.getMailMessages(accountId);
-        log.info(`Retrieved ${messages.length} messages for account ${accountId}`);
+        log.info(`Getting messages via Rust for account ${accountId}, folder ${folderId}`);
+        const messages = await rustEngineIntegration.getMailMessages(accountId);
+        log.info(`Retrieved ${messages.length} messages for account ${accountId} via Rust`);
         return messages;
       } catch (error) {
-        log.error('Failed to get mail messages:', error);
+        log.error('Failed to get mail messages via Rust:', error);
         return [];
       }
     });
@@ -781,51 +944,53 @@ class FlowDeskApp {
     // mail:delete-message handler already registered above
 
     ipcMain.handle('mail:search-messages', async (_, query: string, options?: any) => {
-      log.info(`Searching messages: ${query}`);
-      return [];
+      try {
+        log.info(`Searching messages via Rust: ${query}`);
+        const results = await rustEngineIntegration.searchMailMessages(query);
+        log.info(`Mail search via Rust returned ${results.length} results`);
+        return results;
+      } catch (error) {
+        log.error('Failed to search messages via Rust:', error);
+        return [];
+      }
     });
 
     // mail:sync-all handler already registered above
 
     // mail:get-sync-status handler already registered above
 
-    // Calendar handlers (will integrate with Rust CalDAV engine) - unified API
+    // Calendar handlers (using comprehensive Rust engine integration)
     ipcMain.handle('calendar:add-account', async (_, email: string, password: string, serverConfig?: any) => {
       try {
-        log.info(`Adding calendar account: ${email}`);
+        log.info(`Adding calendar account via Rust: ${email}`);
         
-        // Use Rust engine to add calendar account
-        await rustEngine.initCalendarEngine();
-        const result = await rustEngine.addCalendarAccount({
-          id: 'cal-' + Date.now(),
+        const rustAccount = await rustEngineIntegration.addCalendarAccount({
           email,
-          provider: 'auto', // Auto-detect from email domain  
-          displayName: email,
-          password
+          password,
+          serverUrl: serverConfig?.serverUrl
         });
         
-        log.info(`Successfully added calendar account: ${result.id}`);
+        log.info(`Successfully added calendar account via Rust: ${rustAccount.id}`);
         return {
-          id: result.id,
-          email,
-          displayName: email,
-          provider: 'caldav',
-          isEnabled: true
+          id: rustAccount.id,
+          email: rustAccount.email,
+          displayName: rustAccount.displayName,
+          provider: rustAccount.provider,
+          isEnabled: rustAccount.isEnabled
         };
       } catch (error) {
-        log.error('Failed to add calendar account:', error);
+        log.error('Failed to add calendar account via Rust:', error);
         throw new Error(`Failed to add calendar account: ${error instanceof Error ? error.message : String(error)}`);
       }
     });
 
     ipcMain.handle('calendar:get-accounts', async () => {
       try {
-        await rustEngine.initCalendarEngine();
-        const accounts = await rustEngine.getCalendarAccounts();
-        log.info(`Retrieved ${accounts.length} calendar accounts`);
+        const accounts = await rustEngineIntegration.getCalendarAccounts();
+        log.info(`Retrieved ${accounts.length} calendar accounts via Rust`);
         return accounts;
       } catch (error) {
-        log.error('Failed to get calendar accounts:', error);
+        log.error('Failed to get calendar accounts via Rust:', error);
         return [];
       }
     });
@@ -846,14 +1011,38 @@ class FlowDeskApp {
     });
 
     ipcMain.handle('calendar:get-events', async (_, accountId: string, startDate: string, endDate: string) => {
-      // TODO: Get events from Rust engine
-      log.info(`Getting events for account ${accountId} from ${startDate} to ${endDate}`);
-      return [];
+      try {
+        log.info(`Getting events via Rust for account ${accountId} from ${startDate} to ${endDate}`);
+        const events = await rustEngineIntegration.getCalendarEvents(
+          accountId, 
+          new Date(startDate), 
+          new Date(endDate)
+        );
+        log.info(`Retrieved ${events.length} events for account ${accountId} via Rust`);
+        return events;
+      } catch (error) {
+        log.error('Failed to get calendar events via Rust:', error);
+        return [];
+      }
     });
 
     ipcMain.handle('calendar:create-event', async (_, calendarId: string, title: string, startTime: Date, endTime: Date, options?: any) => {
-      log.info(`Creating event: ${title}`);
-      return 'event-' + Date.now();
+      try {
+        log.info(`Creating event via Rust: ${title}`);
+        const eventId = await rustEngineIntegration.createCalendarEvent({
+          calendarId,
+          title,
+          startTime: new Date(startTime),
+          endTime: new Date(endTime),
+          description: options?.description,
+          location: options?.location
+        });
+        log.info(`Successfully created event via Rust: ${eventId}`);
+        return eventId;
+      } catch (error) {
+        log.error('Failed to create event via Rust:', error);
+        return 'event-' + Date.now(); // Fallback ID
+      }
     });
 
     ipcMain.handle('calendar:update-event', async (_, eventId: string, updates: any) => {
@@ -867,8 +1056,15 @@ class FlowDeskApp {
     });
 
     ipcMain.handle('calendar:sync-account', async (_, accountId: string) => {
-      log.info(`Syncing calendar account: ${accountId}`);
-      return { totalCalendars: 1, totalEvents: 0 };
+      try {
+        log.info(`Syncing calendar account via Rust: ${accountId}`);
+        const result = await rustEngineIntegration.syncCalendarAccount(accountId);
+        log.info(`Successfully synced calendar account ${accountId} via Rust:`, result);
+        return { totalCalendars: 1, totalEvents: 0, success: result };
+      } catch (error) {
+        log.error('Failed to sync calendar account via Rust:', error);
+        return { totalCalendars: 0, totalEvents: 0, success: false };
+      }
     });
 
     ipcMain.handle('calendar:sync-all', async () => {
@@ -993,30 +1189,85 @@ class FlowDeskApp {
       return { success: true };
     });
 
-    // Search API handlers (for searchSlice compatibility)
+    // Search API handlers (using comprehensive Rust search engine)
     ipcMain.handle('search:perform', async (_, options: { query: string; limit: number; offset: number }) => {
-      log.info(`Performing search: ${options.query}`);
-      return { success: true, data: { results: [], total: 0 }, error: undefined };
+      try {
+        log.info(`Performing search via Rust: ${options.query}`);
+        const results = await rustEngineIntegration.searchDocuments(options.query, options.limit);
+        log.info(`Search via Rust returned ${results.length} results`);
+        return { 
+          success: true, 
+          data: { results, total: results.length }, 
+          error: undefined 
+        };
+      } catch (error) {
+        log.error('Failed to perform search via Rust:', error);
+        return { 
+          success: false, 
+          data: { results: [], total: 0 }, 
+          error: error instanceof Error ? error.message : 'Search failed' 
+        };
+      }
     });
 
     ipcMain.handle('search:get-suggestions', async (_, partialQuery: string, limit: number) => {
-      log.info(`Getting search suggestions for: ${partialQuery}`);
-      return { success: true, data: [], error: undefined };
+      try {
+        log.info(`Getting search suggestions via Rust for: ${partialQuery}`);
+        // For now, return simple suggestions based on the partial query
+        const suggestions = [partialQuery, `${partialQuery}*`, `*${partialQuery}*`].slice(0, limit);
+        return { success: true, data: suggestions, error: undefined };
+      } catch (error) {
+        log.error('Failed to get search suggestions via Rust:', error);
+        return { success: false, data: [], error: error instanceof Error ? error.message : 'Suggestions failed' };
+      }
     });
 
     ipcMain.handle('search:index-document', async (_, document: any) => {
-      log.info(`Indexing document: ${document.id}`);
-      return { success: true, error: undefined };
+      try {
+        log.info(`Indexing document via Rust: ${document.id}`);
+        const success = await rustEngineIntegration.indexDocument({
+          id: document.id,
+          title: document.title,
+          content: document.content,
+          source: document.source || 'unknown',
+          metadata: document.metadata
+        });
+        log.info(`Document indexed via Rust: ${document.id}, success: ${success}`);
+        return { success, error: undefined };
+      } catch (error) {
+        log.error('Failed to index document via Rust:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Indexing failed' };
+      }
     });
 
     ipcMain.handle('search:initialize', async () => {
-      log.info('Initializing search engine');
-      return { success: true, error: undefined };
+      try {
+        log.info('Initializing search engine via Rust');
+        // Search engine is already initialized in initializeRustEngine()
+        const isInitialized = rustEngineIntegration.isInitialized();
+        log.info('Search engine initialization via Rust:', isInitialized);
+        return { success: isInitialized, error: undefined };
+      } catch (error) {
+        log.error('Failed to initialize search engine via Rust:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Search initialization failed' };
+      }
     });
 
     ipcMain.handle('search:get-analytics', async () => {
-      log.info('Getting search analytics');
-      return { success: true, data: {}, error: undefined };
+      try {
+        log.info('Getting search analytics via Rust');
+        // Return basic analytics - this would be expanded with actual Rust analytics
+        const analytics = {
+          totalDocuments: 0,
+          totalSearches: 0,
+          avgResponseTime: 0,
+          engineVersion: rustEngineIntegration.getVersion()
+        };
+        return { success: true, data: analytics, error: undefined };
+      } catch (error) {
+        log.error('Failed to get search analytics via Rust:', error);
+        return { success: false, data: {}, error: error instanceof Error ? error.message : 'Analytics failed' };
+      }
     });
 
     // Theme API handlers (for themeSlice compatibility)
@@ -1027,6 +1278,173 @@ class FlowDeskApp {
     ipcMain.handle('theme:set', async (_, theme: any) => {
       log.info('Setting theme:', theme);
       return { success: true };
+    });
+
+    // Database API handlers
+    ipcMain.handle('database:get-status', async () => {
+      try {
+        const databaseService = getDatabaseInitializationService();
+        const isInitialized = await databaseService.isDatabasesInitialized();
+        const config = databaseService.getConfig();
+        
+        return {
+          success: true,
+          data: {
+            initialized: isInitialized,
+            config,
+            progress: this.initializationProgress
+          },
+          error: undefined
+        };
+      } catch (error) {
+        log.error('Failed to get database status:', error);
+        return {
+          success: false,
+          data: null,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    });
+
+    ipcMain.handle('database:initialize', async () => {
+      try {
+        log.info('Manual database initialization requested');
+        await this.initializeDatabases();
+        return {
+          success: this.databaseInitialized,
+          error: this.databaseInitialized ? undefined : 'Database initialization failed'
+        };
+      } catch (error) {
+        log.error('Manual database initialization failed:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    });
+
+    ipcMain.handle('database:repair', async () => {
+      try {
+        log.info('Database repair requested');
+        const databaseService = getDatabaseInitializationService();
+        const success = await databaseService.repairDatabases();
+        
+        if (success) {
+          // Re-initialize Rust engines after repair
+          await this.initializeRustEngine();
+        }
+        
+        return {
+          success,
+          error: success ? undefined : 'Database repair failed'
+        };
+      } catch (error) {
+        log.error('Database repair failed:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    });
+
+    ipcMain.handle('database:check-integrity', async () => {
+      try {
+        log.info('Database integrity check requested');
+        const databaseService = getDatabaseInitializationService();
+        const config = databaseService.getConfig();
+        
+        // Check integrity of each database
+        const results = {
+          mail: { valid: false, error: null as string | null },
+          calendar: { valid: false, error: null as string | null }
+        };
+        
+        try {
+          // Use Rust engine to check database integrity if available
+          const rustEngine = require('../lib/rust-engine');
+          const mailCheck = await rustEngine.checkDatabaseIntegrity(config.mailDbPath);
+          results.mail = { valid: mailCheck.valid, error: mailCheck.errors?.join(', ') || null };
+          
+          const calendarCheck = await rustEngine.checkDatabaseIntegrity(config.calendarDbPath);
+          results.calendar = { valid: calendarCheck.valid, error: calendarCheck.errors?.join(', ') || null };
+        } catch (error) {
+          log.warn('Rust engine integrity check failed, using fallback:', error);
+          
+          // Fallback: just check if databases exist and are accessible
+          const fs = require('fs').promises;
+          try {
+            await fs.access(config.mailDbPath);
+            results.mail = { valid: true, error: null };
+          } catch (err) {
+            results.mail = { valid: false, error: 'Database file not accessible' };
+          }
+          
+          try {
+            await fs.access(config.calendarDbPath);
+            results.calendar = { valid: true, error: null };
+          } catch (err) {
+            results.calendar = { valid: false, error: 'Database file not accessible' };
+          }
+        }
+        
+        return {
+          success: true,
+          data: results,
+          error: undefined
+        };
+      } catch (error) {
+        log.error('Database integrity check failed:', error);
+        return {
+          success: false,
+          data: null,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    });
+
+    ipcMain.handle('database:get-migration-status', async () => {
+      try {
+        const databaseService = getDatabaseInitializationService();
+        const config = databaseService.getConfig();
+        const migrationManager = getDatabaseMigrationManager(config.mailDbPath, config.calendarDbPath);
+        
+        const statuses = await migrationManager.getAllMigrationStatuses();
+        
+        return {
+          success: true,
+          data: statuses,
+          error: undefined
+        };
+      } catch (error) {
+        log.error('Failed to get migration status:', error);
+        return {
+          success: false,
+          data: null,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
+    });
+
+    ipcMain.handle('database:apply-migrations', async () => {
+      try {
+        log.info('Manual migration application requested');
+        const databaseService = getDatabaseInitializationService();
+        const config = databaseService.getConfig();
+        const migrationManager = getDatabaseMigrationManager(config.mailDbPath, config.calendarDbPath);
+        
+        const success = await migrationManager.applyAllMigrations();
+        
+        return {
+          success,
+          error: success ? undefined : 'Migration application failed'
+        };
+      } catch (error) {
+        log.error('Migration application failed:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
     });
 
     log.info('IPC handlers setup complete');

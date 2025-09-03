@@ -24,7 +24,7 @@ pub struct AuthCredentials {
 }
 
 /// OAuth2 authorization URL
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthorizationUrl {
     pub url: String,
     pub state: String,

@@ -1,13 +1,12 @@
 /**
  * Search service for integrating with the unified Rust-based search engine
+ * UPDATED: Now uses the comprehensive Rust engine integration
  */
 
 import { app } from 'electron';
 import { join } from 'path';
 import log from 'electron-log';
-
-// Import working Rust FFI engine
-const rustEngine = require('@flow-desk/shared-rust');
+import { rustEngineIntegration } from '../lib/rust-integration/rust-engine-integration';
 
 // Temporary types until we import from shared
 interface SearchQuery {
@@ -53,52 +52,47 @@ interface SearchResult {
 }
 
 export class MainSearchService {
-  private rustEngine = rustEngine;
   private initialized = false;
 
   /**
-   * Initialize the search service
+   * Initialize the search service using comprehensive Rust integration
    */
   async initialize(): Promise<void> {
     try {
-      log.info('Initializing search service with Rust backend...');
+      log.info('Initializing search service with comprehensive Rust backend...');
       
-      // Initialize the Rust engine
-      await this.rustEngine.initialize();
+      // Initialize the comprehensive Rust engine integration
+      await rustEngineIntegration.initialize();
       
-      // Initialize the search engine specifically
-      const initResult = await this.rustEngine.initSearchEngine();
-      log.info('Rust search engine init result:', initResult);
-      
-      this.initialized = true;
-      log.info('Search service initialized successfully');
+      this.initialized = rustEngineIntegration.isInitialized();
+      log.info('Search service initialized successfully via Rust integration');
     } catch (error) {
-      log.error('Failed to initialize search service:', error);
+      log.error('Failed to initialize search service via Rust integration:', error);
       throw error;
     }
   }
 
   /**
-   * Execute a search query
+   * Execute a search query using comprehensive Rust integration
    */
   async search(query: SearchQuery): Promise<SearchResponse> {
     this.ensureInitialized();
     
     try {
-      log.info('Executing search query via Rust:', query.query);
+      log.info('Executing search query via comprehensive Rust integration:', query.query);
       
-      const rustResults = await this.rustEngine.search(query.query);
+      const rustResults = await rustEngineIntegration.searchDocuments(query.query, query.limit || 20);
       
       // Convert Rust results to expected format
       const results = rustResults.map((rustResult: any) => ({
         id: rustResult.id,
         title: rustResult.title,
         content: rustResult.content,
-        contentType: rustResult.content_type,
-        provider: rustResult.provider,
+        contentType: 'document', // Default content type
+        provider: rustResult.source,
         score: rustResult.score,
         highlights: [],
-        metadata: {}
+        metadata: JSON.parse(rustResult.metadata || '{}')
       }));
 
       return {
@@ -108,33 +102,35 @@ export class MainSearchService {
         took: 0 // Will be provided by Rust engine in future
       };
     } catch (error) {
-      log.error('Search failed:', error);
+      log.error('Search failed via Rust integration:', error);
       throw error;
     }
   }
 
   /**
-   * Index a single document
+   * Index a single document using comprehensive Rust integration
    */
   async indexDocument(document: SearchDocument): Promise<void> {
     this.ensureInitialized();
     
     try {
-      log.info('Indexing document via Rust:', document.id);
+      log.info('Indexing document via comprehensive Rust integration:', document.id);
       
-      const rustDocument = {
+      const success = await rustEngineIntegration.indexDocument({
         id: document.id,
         title: document.title,
         content: document.content,
-        content_type: document.contentType,
-        provider: document.provider,
-        last_modified: Math.floor(document.lastModified.getTime() / 1000)
-      };
+        source: document.provider,
+        metadata: document.metadata
+      });
 
-      await this.rustEngine.indexDocument(rustDocument);
-      log.info('Document indexed successfully:', document.id);
+      if (success) {
+        log.info('Document indexed successfully via Rust integration:', document.id);
+      } else {
+        throw new Error('Indexing returned false');
+      }
     } catch (error) {
-      log.error('Document indexing failed:', error);
+      log.error('Document indexing failed via Rust integration:', error);
       throw error;
     }
   }

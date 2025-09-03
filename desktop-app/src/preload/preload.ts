@@ -94,6 +94,15 @@ interface FlowDeskAPI {
     startSync(): Promise<boolean>;
     stopSync(): Promise<boolean>;
     
+    // OAuth2 Authentication
+    startOAuthFlow(providerId: string): Promise<{ success: boolean; email?: string; config?: any; error?: string; setupInstructions?: string[] }>;
+    authenticateProvider(providerId: string): Promise<{ success: boolean; accountId?: string; email?: string; error?: string }>;
+    getProviderStatus(providerId?: string): Promise<any>;
+    getConfiguredProviders(): Promise<Array<{ providerId: string; name: string; configured: boolean }>>;
+    refreshToken(accountId: string, providerId: string): Promise<{ success: boolean; error?: string }>;
+    revokeToken(accountId: string, providerId: string): Promise<{ success: boolean; error?: string }>;
+    getTokenStatus(accountId?: string, providerId?: string): Promise<any>;
+    
     // Real-time sync (IDLE)
     startIdle(accountId: string): Promise<boolean>;
     stopIdle(accountId: string): Promise<boolean>;
@@ -436,6 +445,22 @@ const flowDeskAPI: FlowDeskAPI = {
       ipcRenderer.invoke('mail:start-sync'),
     stopSync: () => 
       ipcRenderer.invoke('mail:stop-sync'),
+    
+    // OAuth2 Authentication (new enhanced methods)
+    startOAuthFlow: (providerId: string) => 
+      ipcRenderer.invoke('oauth:start-flow', providerId),
+    authenticateProvider: (providerId: string) => 
+      ipcRenderer.invoke('oauth:authenticate-provider', providerId),
+    getProviderStatus: (providerId?: string) => 
+      ipcRenderer.invoke('oauth:get-provider-status', providerId),
+    getConfiguredProviders: () => 
+      ipcRenderer.invoke('oauth:get-configured-providers'),
+    refreshToken: (accountId: string, providerId: string) => 
+      ipcRenderer.invoke('oauth:refresh-token', accountId, providerId),
+    revokeToken: (accountId: string, providerId: string) => 
+      ipcRenderer.invoke('oauth:revoke-token', accountId, providerId),
+    getTokenStatus: (accountId?: string, providerId?: string) => 
+      ipcRenderer.invoke('oauth:get-token-status', accountId, providerId),
     
     // Real-time sync (IDLE)
     startIdle: (accountId: string) => 

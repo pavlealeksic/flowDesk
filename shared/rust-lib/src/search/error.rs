@@ -44,6 +44,33 @@ pub enum SearchError {
         provider: String,
         message: String,
     },
+
+    /// Authentication error (deprecated variant for compatibility)
+    #[error("Authentication error: {message}")]
+    AuthenticationError {
+        message: String,
+    },
+
+    /// API error (for provider API calls)
+    #[error("API error: {message}")]
+    ApiError {
+        message: String,
+        status_code: Option<u16>,
+        retry_after: Option<u64>,
+    },
+
+    /// Parsing error
+    #[error("Parsing error: {message}")]
+    ParsingError {
+        message: String,
+    },
+
+    /// Configuration error with field
+    #[error("Configuration error in field {field}: {message}")]
+    ConfigurationError {
+        message: String,
+        field: String,
+    },
     
     /// Rate limiting errors
     #[error("Rate limit exceeded for provider: {provider}")]
@@ -244,6 +271,10 @@ impl SearchError {
             Self::CorruptionError { .. } => "corruption",
             Self::PluginError { .. } => "plugin",
             Self::InternalError(_) => "internal",
+            Self::AuthenticationError { .. } => "auth",
+            Self::ApiError { .. } => "api",
+            Self::ParsingError { .. } => "parsing",
+            Self::ConfigurationError { .. } => "config",
         }
     }
 }
@@ -295,7 +326,7 @@ pub trait ErrorContext<T> {
 
 impl<T> ErrorContext<T> for SearchResult<T> {
     fn with_context(self, context: SearchErrorContext) -> SearchResult<T> {
-        self.map_err(|mut error| {
+        self.map_err(|error| {
             tracing::error!(
                 operation = %context.operation,
                 provider_id = ?context.provider_id,

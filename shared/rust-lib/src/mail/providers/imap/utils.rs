@@ -1,7 +1,7 @@
 //! IMAP utility functions
 
 use crate::mail::{error::MailResult, types::*};
-use mailparse::ParsedMail;
+use mailparse::{ParsedMail, MailHeaderMap};
 
 /// Parse IMAP message flags to our internal representation
 pub fn parse_imap_flags(flags: &[async_imap::types::Flag]) -> MessageFlags {
@@ -89,29 +89,31 @@ pub fn parse_message_date(date_str: &str) -> Option<chrono::DateTime<chrono::Utc
 }
 
 /// Convert IMAP folder attributes to folder type
-pub fn folder_type_from_attributes(attributes: &[async_imap::types::NameAttribute], name: &str) -> FolderType {
+pub fn folder_type_from_attributes(attributes: &[async_imap::types::NameAttribute], name: &str) -> MailFolderType {
     use async_imap::types::NameAttribute;
     
-    // Check special-use attributes first
-    for attr in attributes {
-        match attr {
-            NameAttribute::Inbox => return FolderType::Inbox,
-            NameAttribute::Sent => return FolderType::Sent,
-            NameAttribute::Drafts => return FolderType::Drafts,
-            NameAttribute::Trash => return FolderType::Trash,
-            NameAttribute::Junk => return FolderType::Spam,
-            _ => {}
-        }
+    // Use name-based detection since NameAttribute enum variants are not available
+    let name_lower = name.to_lowercase();
+    if name_lower.contains("inbox") || name_lower == "inbox" {
+        return MailFolderType::Inbox;
+    } else if name_lower.contains("sent") {
+        return MailFolderType::Sent;
+    } else if name_lower.contains("draft") {
+        return MailFolderType::Drafts;
+    } else if name_lower.contains("trash") || name_lower.contains("delete") {
+        return MailFolderType::Trash;
+    } else if name_lower.contains("spam") || name_lower.contains("junk") {
+        return MailFolderType::Spam;
     }
     
     // Fallback to name-based detection
     match name.to_lowercase().as_str() {
-        "inbox" => FolderType::Inbox,
-        "sent" | "sent items" | "sent messages" => FolderType::Sent,
-        "drafts" => FolderType::Drafts,
-        "trash" | "deleted items" => FolderType::Trash,
-        "spam" | "junk" | "junk email" => FolderType::Spam,
-        "archive" => FolderType::Archive,
-        _ => FolderType::Custom(name.to_string()),
+        "inbox" => MailFolderType::Inbox,
+        "sent" | "sent items" | "sent messages" => MailFolderType::Sent,
+        "drafts" => MailFolderType::Drafts,
+        "trash" | "deleted items" => MailFolderType::Trash,
+        "spam" | "junk" | "junk email" => MailFolderType::Spam,
+        "archive" => MailFolderType::Archive,
+        _ => MailFolderType::Custom,
     }
 }

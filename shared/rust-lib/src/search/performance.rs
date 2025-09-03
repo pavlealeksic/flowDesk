@@ -114,7 +114,7 @@ pub struct PerformanceAlertsConfig {
 }
 
 /// Performance targets
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerformanceTargets {
     /// Target response time (ms)
     pub target_response_time_ms: u64,
@@ -175,8 +175,9 @@ impl PerformanceMonitor {
             response_times.push(response_time_ms);
             
             // Keep only the last 1000 samples for statistical analysis
-            if response_times.len() > 1000 {
-                response_times.drain(0..response_times.len() - 1000);
+            let len = response_times.len();
+            if len > 1000 {
+                response_times.drain(0..len - 1000);
             }
         }
         

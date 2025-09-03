@@ -606,22 +606,22 @@ export declare const EmailMessageSchema: z.ZodObject<{
         isSent: z.ZodBoolean;
         hasAttachments: z.ZodBoolean;
     }, "strip", z.ZodTypeAny, {
+        isArchived: boolean;
         isRead: boolean;
         isStarred: boolean;
         isTrashed: boolean;
         isSpam: boolean;
         isImportant: boolean;
-        isArchived: boolean;
         isDraft: boolean;
         isSent: boolean;
         hasAttachments: boolean;
     }, {
+        isArchived: boolean;
         isRead: boolean;
         isStarred: boolean;
         isTrashed: boolean;
         isSpam: boolean;
         isImportant: boolean;
-        isArchived: boolean;
         isDraft: boolean;
         isSent: boolean;
         hasAttachments: boolean;
@@ -710,21 +710,15 @@ export declare const EmailMessageSchema: z.ZodObject<{
     createdAt: z.ZodDate;
     updatedAt: z.ZodDate;
 }, "strip", z.ZodTypeAny, {
-    id: string;
     accountId: string;
-    providerId: string;
-    threadId: string;
+    id: string;
+    createdAt: Date;
+    updatedAt: Date;
     subject: string;
-    snippet: string;
-    from: {
-        address: string;
-        name?: string | undefined;
-    };
     to: {
         address: string;
         name?: string | undefined;
     }[];
-    date: Date;
     cc: {
         address: string;
         name?: string | undefined;
@@ -733,25 +727,33 @@ export declare const EmailMessageSchema: z.ZodObject<{
         address: string;
         name?: string | undefined;
     }[];
+    from: {
+        address: string;
+        name?: string | undefined;
+    };
+    priority: "normal" | "high" | "low";
+    date: Date;
+    providerId: string;
+    threadId: string;
+    snippet: string;
     replyTo: {
         address: string;
         name?: string | undefined;
     }[];
     flags: {
+        isArchived: boolean;
         isRead: boolean;
         isStarred: boolean;
         isTrashed: boolean;
         isSpam: boolean;
         isImportant: boolean;
-        isArchived: boolean;
         isDraft: boolean;
         isSent: boolean;
         hasAttachments: boolean;
     };
     labels: string[];
     folder: string;
-    importance: "normal" | "low" | "high";
-    priority: "normal" | "low" | "high";
+    importance: "normal" | "high" | "low";
     size: number;
     attachments: {
         id: string;
@@ -766,8 +768,6 @@ export declare const EmailMessageSchema: z.ZodObject<{
     headers: Record<string, string>;
     messageId: string;
     references: string[];
-    createdAt: Date;
-    updatedAt: Date;
     bodyHtml?: string | undefined;
     bodyText?: string | undefined;
     inReplyTo?: string | undefined;
@@ -784,21 +784,15 @@ export declare const EmailMessageSchema: z.ZodObject<{
         } | undefined;
     } | undefined;
 }, {
-    id: string;
     accountId: string;
-    providerId: string;
-    threadId: string;
+    id: string;
+    createdAt: Date;
+    updatedAt: Date;
     subject: string;
-    snippet: string;
-    from: {
-        address: string;
-        name?: string | undefined;
-    };
     to: {
         address: string;
         name?: string | undefined;
     }[];
-    date: Date;
     cc: {
         address: string;
         name?: string | undefined;
@@ -807,25 +801,33 @@ export declare const EmailMessageSchema: z.ZodObject<{
         address: string;
         name?: string | undefined;
     }[];
+    from: {
+        address: string;
+        name?: string | undefined;
+    };
+    priority: "normal" | "high" | "low";
+    date: Date;
+    providerId: string;
+    threadId: string;
+    snippet: string;
     replyTo: {
         address: string;
         name?: string | undefined;
     }[];
     flags: {
+        isArchived: boolean;
         isRead: boolean;
         isStarred: boolean;
         isTrashed: boolean;
         isSpam: boolean;
         isImportant: boolean;
-        isArchived: boolean;
         isDraft: boolean;
         isSent: boolean;
         hasAttachments: boolean;
     };
     labels: string[];
     folder: string;
-    importance: "normal" | "low" | "high";
-    priority: "normal" | "low" | "high";
+    importance: "normal" | "high" | "low";
     size: number;
     attachments: {
         id: string;
@@ -840,8 +842,6 @@ export declare const EmailMessageSchema: z.ZodObject<{
     headers: Record<string, string>;
     messageId: string;
     references: string[];
-    createdAt: Date;
-    updatedAt: Date;
     bodyHtml?: string | undefined;
     bodyText?: string | undefined;
     inReplyTo?: string | undefined;
@@ -872,16 +872,16 @@ export declare const MailAccountSchema: z.ZodObject<{
         password: z.ZodOptional<z.ZodString>;
         additionalTokens: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
     }, "strip", z.ZodTypeAny, {
+        password?: string | undefined;
         accessToken?: string | undefined;
         refreshToken?: string | undefined;
         tokenExpiresAt?: Date | undefined;
-        password?: string | undefined;
         additionalTokens?: Record<string, string> | undefined;
     }, {
+        password?: string | undefined;
         accessToken?: string | undefined;
         refreshToken?: string | undefined;
         tokenExpiresAt?: Date | undefined;
-        password?: string | undefined;
         additionalTokens?: Record<string, string> | undefined;
     }>>;
     status: z.ZodEnum<["active", "auth_error", "quota_exceeded", "suspended", "disabled", "error"]>;
@@ -892,43 +892,43 @@ export declare const MailAccountSchema: z.ZodObject<{
     createdAt: z.ZodDate;
     updatedAt: z.ZodDate;
 }, "strip", z.ZodTypeAny, {
+    email: string;
     id: string;
-    name: string;
-    status: "error" | "active" | "auth_error" | "quota_exceeded" | "suspended" | "disabled";
     createdAt: Date;
     updatedAt: Date;
-    userId: string;
-    email: string;
-    provider: "imap" | "gmail" | "outlook" | "exchange" | "fastmail" | "proton" | "yahoo" | "aol";
-    syncIntervalMinutes: number;
+    name: string;
+    status: "error" | "active" | "auth_error" | "quota_exceeded" | "suspended" | "disabled";
+    provider: "gmail" | "outlook" | "imap" | "yahoo" | "fastmail" | "exchange" | "proton" | "aol";
     isEnabled: boolean;
+    userId: string;
+    syncIntervalMinutes: number;
     config?: any;
     credentials?: {
+        password?: string | undefined;
         accessToken?: string | undefined;
         refreshToken?: string | undefined;
         tokenExpiresAt?: Date | undefined;
-        password?: string | undefined;
         additionalTokens?: Record<string, string> | undefined;
     } | undefined;
     lastSyncAt?: Date | undefined;
     nextSyncAt?: Date | undefined;
 }, {
+    email: string;
     id: string;
-    name: string;
-    status: "error" | "active" | "auth_error" | "quota_exceeded" | "suspended" | "disabled";
     createdAt: Date;
     updatedAt: Date;
-    userId: string;
-    email: string;
-    provider: "imap" | "gmail" | "outlook" | "exchange" | "fastmail" | "proton" | "yahoo" | "aol";
-    syncIntervalMinutes: number;
+    name: string;
+    status: "error" | "active" | "auth_error" | "quota_exceeded" | "suspended" | "disabled";
+    provider: "gmail" | "outlook" | "imap" | "yahoo" | "fastmail" | "exchange" | "proton" | "aol";
     isEnabled: boolean;
+    userId: string;
+    syncIntervalMinutes: number;
     config?: any;
     credentials?: {
+        password?: string | undefined;
         accessToken?: string | undefined;
         refreshToken?: string | undefined;
         tokenExpiresAt?: Date | undefined;
-        password?: string | undefined;
         additionalTokens?: Record<string, string> | undefined;
     } | undefined;
     lastSyncAt?: Date | undefined;

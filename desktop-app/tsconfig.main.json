@@ -12,7 +12,7 @@
     "allowSyntheticDefaultImports": true,
     "downlevelIteration": true
   },
-  "include": ["src/main/main.ts", "src/preload/preload.ts", "src/main/workspace.ts", "src/main/notification-manager.ts", "src/main/mail-sync-manager.ts", "src/main/email-template-manager.ts", "src/main/email-scheduler.ts", "src/main/email-rules-engine.ts", "src/main/real-email-service.ts", "src/main/provider-manager.ts", "src/main/snippet-manager.ts", "src/types/**/*"],
+  "include": ["src/main/main.ts", "src/preload/preload.ts", "src/main/workspace.ts", "src/main/notification-manager.ts", "src/main/mail-sync-manager.ts", "src/main/email-template-manager.ts", "src/main/email-scheduler.ts", "src/main/email-rules-engine.ts", "src/main/real-email-service.ts", "src/main/provider-manager.ts", "src/main/snippet-manager.ts", "src/types/**/*", "src/lib/rust-integration/**/*", "src/test/rust-integration-test.ts"],
   "exclude": [
     "src/renderer/**/*", 
     "**/*.test.*", 

@@ -22,7 +22,7 @@ pub fn parse_email_address(addr_str: &str) -> MailResult<EmailAddress> {
             let address = captures.get(2).unwrap().as_str().trim().to_string();
             
             if is_valid_email(&address) {
-                return Ok(EmailAddress { name, address });
+                return Ok(EmailAddress { name, address: address.clone(), email: address });
             }
         }
     } else if is_valid_email(addr_str) {
@@ -30,6 +30,7 @@ pub fn parse_email_address(addr_str: &str) -> MailResult<EmailAddress> {
         return Ok(EmailAddress {
             name: None,
             address: addr_str.to_string(),
+            email: addr_str.to_string(),
         });
     }
 

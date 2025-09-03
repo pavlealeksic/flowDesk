@@ -39,8 +39,8 @@ pub mod bindings {
         pub id: String,
         pub provider_type: String,
         pub enabled: bool,
-        pub weight: Option<f32>,
-        pub config: Option<Value>,
+        pub weight: Option<f64>,
+        pub config: Option<String>,
     }
 
     /// JavaScript-friendly search query
@@ -71,7 +71,7 @@ pub mod bindings {
         pub author: Option<String>,
         pub tags: Option<Vec<String>>,
         pub categories: Option<Vec<String>>,
-        pub metadata: Option<Value>,
+        pub metadata: Option<String>,
     }
 
     /// JavaScript-friendly search result
@@ -85,7 +85,7 @@ pub mod bindings {
         pub content_type: String,
         pub provider_id: String,
         pub provider_type: String,
-        pub score: f32,
+        pub score: f64,
         pub highlights: Option<Vec<JsSearchHighlight>>,
         pub created_at: String,
         pub last_modified: String,
@@ -274,8 +274,8 @@ pub mod bindings {
                         id: p.id,
                         provider_type: p.provider_type,
                         enabled: p.enabled,
-                        weight: p.weight.unwrap_or(1.0),
-                        config: p.config.unwrap_or(Value::Null),
+                        weight: p.weight.unwrap_or(1.0) as f32,
+                        config: serde_json::from_str(&p.config.unwrap_or_default()).unwrap_or(Value::Null),
                     })
                     .collect()
             } else {
@@ -335,7 +335,7 @@ pub mod bindings {
             let provider_type = self.parse_provider_type(&document.provider_type);
 
             let metadata = if let Some(meta) = document.metadata {
-                serde_json::from_value(meta).map_err(|e| {
+                serde_json::from_str(&meta).map_err(|e| {
                     napi::Error::from_reason(format!("Invalid metadata: {}", e))
                 })?
             } else {
@@ -392,7 +392,7 @@ pub mod bindings {
                     content_type: result.content_type.as_str().to_string(),
                     provider_id: result.provider_id,
                     provider_type: result.provider_type.as_str().to_string(),
-                    score: result.score,
+                    score: result.score as f64,
                     highlights: result.highlights.map(|highlights| {
                         highlights
                             .into_iter()

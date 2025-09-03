@@ -618,12 +618,12 @@ export declare const SearchQuerySchema: z.ZodObject<{
         boost: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
         field: string;
-        operator: "fuzzy" | "equals" | "contains" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "range";
+        operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "range" | "fuzzy";
         value?: any;
         boost?: number | undefined;
     }, {
         field: string;
-        operator: "fuzzy" | "equals" | "contains" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "range";
+        operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "range" | "fuzzy";
         value?: any;
         boost?: number | undefined;
     }>, "many">>;
@@ -654,10 +654,10 @@ export declare const SearchQuerySchema: z.ZodObject<{
         useCache: z.ZodOptional<z.ZodBoolean>;
         cacheTtl: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        debug?: boolean | undefined;
-        fuzzy?: boolean | undefined;
         timeout?: number | undefined;
         suggestions?: boolean | undefined;
+        debug?: boolean | undefined;
+        fuzzy?: boolean | undefined;
         fuzzyThreshold?: number | undefined;
         semantic?: boolean | undefined;
         facets?: boolean | undefined;
@@ -665,10 +665,10 @@ export declare const SearchQuerySchema: z.ZodObject<{
         useCache?: boolean | undefined;
         cacheTtl?: number | undefined;
     }, {
-        debug?: boolean | undefined;
-        fuzzy?: boolean | undefined;
         timeout?: number | undefined;
         suggestions?: boolean | undefined;
+        debug?: boolean | undefined;
+        fuzzy?: boolean | undefined;
         fuzzyThreshold?: number | undefined;
         semantic?: boolean | undefined;
         facets?: boolean | undefined;
@@ -678,17 +678,11 @@ export declare const SearchQuerySchema: z.ZodObject<{
     }>>;
 }, "strip", z.ZodTypeAny, {
     query: string;
-    limit?: number | undefined;
-    sort?: {
-        field: string;
-        direction: "asc" | "desc";
-        boost?: number | undefined;
-    } | undefined;
     options?: {
-        debug?: boolean | undefined;
-        fuzzy?: boolean | undefined;
         timeout?: number | undefined;
         suggestions?: boolean | undefined;
+        debug?: boolean | undefined;
+        fuzzy?: boolean | undefined;
         fuzzyThreshold?: number | undefined;
         semantic?: boolean | undefined;
         facets?: boolean | undefined;
@@ -696,28 +690,28 @@ export declare const SearchQuerySchema: z.ZodObject<{
         useCache?: boolean | undefined;
         cacheTtl?: number | undefined;
     } | undefined;
+    sort?: {
+        field: string;
+        direction: "asc" | "desc";
+        boost?: number | undefined;
+    } | undefined;
     filters?: {
         field: string;
-        operator: "fuzzy" | "equals" | "contains" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "range";
+        operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "range" | "fuzzy";
         value?: any;
         boost?: number | undefined;
     }[] | undefined;
+    limit?: number | undefined;
     offset?: number | undefined;
     contentTypes?: string[] | undefined;
     providers?: string[] | undefined;
 }, {
     query: string;
-    limit?: number | undefined;
-    sort?: {
-        field: string;
-        direction: "asc" | "desc";
-        boost?: number | undefined;
-    } | undefined;
     options?: {
-        debug?: boolean | undefined;
-        fuzzy?: boolean | undefined;
         timeout?: number | undefined;
         suggestions?: boolean | undefined;
+        debug?: boolean | undefined;
+        fuzzy?: boolean | undefined;
         fuzzyThreshold?: number | undefined;
         semantic?: boolean | undefined;
         facets?: boolean | undefined;
@@ -725,12 +719,18 @@ export declare const SearchQuerySchema: z.ZodObject<{
         useCache?: boolean | undefined;
         cacheTtl?: number | undefined;
     } | undefined;
+    sort?: {
+        field: string;
+        direction: "asc" | "desc";
+        boost?: number | undefined;
+    } | undefined;
     filters?: {
         field: string;
-        operator: "fuzzy" | "equals" | "contains" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "range";
+        operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "range" | "fuzzy";
         value?: any;
         boost?: number | undefined;
     }[] | undefined;
+    limit?: number | undefined;
     offset?: number | undefined;
     contentTypes?: string[] | undefined;
     providers?: string[] | undefined;
@@ -760,14 +760,14 @@ export declare const SearchResultSchema: z.ZodObject<{
             workspace: z.ZodOptional<z.ZodString>;
             project: z.ZodOptional<z.ZodString>;
         }, "strip", z.ZodTypeAny, {
+            path?: string | undefined;
             folder?: string | undefined;
             workspace?: string | undefined;
-            path?: string | undefined;
             project?: string | undefined;
         }, {
+            path?: string | undefined;
             folder?: string | undefined;
             workspace?: string | undefined;
-            path?: string | undefined;
             project?: string | undefined;
         }>>;
         collaboration: z.ZodOptional<z.ZodObject<{
@@ -801,17 +801,17 @@ export declare const SearchResultSchema: z.ZodObject<{
         }>>;
         custom: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
     }, "strip", z.ZodTypeAny, {
+        tags?: string[] | undefined;
+        custom?: Record<string, any> | undefined;
+        size?: number | undefined;
+        mimeType?: string | undefined;
         location?: {
+            path?: string | undefined;
             folder?: string | undefined;
             workspace?: string | undefined;
-            path?: string | undefined;
             project?: string | undefined;
         } | undefined;
-        custom?: Record<string, any> | undefined;
-        mimeType?: string | undefined;
-        size?: number | undefined;
         author?: string | undefined;
-        tags?: string[] | undefined;
         fileType?: string | undefined;
         categories?: string[] | undefined;
         collaboration?: {
@@ -826,17 +826,17 @@ export declare const SearchResultSchema: z.ZodObject<{
             lastActivity?: Date | undefined;
         } | undefined;
     }, {
+        tags?: string[] | undefined;
+        custom?: Record<string, any> | undefined;
+        size?: number | undefined;
+        mimeType?: string | undefined;
         location?: {
+            path?: string | undefined;
             folder?: string | undefined;
             workspace?: string | undefined;
-            path?: string | undefined;
             project?: string | undefined;
         } | undefined;
-        custom?: Record<string, any> | undefined;
-        mimeType?: string | undefined;
-        size?: number | undefined;
         author?: string | undefined;
-        tags?: string[] | undefined;
         fileType?: string | undefined;
         categories?: string[] | undefined;
         collaboration?: {
@@ -858,25 +858,25 @@ export declare const SearchResultSchema: z.ZodObject<{
             start: z.ZodNumber;
             end: z.ZodNumber;
         }, "strip", z.ZodTypeAny, {
-            end: number;
             start: number;
+            end: number;
         }, {
-            end: number;
             start: number;
+            end: number;
         }>, "many">>;
     }, "strip", z.ZodTypeAny, {
         field: string;
         fragments: string[];
         positions?: {
-            end: number;
             start: number;
+            end: number;
         }[] | undefined;
     }, {
         field: string;
         fragments: string[];
         positions?: {
-            end: number;
             start: number;
+            end: number;
         }[] | undefined;
     }>, "many">>;
     actions: z.ZodOptional<z.ZodArray<z.ZodObject<{
@@ -889,41 +889,40 @@ export declare const SearchResultSchema: z.ZodObject<{
         params: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
     }, "strip", z.ZodTypeAny, {
         id: string;
-        type: "custom" | "delete" | "open" | "download" | "share" | "edit";
+        type: "delete" | "custom" | "open" | "download" | "share" | "edit";
         label: string;
-        url?: string | undefined;
         icon?: string | undefined;
         params?: Record<string, any> | undefined;
+        url?: string | undefined;
         handler?: string | undefined;
     }, {
         id: string;
-        type: "custom" | "delete" | "open" | "download" | "share" | "edit";
+        type: "delete" | "custom" | "open" | "download" | "share" | "edit";
         label: string;
-        url?: string | undefined;
         icon?: string | undefined;
         params?: Record<string, any> | undefined;
+        url?: string | undefined;
         handler?: string | undefined;
     }>, "many">>;
     createdAt: z.ZodDate;
     lastModified: z.ZodDate;
 }, "strip", z.ZodTypeAny, {
+    title: string;
     id: string;
     createdAt: Date;
     provider: string;
-    title: string;
-    score: number;
     metadata: {
+        tags?: string[] | undefined;
+        custom?: Record<string, any> | undefined;
+        size?: number | undefined;
+        mimeType?: string | undefined;
         location?: {
+            path?: string | undefined;
             folder?: string | undefined;
             workspace?: string | undefined;
-            path?: string | undefined;
             project?: string | undefined;
         } | undefined;
-        custom?: Record<string, any> | undefined;
-        mimeType?: string | undefined;
-        size?: number | undefined;
         author?: string | undefined;
-        tags?: string[] | undefined;
         fileType?: string | undefined;
         categories?: string[] | undefined;
         collaboration?: {
@@ -941,46 +940,46 @@ export declare const SearchResultSchema: z.ZodObject<{
     lastModified: Date;
     contentType: string;
     providerType: string;
-    description?: string | undefined;
+    score: number;
+    icon?: string | undefined;
+    actions?: {
+        id: string;
+        type: "delete" | "custom" | "open" | "download" | "share" | "edit";
+        label: string;
+        icon?: string | undefined;
+        params?: Record<string, any> | undefined;
+        url?: string | undefined;
+        handler?: string | undefined;
+    }[] | undefined;
     content?: string | undefined;
+    description?: string | undefined;
     url?: string | undefined;
+    thumbnail?: string | undefined;
     highlights?: {
         field: string;
         fragments: string[];
         positions?: {
-            end: number;
             start: number;
+            end: number;
         }[] | undefined;
     }[] | undefined;
-    icon?: string | undefined;
-    actions?: {
-        id: string;
-        type: "custom" | "delete" | "open" | "download" | "share" | "edit";
-        label: string;
-        url?: string | undefined;
-        icon?: string | undefined;
-        params?: Record<string, any> | undefined;
-        handler?: string | undefined;
-    }[] | undefined;
-    thumbnail?: string | undefined;
 }, {
+    title: string;
     id: string;
     createdAt: Date;
     provider: string;
-    title: string;
-    score: number;
     metadata: {
+        tags?: string[] | undefined;
+        custom?: Record<string, any> | undefined;
+        size?: number | undefined;
+        mimeType?: string | undefined;
         location?: {
+            path?: string | undefined;
             folder?: string | undefined;
             workspace?: string | undefined;
-            path?: string | undefined;
             project?: string | undefined;
         } | undefined;
-        custom?: Record<string, any> | undefined;
-        mimeType?: string | undefined;
-        size?: number | undefined;
         author?: string | undefined;
-        tags?: string[] | undefined;
         fileType?: string | undefined;
         categories?: string[] | undefined;
         collaboration?: {
@@ -998,28 +997,29 @@ export declare const SearchResultSchema: z.ZodObject<{
     lastModified: Date;
     contentType: string;
     providerType: string;
-    description?: string | undefined;
+    score: number;
+    icon?: string | undefined;
+    actions?: {
+        id: string;
+        type: "delete" | "custom" | "open" | "download" | "share" | "edit";
+        label: string;
+        icon?: string | undefined;
+        params?: Record<string, any> | undefined;
+        url?: string | undefined;
+        handler?: string | undefined;
+    }[] | undefined;
     content?: string | undefined;
+    description?: string | undefined;
     url?: string | undefined;
+    thumbnail?: string | undefined;
     highlights?: {
         field: string;
         fragments: string[];
         positions?: {
-            end: number;
             start: number;
+            end: number;
         }[] | undefined;
     }[] | undefined;
-    icon?: string | undefined;
-    actions?: {
-        id: string;
-        type: "custom" | "delete" | "open" | "download" | "share" | "edit";
-        label: string;
-        url?: string | undefined;
-        icon?: string | undefined;
-        params?: Record<string, any> | undefined;
-        handler?: string | undefined;
-    }[] | undefined;
-    thumbnail?: string | undefined;
 }>;
 export declare const SearchProviderSchema: z.ZodObject<{
     id: z.ZodString;
@@ -1039,27 +1039,27 @@ export declare const SearchProviderSchema: z.ZodObject<{
                 authUrl: z.ZodString;
                 tokenUrl: z.ZodString;
             }, "strip", z.ZodTypeAny, {
-                clientId: string;
-                scopes: string[];
-                clientSecret: string;
                 authUrl: string;
                 tokenUrl: string;
+                scopes: string[];
+                clientId: string;
+                clientSecret: string;
             }, {
-                clientId: string;
-                scopes: string[];
-                clientSecret: string;
                 authUrl: string;
                 tokenUrl: string;
+                scopes: string[];
+                clientId: string;
+                clientSecret: string;
             }>>;
             apiKey: z.ZodOptional<z.ZodObject<{
                 key: z.ZodString;
                 header: z.ZodString;
             }, "strip", z.ZodTypeAny, {
-                header: string;
                 key: string;
+                header: string;
             }, {
-                header: string;
                 key: string;
+                header: string;
             }>>;
             basic: z.ZodOptional<z.ZodObject<{
                 username: z.ZodString;
@@ -1073,40 +1073,40 @@ export declare const SearchProviderSchema: z.ZodObject<{
             }>>;
             custom: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
         }, "strip", z.ZodTypeAny, {
-            type: "custom" | "api_key" | "oauth2" | "basic";
-            custom?: Record<string, any> | undefined;
+            type: "oauth2" | "custom" | "api_key" | "basic";
             oauth2?: {
-                clientId: string;
-                scopes: string[];
-                clientSecret: string;
                 authUrl: string;
                 tokenUrl: string;
+                scopes: string[];
+                clientId: string;
+                clientSecret: string;
             } | undefined;
+            custom?: Record<string, any> | undefined;
             basic?: {
                 password: string;
                 username: string;
             } | undefined;
             apiKey?: {
-                header: string;
                 key: string;
+                header: string;
             } | undefined;
         }, {
-            type: "custom" | "api_key" | "oauth2" | "basic";
-            custom?: Record<string, any> | undefined;
+            type: "oauth2" | "custom" | "api_key" | "basic";
             oauth2?: {
-                clientId: string;
-                scopes: string[];
-                clientSecret: string;
                 authUrl: string;
                 tokenUrl: string;
+                scopes: string[];
+                clientId: string;
+                clientSecret: string;
             } | undefined;
+            custom?: Record<string, any> | undefined;
             basic?: {
                 password: string;
                 username: string;
             } | undefined;
             apiKey?: {
-                header: string;
                 key: string;
+                header: string;
             } | undefined;
         }>>;
         rateLimit: z.ZodOptional<z.ZodObject<{
@@ -1129,14 +1129,14 @@ export declare const SearchProviderSchema: z.ZodObject<{
             fullSyncIntervalHours: z.ZodNumber;
             retentionDays: z.ZodNumber;
         }, "strip", z.ZodTypeAny, {
-            batchSize: number;
             enabled: boolean;
+            batchSize: number;
             intervalMinutes: number;
             fullSyncIntervalHours: number;
             retentionDays: number;
         }, {
-            batchSize: number;
             enabled: boolean;
+            batchSize: number;
             intervalMinutes: number;
             fullSyncIntervalHours: number;
             retentionDays: number;
@@ -1147,90 +1147,90 @@ export declare const SearchProviderSchema: z.ZodObject<{
             enableFacets: z.ZodBoolean;
             enableHighlighting: z.ZodBoolean;
         }, "strip", z.ZodTypeAny, {
-            maxResults: number;
             timeout: number;
+            maxResults: number;
             enableFacets: boolean;
             enableHighlighting: boolean;
         }, {
-            maxResults: number;
             timeout: number;
+            maxResults: number;
             enableFacets: boolean;
             enableHighlighting: boolean;
         }>>;
     }, "strip", z.ZodTypeAny, {
         settings: Record<string, any>;
-        auth?: {
-            type: "custom" | "api_key" | "oauth2" | "basic";
-            custom?: Record<string, any> | undefined;
-            oauth2?: {
-                clientId: string;
-                scopes: string[];
-                clientSecret: string;
-                authUrl: string;
-                tokenUrl: string;
-            } | undefined;
-            basic?: {
-                password: string;
-                username: string;
-            } | undefined;
-            apiKey?: {
-                header: string;
-                key: string;
-            } | undefined;
-        } | undefined;
-        search?: {
-            maxResults: number;
-            timeout: number;
-            enableFacets: boolean;
-            enableHighlighting: boolean;
-        } | undefined;
         rateLimit?: {
             requestsPerMinute: number;
             burstLimit: number;
             retryAfterMs: number;
         } | undefined;
+        search?: {
+            timeout: number;
+            maxResults: number;
+            enableFacets: boolean;
+            enableHighlighting: boolean;
+        } | undefined;
+        auth?: {
+            type: "oauth2" | "custom" | "api_key" | "basic";
+            oauth2?: {
+                authUrl: string;
+                tokenUrl: string;
+                scopes: string[];
+                clientId: string;
+                clientSecret: string;
+            } | undefined;
+            custom?: Record<string, any> | undefined;
+            basic?: {
+                password: string;
+                username: string;
+            } | undefined;
+            apiKey?: {
+                key: string;
+                header: string;
+            } | undefined;
+        } | undefined;
         indexing?: {
-            batchSize: number;
             enabled: boolean;
+            batchSize: number;
             intervalMinutes: number;
             fullSyncIntervalHours: number;
             retentionDays: number;
         } | undefined;
     }, {
         settings: Record<string, any>;
-        auth?: {
-            type: "custom" | "api_key" | "oauth2" | "basic";
-            custom?: Record<string, any> | undefined;
-            oauth2?: {
-                clientId: string;
-                scopes: string[];
-                clientSecret: string;
-                authUrl: string;
-                tokenUrl: string;
-            } | undefined;
-            basic?: {
-                password: string;
-                username: string;
-            } | undefined;
-            apiKey?: {
-                header: string;
-                key: string;
-            } | undefined;
-        } | undefined;
-        search?: {
-            maxResults: number;
-            timeout: number;
-            enableFacets: boolean;
-            enableHighlighting: boolean;
-        } | undefined;
         rateLimit?: {
             requestsPerMinute: number;
             burstLimit: number;
             retryAfterMs: number;
         } | undefined;
+        search?: {
+            timeout: number;
+            maxResults: number;
+            enableFacets: boolean;
+            enableHighlighting: boolean;
+        } | undefined;
+        auth?: {
+            type: "oauth2" | "custom" | "api_key" | "basic";
+            oauth2?: {
+                authUrl: string;
+                tokenUrl: string;
+                scopes: string[];
+                clientId: string;
+                clientSecret: string;
+            } | undefined;
+            custom?: Record<string, any> | undefined;
+            basic?: {
+                password: string;
+                username: string;
+            } | undefined;
+            apiKey?: {
+                key: string;
+                header: string;
+            } | undefined;
+        } | undefined;
         indexing?: {
-            batchSize: number;
             enabled: boolean;
+            batchSize: number;
             intervalMinutes: number;
             fullSyncIntervalHours: number;
             retentionDays: number;
@@ -1250,26 +1250,26 @@ export declare const SearchProviderSchema: z.ZodObject<{
         maxResults: z.ZodNumber;
         avgResponseTime: z.ZodNumber;
     }, "strip", z.ZodTypeAny, {
-        maxResults: number;
         realTime: boolean;
         avgResponseTime: number;
         suggestions: boolean;
         contentTypes: string[];
         facets: boolean;
         highlighting: boolean;
+        maxResults: number;
         textSearch: boolean;
         semanticSearch: boolean;
         autocomplete: boolean;
         sorting: boolean;
         filtering: boolean;
     }, {
-        maxResults: number;
         realTime: boolean;
         avgResponseTime: number;
         suggestions: boolean;
         contentTypes: string[];
         facets: boolean;
         highlighting: boolean;
+        maxResults: number;
         textSearch: boolean;
         semanticSearch: boolean;
         autocomplete: boolean;
@@ -1311,45 +1311,61 @@ export declare const SearchProviderSchema: z.ZodObject<{
     createdAt: Date;
     updatedAt: Date;
     name: string;
+    enabled: boolean;
+    type: string;
     config: {
         settings: Record<string, any>;
-        auth?: {
-            type: "custom" | "api_key" | "oauth2" | "basic";
-            custom?: Record<string, any> | undefined;
-            oauth2?: {
-                clientId: string;
-                scopes: string[];
-                clientSecret: string;
-                authUrl: string;
-                tokenUrl: string;
-            } | undefined;
-            basic?: {
-                password: string;
-                username: string;
-            } | undefined;
-            apiKey?: {
-                header: string;
-                key: string;
-            } | undefined;
-        } | undefined;
-        search?: {
-            maxResults: number;
-            timeout: number;
-            enableFacets: boolean;
-            enableHighlighting: boolean;
-        } | undefined;
         rateLimit?: {
             requestsPerMinute: number;
             burstLimit: number;
             retryAfterMs: number;
         } | undefined;
+        search?: {
+            timeout: number;
+            maxResults: number;
+            enableFacets: boolean;
+            enableHighlighting: boolean;
+        } | undefined;
+        auth?: {
+            type: "oauth2" | "custom" | "api_key" | "basic";
+            oauth2?: {
+                authUrl: string;
+                tokenUrl: string;
+                scopes: string[];
+                clientId: string;
+                clientSecret: string;
+            } | undefined;
+            custom?: Record<string, any> | undefined;
+            basic?: {
+                password: string;
+                username: string;
+            } | undefined;
+            apiKey?: {
+                key: string;
+                header: string;
+            } | undefined;
+        } | undefined;
         indexing?: {
-            batchSize: number;
             enabled: boolean;
+            batchSize: number;
             intervalMinutes: number;
             fullSyncIntervalHours: number;
             retentionDays: number;
         } | undefined;
+    };
+    capabilities: {
+        realTime: boolean;
+        avgResponseTime: number;
+        suggestions: boolean;
+        contentTypes: string[];
+        facets: boolean;
+        highlighting: boolean;
+        maxResults: number;
+        textSearch: boolean;
+        semanticSearch: boolean;
+        autocomplete: boolean;
+        sorting: boolean;
+        filtering: boolean;
     };
     stats: {
         avgResponseTime: number;
@@ -1361,68 +1377,68 @@ export declare const SearchProviderSchema: z.ZodObject<{
         lastSuccessfulQuery?: Date | undefined;
         lastIndexing?: Date | undefined;
     };
-    type: string;
-    capabilities: {
-        maxResults: number;
-        realTime: boolean;
-        avgResponseTime: number;
-        suggestions: boolean;
-        contentTypes: string[];
-        facets: boolean;
-        highlighting: boolean;
-        textSearch: boolean;
-        semanticSearch: boolean;
-        autocomplete: boolean;
-        sorting: boolean;
-        filtering: boolean;
-    };
-    enabled: boolean;
-    description?: string | undefined;
     icon?: string | undefined;
+    description?: string | undefined;
 }, {
     id: string;
     createdAt: Date;
     updatedAt: Date;
     name: string;
+    enabled: boolean;
+    type: string;
     config: {
         settings: Record<string, any>;
-        auth?: {
-            type: "custom" | "api_key" | "oauth2" | "basic";
-            custom?: Record<string, any> | undefined;
-            oauth2?: {
-                clientId: string;
-                scopes: string[];
-                clientSecret: string;
-                authUrl: string;
-                tokenUrl: string;
-            } | undefined;
-            basic?: {
-                password: string;
-                username: string;
-            } | undefined;
-            apiKey?: {
-                header: string;
-                key: string;
-            } | undefined;
-        } | undefined;
-        search?: {
-            maxResults: number;
-            timeout: number;
-            enableFacets: boolean;
-            enableHighlighting: boolean;
-        } | undefined;
         rateLimit?: {
             requestsPerMinute: number;
             burstLimit: number;
             retryAfterMs: number;
         } | undefined;
+        search?: {
+            timeout: number;
+            maxResults: number;
+            enableFacets: boolean;
+            enableHighlighting: boolean;
+        } | undefined;
+        auth?: {
+            type: "oauth2" | "custom" | "api_key" | "basic";
+            oauth2?: {
+                authUrl: string;
+                tokenUrl: string;
+                scopes: string[];
+                clientId: string;
+                clientSecret: string;
+            } | undefined;
+            custom?: Record<string, any> | undefined;
+            basic?: {
+                password: string;
+                username: string;
+            } | undefined;
+            apiKey?: {
+                key: string;
+                header: string;
+            } | undefined;
+        } | undefined;
         indexing?: {
-            batchSize: number;
             enabled: boolean;
+            batchSize: number;
             intervalMinutes: number;
             fullSyncIntervalHours: number;
             retentionDays: number;
         } | undefined;
+    };
+    capabilities: {
+        realTime: boolean;
+        avgResponseTime: number;
+        suggestions: boolean;
+        contentTypes: string[];
+        facets: boolean;
+        highlighting: boolean;
+        maxResults: number;
+        textSearch: boolean;
+        semanticSearch: boolean;
+        autocomplete: boolean;
+        sorting: boolean;
+        filtering: boolean;
     };
     stats: {
         avgResponseTime: number;
@@ -1434,24 +1450,8 @@ export declare const SearchProviderSchema: z.ZodObject<{
         lastSuccessfulQuery?: Date | undefined;
         lastIndexing?: Date | undefined;
     };
-    type: string;
-    capabilities: {
-        maxResults: number;
-        realTime: boolean;
-        avgResponseTime: number;
-        suggestions: boolean;
-        contentTypes: string[];
-        facets: boolean;
-        highlighting: boolean;
-        textSearch: boolean;
-        semanticSearch: boolean;
-        autocomplete: boolean;
-        sorting: boolean;
-        filtering: boolean;
-    };
-    enabled: boolean;
-    description?: string | undefined;
     icon?: string | undefined;
+    description?: string | undefined;
 }>;
 /**
  * Utility types for search operations

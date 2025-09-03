@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, error, debug, instrument};
 use dashmap::DashMap;
-use parking_lot::Mutex;
+use tokio::sync::Mutex as AsyncMutex;
 
 /// Main search engine coordinating all search operations
 #[derive(Clone)]
@@ -26,7 +26,7 @@ pub struct SearchEngine {
     provider_manager: Arc<ProviderManager>,
     
     /// Analytics manager for search metrics
-    analytics_manager: Arc<Mutex<AnalyticsManager>>,
+    analytics_manager: Arc<AsyncMutex<AnalyticsManager>>,
     
     /// Search cache for performance
     search_cache: Arc<DashMap<String, (SearchResponse, chrono::DateTime<chrono::Utc>)>>,
@@ -93,7 +93,7 @@ impl SearchEngine {
         );
         
         // Initialize analytics manager
-        let analytics_manager = Arc::new(Mutex::new(
+        let analytics_manager = Arc::new(AsyncMutex::new(
             AnalyticsManager::new(config.enable_analytics)
                 .with_context(SearchErrorContext::new("analytics_manager_init"))?
         ));
@@ -128,9 +128,10 @@ impl SearchEngine {
         // Check cache first if enabled
         if query.options.use_cache.unwrap_or(true) {
             let cache_key = self.generate_cache_key(&query);
-            if let Some((cached_response, cached_at)) = self.search_cache.get(&cache_key) {
+            if let Some(cached_entry) = self.search_cache.get(&cache_key) {
+                let (cached_response, cached_at) = cached_entry.value();
                 let cache_ttl = query.options.cache_ttl.unwrap_or(300);
-                if (chrono::Utc::now() - *cached_at).num_seconds() < cache_ttl as i64 {
+                if chrono::Utc::now().timestamp() - cached_at.timestamp() < cache_ttl as i64 {
                     debug!("Returning cached search result");
                     return Ok(cached_response.clone());
                 }
@@ -279,7 +280,7 @@ impl SearchEngine {
     
     /// Get search analytics
     pub async fn get_analytics(&self) -> SearchResultType<crate::search::SearchAnalytics> {
-        let analytics = self.analytics_manager.lock().get_analytics().await?;
+        let analytics = self.analytics_manager.lock().await.get_analytics().await?;
         Ok(analytics)
     }
     
@@ -437,7 +438,7 @@ impl SearchEngine {
         execution_time_ms: u64,
     ) {
         if self.config.enable_analytics {
-            let mut analytics = self.analytics_manager.lock();
+            let mut analytics = self.analytics_manager.lock().await;
             analytics.record_search(query, response, execution_time_ms).await;
         }
         
@@ -450,7 +451,7 @@ impl SearchEngine {
     /// Record search error for analytics
     async fn record_search_error(&self, query: &SearchQuery, error: &SearchError) {
         if self.config.enable_analytics {
-            let mut analytics = self.analytics_manager.lock();
+            let mut analytics = self.analytics_manager.lock().await;
             analytics.record_error(query, error).await;
         }
         

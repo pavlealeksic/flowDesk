@@ -28,6 +28,30 @@ pub enum ContentType {
     Custom(String),
 }
 
+impl std::fmt::Display for ContentType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ContentType::Email => write!(f, "email"),
+            ContentType::CalendarEvent => write!(f, "calendar_event"),
+            ContentType::Contact => write!(f, "contact"),
+            ContentType::File => write!(f, "file"),
+            ContentType::Document => write!(f, "document"),
+            ContentType::Message => write!(f, "message"),
+            ContentType::Channel => write!(f, "channel"),
+            ContentType::Thread => write!(f, "thread"),
+            ContentType::Task => write!(f, "task"),
+            ContentType::Project => write!(f, "project"),
+            ContentType::Issue => write!(f, "issue"),
+            ContentType::PullRequest => write!(f, "pull_request"),
+            ContentType::Commit => write!(f, "commit"),
+            ContentType::Meeting => write!(f, "meeting"),
+            ContentType::Note => write!(f, "note"),
+            ContentType::Bookmark => write!(f, "bookmark"),
+            ContentType::Custom(s) => write!(f, "{}", s),
+        }
+    }
+}
+
 impl ContentType {
     /// Get the string representation of the content type
     pub fn as_str(&self) -> &str {
@@ -579,6 +603,15 @@ pub struct SearchFacet {
     
     /// Facet type
     pub facet_type: FacetType,
+    
+    /// Facet value (for individual facet items)
+    pub value: Option<serde_json::Value>,
+    
+    /// Count of documents with this facet value
+    pub count: Option<i64>,
+    
+    /// Whether this facet is selected
+    pub selected: Option<bool>,
 }
 
 /// Individual facet value
@@ -747,4 +780,38 @@ pub struct JobError {
     pub document_id: Option<String>,
     pub error_message: String,
     pub timestamp: DateTime<Utc>,
+}
+/// Sort order for search results
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SortOrder {
+    Relevance,
+    DateAscending, 
+    DateDescending,
+    Alphabetical,
+}
+
+/// Query performance breakdown
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryPerformanceBreakdown {
+    pub parsing_time_ms: u64,
+    pub execution_time_ms: u64,
+    pub total_time_ms: u64,
+}
+
+/// Sort configuration for search results
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SortConfig {
+    pub field: String,
+    pub direction: SortDirection,
+    pub boost: Option<f32>,
+}
+
+/// Highlight configuration for search results
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HighlightConfig {
+    pub enabled: bool,
+    pub max_fragments: usize,
+    pub fragment_length: usize,
+    pub pre_tag: String,
+    pub post_tag: String,
 }

@@ -2,15 +2,21 @@
   "name": "@flow-desk/desktop-app",
   "version": "0.1.0",
   "description": "Flow Desk Desktop Application (Electron)",
+  "author": "Flow Desk Team <team@flowdesk.com>",
   "private": true,
   "main": "dist/main/main.js",
   "homepage": "./",
   "scripts": {
     "build": "npm run build:rust && npm run build:renderer && npm run build:main",
-    "build:rust": "npm run copy-rust-lib && cd ../shared/rust-lib && npm run build",
-    "copy-rust-lib": "mkdir -p src/lib/rust-engine && cp -r ../shared/rust-lib/* src/lib/rust-engine/",
+    "build:rust": "npm run copy-rust-lib && npm run build:rust:current-platform",
+    "build:rust:current-platform": "cd ../shared/rust-lib && cargo build --release --bin flow_desk_cli",
+    "build:rust:all-platforms": "node scripts/build-rust-all-platforms.js",
+    "prebuild": "npm run clean:binaries",
+    "clean:binaries": "rm -rf dist/binaries && mkdir -p dist/binaries",
+    "copy-rust-lib": "mkdir -p src/lib/rust-engine && cp -r ../shared/rust-lib/* src/lib/rust-engine/ && mkdir -p src/lib/rust-integration",
     "build:main": "tsc --project tsconfig.main.json && npm run copy-rust-to-dist",
-    "copy-rust-to-dist": "mkdir -p dist/lib && cp -r src/lib/rust-engine dist/lib/",
+    "copy-rust-to-dist": "mkdir -p dist/lib && cp -r src/lib/rust-engine dist/lib/ && npm run copy:binaries",
+    "copy:binaries": "node scripts/copy-rust-binaries.js",
     "build:renderer": "vite build",
     "build:renderer:analyze": "vite build --mode analyze",
     "dev": "concurrently \"npm run dev:renderer\" \"wait-on http://localhost:5173 && npm run dev:main\"",
@@ -27,8 +33,16 @@
     "test": "vitest",
     "test:watch": "vitest --watch",
     "clean": "rm -rf dist build node_modules/.cache",
+    "verify:build": "node scripts/verify-build.js",
+    "test:distribution": "node scripts/test-distribution.js",
+    "postbuild": "npm run verify:build",
+    "prebuild:production": "npm run clean && npm run build:rust:all-platforms",
+    "build:production": "npm run build:renderer && npm run build:main && npm run verify:build",
+    "dist:production": "npm run prebuild:production && npm run build:production && electron-builder",
     "perf:analyze": "npm run build:renderer:analyze && npx vite-bundle-analyzer dist/renderer",
-    "perf:profile": "NODE_ENV=production electron dist/main/main.js --enable-logging --v=1"
+    "perf:profile": "NODE_ENV=production electron dist/main/main.js --enable-logging --v=1",
+    "optimize:icons": "node scripts/analyze-icons.js",
+    "optimize:bundle": "npm run optimize:icons && npm run build:renderer && npm run perf:analyze"
   },
   "dependencies": {
     "@flow-desk/shared": "*",
@@ -37,7 +51,6 @@
     "@slack/web-api": "^7.10.0",
     "@types/node-imap": "^0.9.3",
     "@types/nodemailer": "^7.0.1",
-    "@types/react-window": "^1.8.8",
     "better-sqlite3": "^12.2.0",
     "crypto-js": "^4.2.0",
     "dayjs": "^1.11.18",
@@ -52,7 +65,7 @@
     "node-machine-id": "^1.1.12",
     "nodemailer": "^7.0.6",
     "open": "^8.4.2",
-    "react-window": "^2.0.1",
+    "react-window": "^2.0.2",
     "rxjs": "^7.8.1",
     "semver": "^7.6.3",
     "tar": "^7.4.3",
@@ -65,6 +78,7 @@
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.17",
     "@types/react-dom": "^18.3.1",
+    "@types/react-window": "^1.8.8",
     "@types/semver": "^7.5.8",
     "@types/tar": "^6.1.13",
     "@types/uuid": "^10.0.0",
@@ -72,10 +86,11 @@
     "@typescript-eslint/parser": "^8.15.0",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
+    "babel-plugin-transform-remove-console": "^6.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "concurrently": "^9.1.0",
-    "electron": "^33.2.1",
+    "electron": "^33.4.11",
     "electron-builder": "^25.1.8",
     "eslint": "^9.17.0",
     "eslint-plugin-react": "^7.37.3",
@@ -91,19 +106,45 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3",
     "vite": "^6.0.7",
+    "vite-bundle-analyzer": "^1.2.3",
     "vitest": "^2.1.8",
     "wait-on": "^8.0.1"
+  },
+  "rust-build": {
+    "targets": {
+      "darwin-x64": "x86_64-apple-darwin",
+      "darwin-arm64": "aarch64-apple-darwin",
+      "win32-x64": "x86_64-pc-windows-gnu",
+      "win32-ia32": "i686-pc-windows-gnu",
+      "linux-x64": "x86_64-unknown-linux-gnu"
+    },
+    "binary-name": "flow_desk_cli"
   },
   "build": {
     "appId": "com.flowdesk.desktop",
     "productName": "Flow Desk",
+    "electronVersion": "33.4.11",
     "directories": {
       "output": "build"
     },
     "files": [
       "dist/**/*",
       "assets/**/*",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "!dist/lib/rust-engine/target/**/*",
+      "!dist/lib/rust-engine/src/**/*",
+      "!dist/lib/rust-engine/Cargo.lock",
+      "!dist/lib/rust-engine/build-script.sh",
+      "!dist/lib/rust-engine/*.md"
+    ],
+    "extraResources": [
+      {
+        "from": "dist/binaries/",
+        "to": "binaries/",
+        "filter": [
+          "**/*"
+        ]
+      }
     ],
     "extraMetadata": {
       "main": "dist/main/main.js"
@@ -118,6 +159,9 @@
             "arm64"
           ]
         }
+      ],
+      "asarUnpack": [
+        "**/binaries/**/*"
       ]
     },
     "win": {
@@ -129,6 +173,9 @@
             "ia32"
           ]
         }
+      ],
+      "asarUnpack": [
+        "**/binaries/**/*"
       ]
     },
     "linux": {
@@ -140,7 +187,10 @@
           ]
         }
       ],
-      "category": "Office"
+      "category": "Office",
+      "asarUnpack": [
+        "**/binaries/**/*"
+      ]
     }
   }
 }

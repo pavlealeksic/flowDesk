@@ -1,6 +1,5 @@
 //! Error handling for the mail engine
 
-use std::fmt;
 
 /// Result type alias for mail operations
 pub type MailResult<T> = Result<T, MailError>;
@@ -18,7 +17,7 @@ pub enum MailError {
 
     /// OAuth2 authentication errors
     #[error("OAuth2 error: {0}")]
-    OAuth2(#[from] oauth2::basic::BasicErrorResponse),
+    OAuth2(String),
 
     /// IMAP protocol errors
     #[error("IMAP error: {0}")]
@@ -31,6 +30,10 @@ pub enum MailError {
     /// Email parsing errors
     #[error("Email parsing error: {0}")]
     EmailParsing(String),
+
+    /// Parse errors for various formats
+    #[error("Parse error: {0}")]
+    ParseError(String),
 
     /// JSON serialization/deserialization errors
     #[error("JSON error: {0}")]
@@ -118,6 +121,22 @@ pub enum MailError {
     #[error("Conflict: {message}")]
     Conflict { message: String },
 
+    /// Unsupported provider error
+    #[error("Unsupported provider: {provider}")]
+    UnsupportedProvider { provider: String },
+
+    /// Configuration error
+    #[error("Configuration error: {message}")]
+    ConfigurationError { message: String },
+
+    /// Account not found error
+    #[error("Account not found: {account_id}")]
+    AccountNotFound { account_id: String },
+
+    /// Authentication error
+    #[error("Authentication failed: {message}")]
+    AuthenticationError { message: String },
+
     /// Internal server errors
     #[error("Internal error: {message}")]
     Internal { message: String },
@@ -181,6 +200,20 @@ impl MailError {
         }
     }
 
+    /// Create a database error from string
+    pub fn database(message: impl Into<String>) -> Self {
+        Self::Other {
+            message: format!("Database error: {}", message.into()),
+        }
+    }
+
+    /// Create a network connection error
+    pub fn connection(message: impl Into<String>) -> Self {
+        Self::Network {
+            message: message.into(),
+        }
+    }
+
     /// Create a validation error
     pub fn validation(field: impl Into<String>, message: impl Into<String>) -> Self {
         Self::Validation {
@@ -195,6 +228,18 @@ impl MailError {
             operation: operation.into(),
             timeout_seconds,
         }
+    }
+
+    /// Create a configuration error
+    pub fn configuration(message: impl Into<String>) -> Self {
+        MailError::Other {
+            message: format!("Configuration error: {}", message.into()),
+        }
+    }
+
+    /// Create a parsing error
+    pub fn parsing(message: impl Into<String>) -> Self {
+        MailError::EmailParsing(message.into())
     }
 
     /// Create a not found error
@@ -287,7 +332,48 @@ impl MailError {
             MailError::Conflict { .. } => "conflict",
             MailError::Internal { .. } => "internal",
             MailError::NotSupported { .. } => "not_supported",
+            MailError::UnsupportedProvider { .. } => "unsupported_provider",
+            MailError::ConfigurationError { .. } => "configuration",
+            MailError::AccountNotFound { .. } => "account_not_found",
+            MailError::AuthenticationError { .. } => "authentication_error",
             MailError::Other { .. } => "other",
+            MailError::ParseError(_) => "parse",
+        }
+    }
+
+    /// Create an invalid input error
+    pub fn invalid_input(message: impl Into<String>) -> Self {
+        Self::Validation {
+            field: "input".to_string(),
+            message: message.into(),
+        }
+    }
+
+    /// Create a not implemented error
+    pub fn not_implemented(feature: impl Into<String>) -> Self {
+        Self::Internal {
+            message: format!("Not implemented: {}", feature.into()),
+        }
+    }
+
+    /// Create an authentication error
+    pub fn authentication_error(message: impl Into<String>) -> Self {
+        Self::AuthenticationError {
+            message: message.into(),
+        }
+    }
+
+    /// Create a rate limit error
+    pub fn rate_limited(message: impl Into<String>) -> Self {
+        Self::Internal {
+            message: format!("Rate limited: {}", message.into()),
+        }
+    }
+
+    /// Create an encryption error
+    pub fn encryption(message: impl Into<String>) -> Self {
+        Self::Encryption {
+            message: message.into(),
         }
     }
 }
@@ -312,5 +398,21 @@ impl From<url::ParseError> for MailError {
         MailError::Other {
             message: format!("URL parsing error: {}", error),
         }
+    }
+}
+
+// Convert from boxed errors (common for database initialization)
+impl From<Box<dyn std::error::Error + Send + Sync>> for MailError {
+    fn from(error: Box<dyn std::error::Error + Send + Sync>) -> Self {
+        MailError::Other {
+            message: error.to_string(),
+        }
+    }
+}
+
+// Convert from OAuth2 basic error response
+impl From<oauth2::basic::BasicErrorResponse> for MailError {
+    fn from(error: oauth2::basic::BasicErrorResponse) -> Self {
+        MailError::OAuth2(format!("{:?}", error))
     }
 }

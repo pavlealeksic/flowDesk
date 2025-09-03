@@ -673,8 +673,15 @@ export declare const ApiResponseSchema: z.ZodObject<{
     timestamp: z.ZodDate;
     correlationId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
-    timestamp: Date;
     success: boolean;
+    timestamp: Date;
+    error?: {
+        code: string;
+        message: string;
+        details?: any;
+    } | undefined;
+    data?: any;
+    correlationId?: string | undefined;
     meta?: {
         version: string;
         requestId: string;
@@ -696,16 +703,16 @@ export declare const ApiResponseSchema: z.ZodObject<{
         } | undefined;
         totalCount?: number | undefined;
     } | undefined;
-    error?: {
-        code: string;
-        message: string;
-        details?: any;
-    } | undefined;
-    correlationId?: string | undefined;
-    data?: any;
 }, {
-    timestamp: Date;
     success: boolean;
+    timestamp: Date;
+    error?: {
+        code: string;
+        message: string;
+        details?: any;
+    } | undefined;
+    data?: any;
+    correlationId?: string | undefined;
     meta?: {
         version: string;
         requestId: string;
@@ -727,13 +734,6 @@ export declare const ApiResponseSchema: z.ZodObject<{
         } | undefined;
         totalCount?: number | undefined;
     } | undefined;
-    error?: {
-        code: string;
-        message: string;
-        details?: any;
-    } | undefined;
-    correlationId?: string | undefined;
-    data?: any;
 }>;
 export declare const ListParamsSchema: z.ZodObject<{
     page: z.ZodOptional<z.ZodNumber>;
@@ -746,11 +746,11 @@ export declare const ListParamsSchema: z.ZodObject<{
         field: z.ZodString;
         order: z.ZodEnum<["asc", "desc"]>;
     }, "strip", z.ZodTypeAny, {
-        field: string;
         order: "asc" | "desc";
+        field: string;
     }, {
-        field: string;
         order: "asc" | "desc";
+        field: string;
     }>, "many">>;
     filters: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodAny>>;
     search: z.ZodOptional<z.ZodString>;
@@ -774,12 +774,12 @@ export declare const ListParamsSchema: z.ZodObject<{
         logic: z.ZodOptional<z.ZodEnum<["AND", "OR"]>>;
     }, "strip", z.ZodTypeAny, {
         field: string;
-        operator: "endsWith" | "startsWith" | "in" | "null" | "contains" | "regex" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "nin" | "exists" | "empty";
+        operator: "contains" | "regex" | "null" | "in" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "nin" | "startsWith" | "endsWith" | "exists" | "empty";
         value?: any;
         logic?: "AND" | "OR" | undefined;
     }, {
         field: string;
-        operator: "endsWith" | "startsWith" | "in" | "null" | "contains" | "regex" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "nin" | "exists" | "empty";
+        operator: "contains" | "regex" | "null" | "in" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "nin" | "startsWith" | "endsWith" | "exists" | "empty";
         value?: any;
         logic?: "AND" | "OR" | undefined;
     }>, "many">>;
@@ -787,12 +787,12 @@ export declare const ListParamsSchema: z.ZodObject<{
     include: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     includeSoftDeleted: z.ZodOptional<z.ZodBoolean>;
 }, "strip", z.ZodTypeAny, {
-    search?: string | undefined;
     sort?: {
-        field: string;
         order: "asc" | "desc";
+        field: string;
     }[] | undefined;
     filters?: Record<string, any> | undefined;
+    search?: string | undefined;
     limit?: number | undefined;
     page?: number | undefined;
     cursor?: string | undefined;
@@ -806,7 +806,7 @@ export declare const ListParamsSchema: z.ZodObject<{
     } | undefined;
     where?: {
         field: string;
-        operator: "endsWith" | "startsWith" | "in" | "null" | "contains" | "regex" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "nin" | "exists" | "empty";
+        operator: "contains" | "regex" | "null" | "in" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "nin" | "startsWith" | "endsWith" | "exists" | "empty";
         value?: any;
         logic?: "AND" | "OR" | undefined;
     }[] | undefined;
@@ -814,12 +814,12 @@ export declare const ListParamsSchema: z.ZodObject<{
     include?: string[] | undefined;
     includeSoftDeleted?: boolean | undefined;
 }, {
-    search?: string | undefined;
     sort?: {
-        field: string;
         order: "asc" | "desc";
+        field: string;
     }[] | undefined;
     filters?: Record<string, any> | undefined;
+    search?: string | undefined;
     limit?: number | undefined;
     page?: number | undefined;
     cursor?: string | undefined;
@@ -833,7 +833,7 @@ export declare const ListParamsSchema: z.ZodObject<{
     } | undefined;
     where?: {
         field: string;
-        operator: "endsWith" | "startsWith" | "in" | "null" | "contains" | "regex" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "nin" | "exists" | "empty";
+        operator: "contains" | "regex" | "null" | "in" | "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "nin" | "startsWith" | "endsWith" | "exists" | "empty";
         value?: any;
         logic?: "AND" | "OR" | undefined;
     }[] | undefined;

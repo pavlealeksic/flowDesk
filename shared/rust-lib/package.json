@@ -5,17 +5,14 @@
   "main": "index.js",
   "types": "index.d.ts",
   "napi": {
-    "name": "flow-desk-shared",
-    "triples": {
-      "defaults": true,
-      "additional": [
-        "x86_64-pc-windows-msvc",
-        "x86_64-apple-darwin",
-        "aarch64-apple-darwin",
-        "x86_64-unknown-linux-gnu",
-        "aarch64-unknown-linux-gnu"
-      ]
-    }
+    "binaryName": "flow-desk-shared",
+    "targets": [
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-pc-windows-msvc",
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu"
+    ]
   },
   "scripts": {
     "build": "npm run build:ffi",
@@ -23,6 +20,14 @@
     "build:napi": "napi build --platform --release --features napi",
     "build:napi:debug": "napi build --platform --features napi",
     "build:both": "npm run build:ffi && npm run build:napi",
+    "build:cli": "cargo build --release --bin flow_desk_cli",
+    "build:cli:all-targets": "npm run install:targets && npm run build:targets",
+    "install:targets": "rustup target add x86_64-apple-darwin aarch64-apple-darwin x86_64-pc-windows-gnu i686-pc-windows-gnu x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu",
+    "build:targets": "npm run build:darwin && npm run build:windows && npm run build:linux",
+    "build:darwin": "cargo build --release --bin flow_desk_cli --target x86_64-apple-darwin && cargo build --release --bin flow_desk_cli --target aarch64-apple-darwin",
+    "build:windows": "cargo build --release --bin flow_desk_cli --target x86_64-pc-windows-gnu && cargo build --release --bin flow_desk_cli --target i686-pc-windows-gnu",
+    "build:linux": "cargo build --release --bin flow_desk_cli --target x86_64-unknown-linux-gnu && cargo build --release --bin flow_desk_cli --target aarch64-unknown-linux-gnu",
+    "build:all-targets": "npm run build:cli:all-targets",
     "test": "npm run test:ffi",
     "test:ffi": "node test-ffi.js",
     "test:napi": "node test-napi.js",
@@ -45,7 +50,11 @@
     "*.d.ts",
     "src/typescript-ffi-wrapper.ts",
     "target/release/libflow_desk_shared.*",
-    "target/release/flow_desk_shared.*"
+    "target/release/flow_desk_shared.*",
+    "target/release/flow_desk_cli",
+    "target/release/flow_desk_cli.exe",
+    "target/*/release/flow_desk_cli",
+    "target/*/release/flow_desk_cli.exe"
   ],
   "license": "MIT",
   "repository": {

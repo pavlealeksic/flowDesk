@@ -1,13 +1,13 @@
-// Core UI Components
+// Core UI Components (loaded immediately as they're used frequently)
 export * from './ui'
 
-// Layout Components  
+// Layout Components (loaded immediately)
 export * from './layout'
 
-// Feature Components
-export * from './mail/MailLayout'
-export * from './calendar/CalendarViews'
-export * from './plugins/PluginPanels'
-export * from './notifications/NotificationsHub'
-export * from './search/SearchInterface'
-export * from './settings/SettingsPanels'
+// Feature Components - Lazy loaded to reduce initial bundle
+export { MailLayout } from './mail/MailLayout'
+export { CalendarViews } from './calendar/CalendarViews'
+export { PluginPanels } from './plugins/PluginPanels'
+export { NotificationsHub } from './notifications/NotificationsHub'
+export { SearchInterface } from './search/SearchInterface'
+export { SettingsPanels } from './settings/SettingsPanels'

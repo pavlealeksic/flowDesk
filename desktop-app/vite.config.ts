@@ -9,62 +9,127 @@ export default defineConfig({
       jsxRuntime: 'automatic',
       // Enable development optimizations
       fastRefresh: true,
+      // Tree-shake unused imports from React
+      babel: {
+        plugins: [
+          process.env.NODE_ENV === 'production' && ['babel-plugin-transform-remove-console']
+        ].filter(Boolean)
+      }
     })
   ],
   base: './',
   build: {
     outDir: 'dist/renderer',
     emptyOutDir: true,
-    // Bundle optimization
+    // Enable code splitting and compression
     rollupOptions: {
       output: {
-        // Code splitting for better caching
-        manualChunks: {
-          // Vendor libraries
-          vendor: ['react', 'react-dom', 'react-redux'],
-          // Redux and state management
-          store: ['@reduxjs/toolkit'],
-          // UI components
-          ui: ['framer-motion', 'lucide-react'],
-          // Large utility libraries
-          utils: ['dayjs', 'uuid'],
+        // Optimized code splitting strategy
+        manualChunks: (id) => {
+          // Vendor chunk for core React libraries
+          if (id.includes('react') && !id.includes('react-window')) {
+            return 'react-vendor'
+          }
+          // State management chunk
+          if (id.includes('@reduxjs/toolkit') || id.includes('react-redux')) {
+            return 'state-management'
+          }
+          // UI library chunks (split by size)
+          if (id.includes('framer-motion')) {
+            return 'animation'
+          }
+          if (id.includes('lucide-react')) {
+            return 'icons'
+          }
+          // Utilities chunk
+          if (id.includes('dayjs') || id.includes('uuid') || id.includes('crypto-js')) {
+            return 'utils'
+          }
+          // Large virtualization component
+          if (id.includes('react-window')) {
+            return 'virtualization'
+          }
+          // Node modules - group by common functionality
+          if (id.includes('node_modules')) {
+            if (id.includes('tailwind') || id.includes('clsx') || id.includes('class-variance-authority')) {
+              return 'styling'
+            }
+            // Keep everything else in vendor
+            return 'vendor'
+          }
+          // Default: main bundle
+          return undefined
         },
-        // Optimize chunk size
-        chunkFileNames: 'assets/[name]-[hash].js',
-        entryFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash].[ext]'
+        // Optimize chunk and asset naming
+        chunkFileNames: 'assets/js/[name]-[hash].js',
+        entryFileNames: 'assets/js/[name]-[hash].js',
+        assetFileNames: 'assets/[ext]/[name]-[hash].[ext]'
       },
+      // External dependencies for Electron (if any are available globally)
+      external: [],
     },
-    // Enable minification and tree-shaking
+    // Aggressive minification
     minify: 'esbuild',
-    target: 'chrome120', // Target recent Chromium for Electron
-    // Reduce bundle size
+    target: 'chrome120', // Target Electron's Chromium version
+    // CSS optimization
     cssCodeSplit: true,
-    reportCompressedSize: false, // Faster builds
-    // Source maps for debugging
-    sourcemap: process.env.NODE_ENV === 'development',
+    cssMinify: 'esbuild',
+    // Performance optimizations
+    reportCompressedSize: false, // Faster builds in CI
+    chunkSizeWarningLimit: 1000, // Warn for chunks > 1MB
+    // Source maps only in development
+    sourcemap: process.env.NODE_ENV === 'development' ? 'inline' : false,
   },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src/renderer'),
       '@flow-desk/shared': path.resolve(__dirname, '../shared/src'),
+      // Optimize imports
+      'react/jsx-runtime': 'react/jsx-runtime',
+      'react/jsx-dev-runtime': 'react/jsx-dev-runtime',
     },
   },
   server: {
     port: 5173,
     // Enable HMR for better development experience
-    hmr: true,
+    hmr: {
+      overlay: false // Less intrusive error overlay
+    },
+    // Warm up frequently used files
+    warmup: {
+      clientFiles: [
+        './src/renderer/main.tsx',
+        './src/renderer/App.tsx',
+        './src/renderer/components/**/*.tsx'
+      ]
+    }
   },
-  // Optimize dependency pre-bundling
+  // Optimized dependency pre-bundling
   optimizeDeps: {
     include: [
       'react',
       'react-dom',
       'react-redux',
       '@reduxjs/toolkit',
-      'framer-motion',
-      'lucide-react'
+      'dayjs',
+      'uuid',
+      'crypto-js',
+      'clsx',
+      'tailwind-merge',
     ],
-    exclude: ['@flow-desk/shared'], // Local packages should not be pre-bundled
+    exclude: [
+      '@flow-desk/shared', // Local packages
+      'electron', // Electron APIs
+    ],
+    // Force pre-bundle these deps to avoid runtime discovery
+    force: true,
+  },
+  // Enable experimental features for better performance
+  experimental: {
+    buildAdvancedBaseOptions: true,
+  },
+  // Define environment variables at build time
+  define: {
+    __DEV__: JSON.stringify(process.env.NODE_ENV === 'development'),
   },
 })

@@ -14,6 +14,8 @@ use tokio::sync::{RwLock, Mutex};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
+use crate::calendar::providers::SyncStatus;
+
 use crate::calendar::{
     CalendarResult, CalendarError, CalendarConfig, CalendarState,
     CalendarAccount, Calendar, CalendarEvent, CalendarProvider,
@@ -152,10 +154,10 @@ impl CalendarEngine {
         provider.test_connection().await?;
 
         // Store provider instance
-        self.providers.write().await.insert(account.id.clone(), provider);
+        self.providers.write().await.insert(account.id.to_string(), provider);
 
         // Schedule initial sync
-        self.schedule_account_sync(&account.id, false).await?;
+        self.schedule_account_sync(&account.id.to_string(), false).await?;
 
         info!("Calendar account created successfully: {}", account.id);
         Ok(account)
@@ -222,7 +224,7 @@ impl CalendarEngine {
 
     /// Create calendar
     pub async fn create_calendar(&self, calendar: &Calendar) -> CalendarResult<Calendar> {
-        let provider = self.get_provider(&calendar.account_id).await?;
+        let provider = self.get_provider(&calendar.account_id.to_string()).await?;
         let created_calendar = provider.create_calendar(calendar).await?;
         
         // Store in database
@@ -237,7 +239,7 @@ impl CalendarEngine {
     pub async fn create_event(&self, event_input: &CreateCalendarEventInput) -> CalendarResult<CalendarEvent> {
         // Get calendar to determine account
         let calendar = self.database.get_calendar(&event_input.calendar_id).await?;
-        let provider = self.get_provider(&calendar.account_id).await?;
+        let provider = self.get_provider(&calendar.account_id.to_string()).await?;
 
         // Create event via provider
         let created_event = provider.create_event(event_input).await?;
@@ -264,7 +266,7 @@ impl CalendarEngine {
     ) -> CalendarResult<CalendarEvent> {
         // Get calendar to determine account
         let calendar = self.database.get_calendar(calendar_id).await?;
-        let provider = self.get_provider(&calendar.account_id).await?;
+        let provider = self.get_provider(&calendar.account_id.to_string()).await?;
 
         // Update event via provider
         let updated_event = provider.update_event(calendar_id, event_id, updates).await?;
@@ -286,7 +288,7 @@ impl CalendarEngine {
     pub async fn delete_event(&self, calendar_id: &str, event_id: &str) -> CalendarResult<()> {
         // Get calendar to determine account
         let calendar = self.database.get_calendar(calendar_id).await?;
-        let provider = self.get_provider(&calendar.account_id).await?;
+        let provider = self.get_provider(&calendar.account_id.to_string()).await?;
 
         // Delete event via provider
         provider.delete_event(calendar_id, event_id).await?;
@@ -331,7 +333,7 @@ impl CalendarEngine {
         // For now, use first available provider (would need email->account mapping)
         let accounts = self.database.get_user_calendar_accounts("current_user").await?;
         if let Some(account) = accounts.first() {
-            provider_queries.insert(account.id.clone(), query.emails.clone());
+            provider_queries.insert(account.id.to_string(), query.emails.clone());
         }
 
         let mut merged_response = FreeBusyResponse {
@@ -355,14 +357,14 @@ impl CalendarEngine {
                 Ok(response) => {
                     merged_response.free_busy.extend(response.free_busy);
                     if let Some(provider_errors) = response.errors {
-                        merged_response.errors.get_or_insert_with(HashMap::new).extend(provider_errors);
+                        merged_response.errors.get_or_insert_with(Vec::new).extend(provider_errors);
                     }
                 },
                 Err(e) => {
                     warn!("Free/busy query failed for account {}: {}", account_id, e);
-                    for email in provider_query.emails {
-                        merged_response.errors.get_or_insert_with(HashMap::new)
-                            .insert(email, format!("Query failed: {}", e));
+                    for email in &provider_query.emails {
+                        merged_response.errors.get_or_insert_with(Vec::new)
+                            .push(format!("Query failed for {}: {}", email, e));
                     }
                 }
             }
@@ -405,18 +407,20 @@ impl CalendarEngine {
             },
             Err(e) => {
                 error!("Sync failed for account {}: {}", account_id, e);
-                CalendarSyncStatus {
+                SyncStatus {
+                    operation_id: uuid::Uuid::new_v4().to_string(),
                     account_id: account_id.to_string(),
-                    status: crate::calendar::SyncStatusType::Error,
-                    last_sync_at: Some(Utc::now()),
-                    current_operation: None,
-                    stats: crate::calendar::SyncStats::default(),
-                    last_error: Some(crate::calendar::SyncError {
-                        message: e.to_string(),
-                        code: "sync_failed".to_string(),
-                        timestamp: Utc::now(),
-                        details: None,
-                    }),
+                    sync_type: "full".to_string(),
+                    progress: 0,
+                    status: format!("Error: {}", e),
+                    started_at: Utc::now(),
+                    completed_at: Some(Utc::now()),
+                    events_processed: 0,
+                    error_count: 1,
+                    last_error: Some(e.to_string()),
+                    error_message: Some(e.to_string()),
+                    calendars_synced: 0,
+                    events_synced: 0,
                 }
             }
         };
@@ -424,7 +428,18 @@ impl CalendarEngine {
         // Mark sync as complete
         self.set_account_syncing(account_id, false).await;
 
-        Ok(sync_result)
+        // Convert SyncStatus to CalendarSyncStatus
+        Ok(CalendarSyncStatus {
+            account_id: sync_result.account_id,
+            last_sync_at: Some(sync_result.started_at),
+            last_sync: Some(sync_result.started_at),
+            is_syncing: false,
+            error: sync_result.error_message.clone(),
+            error_message: sync_result.error_message,
+            status: sync_result.status,
+            total_calendars: sync_result.calendars_synced,
+            total_events: sync_result.events_synced,
+        })
     }
 
     /// Schedule automatic sync for an account
@@ -484,8 +499,18 @@ impl CalendarEngine {
         })?;
 
         // Execute sync for this rule
-        // (Would need to create PrivacySyncRule from CalendarPrivacySync)
-        todo!("Execute privacy sync for single rule")
+        match self.privacy_sync.sync_privacy_rule(&privacy_sync).await {
+            Ok(_) => {
+                tracing::info!("Privacy sync completed for calendar {}", privacy_sync.source_calendar_id);
+                Ok(())
+            }
+            Err(e) => {
+                tracing::error!("Privacy sync failed: {}", e);
+                Err(CalendarError::SyncError {
+                    message: format!("Privacy sync failed: {}", e),
+                })
+            }
+        }
     }
 
     // === Search Operations ===
@@ -524,16 +549,14 @@ impl CalendarEngine {
             
             let status = CalendarSyncStatus {
                 account_id: account_id.clone(),
-                status: crate::calendar::SyncStatusType::Syncing,
                 last_sync_at: Some(operation.started_at),
-                current_operation: Some(crate::calendar::SyncOperation {
-                    type_: operation.operation_type.clone(),
-                    calendar_id: None,
-                    progress: operation.progress,
-                    started_at: operation.started_at,
-                }),
-                stats: crate::calendar::SyncStats::default(),
-                last_error: None,
+                last_sync: Some(operation.started_at),
+                is_syncing: true,
+                error: None,
+                error_message: None,
+                status: "syncing".to_string(),
+                total_calendars: 0,
+                total_events: 0,
             };
             
             status_map.insert(account_id, status);
@@ -545,15 +568,16 @@ impl CalendarEngine {
     // === Helper Methods ===
 
     /// Get provider instance for an account
-    async fn get_provider(&self, account_id: &str) -> CalendarResult<Arc<dyn CalendarProviderTrait>> {
+    fn get_provider(&self, account_id: &str) -> std::pin::Pin<Box<dyn std::future::Future<Output = CalendarResult<Arc<dyn CalendarProviderTrait>>> + Send + '_>> {
+        let account_id = account_id.to_string();
+        Box::pin(async move {
         let providers = self.providers.read().await;
-        if let Some(provider) = providers.get(account_id) {
-            // Convert Box<dyn CalendarProviderTrait> to Arc<dyn CalendarProviderTrait>
-            // This is a bit tricky due to trait objects, would need proper implementation
-            todo!("Convert provider to Arc for thread safety")
+        if let Some(provider) = providers.get(&account_id) {
+            // Clone the Arc reference - providers should be stored as Arc from creation
+            Ok(Arc::clone(provider))
         } else {
             // Load provider from database
-            let account = self.database.get_calendar_account(account_id).await?;
+            let account = self.database.get_calendar_account(&account_id).await?;
             if !account.is_enabled {
                 return Err(CalendarError::ValidationError {
                     message: "Account is disabled".to_string(),
@@ -570,8 +594,9 @@ impl CalendarEngine {
             self.providers.write().await.insert(account_id.to_string(), provider);
             
             // Recursive call to get the newly stored provider
-            self.get_provider(account_id).await
+            self.get_provider(&account_id).await
         }
+        })
     }
 
     /// Reload provider instance for an account
@@ -579,7 +604,7 @@ impl CalendarEngine {
         let provider = CalendarProviderFactory::create_provider(account)?;
         provider.test_connection().await?;
         
-        self.providers.write().await.insert(account.id.clone(), provider);
+        self.providers.write().await.insert(account.id.to_string(), provider);
         Ok(())
     }
 
@@ -648,13 +673,8 @@ impl CalendarEngine {
     /// Validate privacy sync rule
     async fn validate_privacy_sync_rule(&self, rule: &CalendarPrivacySync) -> CalendarResult<()> {
         // Validate source and target calendars exist
-        for calendar_id in &rule.source_calendar_ids {
-            self.database.get_calendar(calendar_id).await?;
-        }
-        
-        for calendar_id in &rule.target_calendar_ids {
-            self.database.get_calendar(calendar_id).await?;
-        }
+        self.database.get_calendar(&rule.source_calendar_id).await?;
+        self.database.get_calendar(&rule.target_calendar_id).await?;
         
         Ok(())
     }

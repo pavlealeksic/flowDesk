@@ -19,7 +19,7 @@ pub mod utils;
 pub use client::ImapClient;
 pub use connection::{ImapConnection, ImapConnectionPool};
 
-use crate::mail::{error::MailResult, providers::{MailProvider, ProviderCapabilities}, types::*};
+use crate::mail::{error::{MailResult, MailError}, providers::{MailProvider, ProviderCapabilities, SyncResult}, types::*};
 use async_trait::async_trait;
 use std::{sync::Arc, collections::HashMap, time::Duration};
 use tokio::sync::{RwLock, Mutex};
@@ -87,8 +87,49 @@ struct ImapSyncState {
 }
 
 impl ImapProvider {
-    /// Create new IMAP provider instance
-    pub async fn new(config: ImapConfig) -> MailResult<Self> {
+    /// Create new IMAP provider instance from ProviderAccountConfig
+    pub fn new(config: ProviderAccountConfig) -> MailResult<Self> {
+        // Convert ProviderAccountConfig to ImapConfig
+        let imap_config = match config {
+            ProviderAccountConfig::Imap(imap_config) => {
+                ImapConfig {
+                    imap_host: imap_config.imap_host,
+                    imap_port: imap_config.imap_port,
+                    imap_tls: imap_config.imap_tls,
+                    smtp_host: imap_config.smtp_host,
+                    smtp_port: imap_config.smtp_port,
+                    smtp_tls: imap_config.smtp_tls,
+                    username: imap_config.username,
+                    password: secrecy::Secret::new(imap_config.password),
+                    ..Default::default()
+                }
+            }
+            _ => return Err(MailError::invalid("Invalid provider config for IMAP")),
+        };
+
+        // Since we can't use async in the sync constructor, we'll create with default values
+        // and initialize later when actually used
+        let connection_pool = Arc::new(ImapConnectionPool::new_uninitialized());
+        let client = Arc::new(ImapClient::new_uninitialized());
+        let capabilities = ProviderCapabilities::default();
+        
+        Ok(Self {
+            config: imap_config,
+            connection_pool,
+            client,
+            folder_cache: Arc::new(RwLock::new(HashMap::new())),
+            uid_cache: Arc::new(RwLock::new(HashMap::new())),
+            sync_state: Arc::new(Mutex::new(ImapSyncState {
+                last_uid_validity: None,
+                highest_modseq: None,
+                folder_sync_tokens: HashMap::new(),
+            })),
+            capabilities,
+        })
+    }
+
+    /// Create new IMAP provider instance with async initialization
+    pub async fn new_async(config: ImapConfig) -> MailResult<Self> {
         let connection_pool = Arc::new(ImapConnectionPool::new(config.clone()).await?);
         let client = Arc::new(ImapClient::new(connection_pool.clone()).await?);
         
@@ -145,21 +186,21 @@ impl ImapProvider {
         let mut provider_caps = ProviderCapabilities::default();
         
         // Check for IDLE support
-        provider_caps.supports_push = capabilities.contains("IDLE");
+        provider_caps.supports_push = capabilities.iter().any(|cap| cap == "IDLE");
         
         // Check for server-side search
-        provider_caps.supports_server_search = true; // IMAP always supports SEARCH
+        provider_caps.supports_search = true; // IMAP always supports SEARCH
         
         // Check for threading
-        provider_caps.supports_threading = capabilities.contains("THREAD=REFERENCES") 
-            || capabilities.contains("THREAD=ORDEREDSUBJECT");
+        provider_caps.supports_threading = capabilities.iter().any(|cap| cap == "THREAD=REFERENCES")
+            || capabilities.iter().any(|cap| cap == "THREAD=ORDEREDSUBJECT");
         
         // Check for compression
-        let supports_compression = capabilities.contains("COMPRESS=DEFLATE");
+        let supports_compression = capabilities.iter().any(|cap| cap == "COMPRESS=DEFLATE");
         
         // Check for various extensions
-        let supports_condstore = capabilities.contains("CONDSTORE");
-        let supports_qresync = capabilities.contains("QRESYNC");
+        let supports_condstore = capabilities.iter().any(|cap| cap == "CONDSTORE");
+        let supports_qresync = capabilities.iter().any(|cap| cap == "QRESYNC");
         
         tracing::info!("IMAP capabilities detected: IDLE={}, THREAD={}, COMPRESS={}, CONDSTORE={}, QRESYNC={}", 
             provider_caps.supports_push, provider_caps.supports_threading, 
@@ -224,33 +265,35 @@ impl ImapProvider {
         
         let subject = envelope.subject
             .as_ref()
-            .and_then(|s| String::from_utf8(s.clone()).ok())
+            .and_then(|s| String::from_utf8(s.to_vec()).ok())
             .unwrap_or_default();
         
         let from = envelope.from
             .as_ref()
             .and_then(|addrs| addrs.first())
             .and_then(|addr| {
-                let name = addr.name.as_ref().and_then(|n| String::from_utf8(n.clone()).ok());
+                let name = addr.name.as_ref().and_then(|n| String::from_utf8(n.to_vec()).ok());
                 let email = addr.mailbox.as_ref()
-                    .and_then(|mb| String::from_utf8(mb.clone()).ok())?;
+                    .and_then(|mb| String::from_utf8(mb.to_vec()).ok())?;
                 let host = addr.host.as_ref()
-                    .and_then(|h| String::from_utf8(h.clone()).ok())?;
+                    .and_then(|h| String::from_utf8(h.to_vec()).ok())?;
                 Some(EmailAddress {
                     name,
+                    address: format!("{}@{}", email.clone(), host.clone()),
                     email: format!("{}@{}", email, host),
                 })
             });
         
         let to = envelope.to.as_ref().map(|addrs| {
             addrs.iter().filter_map(|addr| {
-                let name = addr.name.as_ref().and_then(|n| String::from_utf8(n.clone()).ok());
+                let name = addr.name.as_ref().and_then(|n| String::from_utf8(n.to_vec()).ok());
                 let email = addr.mailbox.as_ref()
-                    .and_then(|mb| String::from_utf8(mb.clone()).ok())?;
+                    .and_then(|mb| String::from_utf8(mb.to_vec()).ok())?;
                 let host = addr.host.as_ref()
-                    .and_then(|h| String::from_utf8(h.clone()).ok())?;
+                    .and_then(|h| String::from_utf8(h.to_vec()).ok())?;
                 Some(EmailAddress {
                     name,
+                    address: format!("{}@{}", email.clone(), host.clone()),
                     email: format!("{}@{}", email, host),
                 })
             }).collect()
@@ -258,19 +301,20 @@ impl ImapProvider {
         
         let cc = envelope.cc.as_ref().map(|addrs| {
             addrs.iter().filter_map(|addr| {
-                let name = addr.name.as_ref().and_then(|n| String::from_utf8(n.clone()).ok());
+                let name = addr.name.as_ref().and_then(|n| String::from_utf8(n.to_vec()).ok());
                 let email = addr.mailbox.as_ref()
-                    .and_then(|mb| String::from_utf8(mb.clone()).ok())?;
+                    .and_then(|mb| String::from_utf8(mb.to_vec()).ok())?;
                 let host = addr.host.as_ref()
-                    .and_then(|h| String::from_utf8(h.clone()).ok())?;
+                    .and_then(|h| String::from_utf8(h.to_vec()).ok())?;
                 Some(EmailAddress {
                     name,
+                    address: format!("{}@{}", email.clone(), host.clone()),
                     email: format!("{}@{}", email, host),
                 })
             }).collect()
         }).unwrap_or_default();
         
-        let flags = imap_msg.flags();
+        let flags: Vec<_> = imap_msg.flags().collect();
         let is_read = flags.iter().any(|f| matches!(f, async_imap::types::Flag::Seen));
         let is_flagged = flags.iter().any(|f| matches!(f, async_imap::types::Flag::Flagged));
         let is_draft = flags.iter().any(|f| matches!(f, async_imap::types::Flag::Draft));
@@ -278,112 +322,122 @@ impl ImapProvider {
         
         let date = envelope.date
             .as_ref()
-            .and_then(|d| String::from_utf8(d.clone()).ok())
+            .and_then(|d| String::from_utf8(d.to_vec()).ok())
             .and_then(|d| chrono::DateTime::parse_from_rfc2822(&d).ok())
             .map(|d| d.with_timezone(&Utc))
             .unwrap_or_else(Utc::now);
         
         // Extract message content
-        let (text_content, html_content) = self.extract_content(&parsed).await?;
+        let (body_text, body_html) = self.extract_content(&parsed).await?;
         
         // Extract attachments
         let attachments = self.extract_attachments(&parsed).await?;
         
         Ok(EmailMessage {
             id: Uuid::new_v4(),
-            provider_id: message_id,
             account_id: Uuid::nil(), // Will be set by caller
-            folder_id,
-            thread_id: None,
-            subject,
-            from,
+            provider_id: message_id,
+            thread_id: Uuid::new_v4(),
+            subject: subject.clone(),
+            body_html,
+            body_text,
+            snippet: subject.chars().take(200).collect(),
+            from: from.unwrap_or_default(),
             to,
             cc,
             bcc: vec![],
-            text_content,
-            html_content,
-            attachments,
+            reply_to: vec![],
+            date,
             flags: EmailFlags {
                 is_read,
                 is_starred: is_flagged,
+                is_trashed: false,
+                is_spam: false,
                 is_important: false,
+                is_archived: false,
                 is_draft,
                 is_sent: false,
-                is_replied: is_answered,
-                is_forwarded: false,
-                is_deleted: false,
-                is_archived: false,
-                is_spam: false,
+                has_attachments: !attachments.is_empty(),
             },
             labels: vec![],
-            created_at: date,
-            updated_at: Utc::now(),
-            size: body.len() as u64,
+            folder: "Unknown".to_string(), // Will be set by caller
+            folder_id: None,
+            importance: MessageImportance::Normal,
+            priority: MessagePriority::Normal,
+            size: body.len() as i64,
+            attachments,
+            headers: HashMap::new(),
+            message_id: String::new(), // Would need to parse headers
             message_id_header: None,
             in_reply_to: None,
             references: vec![],
+            encryption: None,
+            created_at: date,
+            updated_at: Utc::now(),
         })
     }
 
     /// Extract text and HTML content from parsed message
     async fn extract_content(&self, parsed: &mailparse::ParsedMail<'_>) -> MailResult<(Option<String>, Option<String>)> {
-        let mut text_content = None;
-        let mut html_content = None;
+        let mut body_text = None;
+        let mut body_html = None;
         
         if parsed.subparts.is_empty() {
             // Single part message
             match parsed.ctype.mimetype.as_str() {
                 "text/plain" => {
-                    text_content = Some(parsed.get_body()?);
+                    body_text = Some(parsed.get_body()?);
                 }
                 "text/html" => {
-                    html_content = Some(parsed.get_body()?);
+                    body_html = Some(parsed.get_body()?);
                     // Convert HTML to text for the text content
-                    text_content = Some(html2text::from_read(parsed.get_body()?.as_bytes(), 80));
+                    body_text = Some(html2text::from_read(parsed.get_body()?.as_bytes(), 80));
                 }
                 _ => {}
             }
         } else {
             // Multipart message
-            self.extract_multipart_content(parsed, &mut text_content, &mut html_content).await?;
+            self.extract_multipart_content(parsed, &mut body_text, &mut body_html).await?;
         }
         
-        Ok((text_content, html_content))
+        Ok((body_text, body_html))
     }
 
     /// Extract content from multipart message
-    async fn extract_multipart_content(
-        &self,
-        parsed: &mailparse::ParsedMail<'_>,
-        text_content: &mut Option<String>,
-        html_content: &mut Option<String>,
-    ) -> MailResult<()> {
+    fn extract_multipart_content<'a>(
+        &'a self,
+        parsed: &'a mailparse::ParsedMail<'_>,
+        body_text: &'a mut Option<String>,
+        body_html: &'a mut Option<String>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = MailResult<()>> + Send + 'a>> {
+        Box::pin(async move {
         for part in &parsed.subparts {
             if part.subparts.is_empty() {
                 // Leaf part
                 match part.ctype.mimetype.as_str() {
-                    "text/plain" if text_content.is_none() => {
-                        *text_content = Some(part.get_body()?);
+                    "text/plain" if body_text.is_none() => {
+                        *body_text = Some(part.get_body()?);
                     }
-                    "text/html" if html_content.is_none() => {
-                        *html_content = Some(part.get_body()?);
+                    "text/html" if body_html.is_none() => {
+                        *body_html = Some(part.get_body()?);
                     }
                     _ => {}
                 }
             } else {
                 // Nested multipart
-                self.extract_multipart_content(part, text_content, html_content).await?;
+                self.extract_multipart_content(part, body_text, body_html).await?;
             }
         }
         
         // If we have HTML but no text, convert HTML to text
-        if text_content.is_none() && html_content.is_some() {
-            if let Some(ref html) = html_content {
-                *text_content = Some(html2text::from_read(html.as_bytes(), 80));
+        if body_text.is_none() && body_html.is_some() {
+            if let Some(ref html) = body_html {
+                *body_text = Some(html2text::from_read(html.as_bytes(), 80));
             }
         }
         
         Ok(())
+        })
     }
 
     /// Extract attachments from parsed message
@@ -396,11 +450,12 @@ impl ImapProvider {
     }
 
     /// Extract attachments recursively from message parts
-    async fn extract_attachments_recursive(
-        &self,
-        parsed: &mailparse::ParsedMail<'_>,
-        attachments: &mut Vec<EmailAttachment>,
-    ) -> MailResult<()> {
+    fn extract_attachments_recursive<'a>(
+        &'a self,
+        parsed: &'a mailparse::ParsedMail<'_>,
+        attachments: &'a mut Vec<EmailAttachment>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = MailResult<()>> + Send + 'a>> {
+        Box::pin(async move {
         for part in &parsed.subparts {
             if part.subparts.is_empty() {
                 // Check if this is an attachment
@@ -412,6 +467,7 @@ impl ImapProvider {
                 
                 if is_attachment {
                     let filename = part.ctype.params.get("name")
+                        .map(|s| s.to_string())
                         .or_else(|| {
                             part.headers.iter()
                                 .find(|h| h.get_key() == "Content-Disposition")
@@ -425,31 +481,35 @@ impl ImapProvider {
                                         } else {
                                             filename_part.split(';').next().unwrap_or("").trim()
                                         };
-                                        Some(filename)
+                                        Some(filename.to_string())
                                     } else {
                                         None
                                     }
                                 })
                         })
-                        .map(|s| s.to_string())
                         .unwrap_or_else(|| "attachment".to_string());
                     
                     let content_type = part.ctype.mimetype.clone();
-                    let size = part.get_body_raw()?.len() as u64;
+                    let size = part.get_body_raw()?.len() as i64;
+                    let is_inline = part.headers.iter().any(|h| {
+                        h.get_key() == "Content-Disposition" 
+                        && h.get_value().contains("inline")
+                    });
                     
                     attachments.push(EmailAttachment {
-                        id: Uuid::new_v4(),
+                        id: Uuid::new_v4().to_string(),
                         filename,
+                        mime_type: content_type.clone(),
                         content_type,
                         size,
-                        inline: part.headers.iter().any(|h| {
-                            h.get_key() == "Content-Disposition" 
-                            && h.get_value().contains("inline")
-                        }),
+                        is_inline,
+                        inline: is_inline,
                         content_id: part.headers.iter()
                             .find(|h| h.get_key() == "Content-ID")
                             .map(|h| h.get_value().to_string()),
-                        data: None, // Data will be loaded on demand
+                        download_url: None,
+                        local_path: None,
+                        data: Some(part.get_body_raw()?.to_vec()),
                     });
                 }
             } else {
@@ -459,6 +519,7 @@ impl ImapProvider {
         }
         
         Ok(())
+        })
     }
 }
 
@@ -482,78 +543,147 @@ impl MailProvider for ImapProvider {
         }
     }
 
-    async fn get_account_info(&self) -> MailResult<serde_json::Value> {
-        let capabilities = self.client.get_capabilities().await?;
-        let namespace = self.client.get_namespace().await.unwrap_or_default();
-        
-        Ok(serde_json::json!({
-            "provider": "imap",
-            "server": self.config.imap_host,
-            "port": self.config.imap_port,
-            "tls": self.config.imap_tls,
-            "capabilities": capabilities,
-            "namespace": namespace,
-            "username": self.config.username
-        }))
+    async fn get_account_info(&self) -> MailResult<MailAccount> {
+        Ok(MailAccount {
+            id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(), // Would be set by the calling code
+            name: self.config.username.clone(),
+            email: self.config.username.clone(),
+            provider: crate::mail::types::MailProvider::Imap,
+            provider_config: ProviderAccountConfig::Imap {
+                imap_host: self.config.imap_host.clone(),
+                imap_port: self.config.imap_port,
+                imap_tls: self.config.imap_tls,
+                smtp_host: self.config.smtp_host.clone(),
+                smtp_port: self.config.smtp_port,
+                smtp_tls: self.config.smtp_tls,
+                folder_mappings: std::collections::HashMap::new(),
+            },
+            status: crate::mail::types::MailAccountStatus::Active,
+            last_sync_at: None,
+            next_sync_at: None,
+            sync_interval_minutes: 15,
+            is_enabled: true,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            config: ProviderAccountConfig::Imap {
+                imap_host: self.config.imap_host.clone(),
+                imap_port: self.config.imap_port,
+                imap_tls: self.config.imap_tls,
+                smtp_host: self.config.smtp_host.clone(),
+                smtp_port: self.config.smtp_port,
+                smtp_tls: self.config.smtp_tls,
+                folder_mappings: std::collections::HashMap::new(),
+            },
+            sync_status: None,
+        })
+    }
+
+    async fn get_folders(&self) -> MailResult<Vec<MailFolder>> {
+        self.client.list_folders().await
     }
 
     async fn list_folders(&self) -> MailResult<Vec<MailFolder>> {
         self.client.list_folders().await
     }
 
-    async fn create_folder(&self, name: &str, parent_id: Option<Uuid>) -> MailResult<MailFolder> {
-        let parent_name = if let Some(parent_id) = parent_id {
-            Some(self.get_folder_name(parent_id).await?)
-        } else {
-            None
-        };
-        
-        self.client.create_folder(name, parent_name.as_deref()).await
+    async fn create_folder(&self, name: &str, parent_id: Option<&str>) -> MailResult<MailFolder> {
+        self.client.create_folder(name, parent_id).await
     }
 
-    async fn delete_folder(&self, folder_id: Uuid) -> MailResult<()> {
-        let folder_name = self.get_folder_name(folder_id).await?;
-        self.client.delete_folder(&folder_name).await
+    async fn delete_folder(&self, folder_id: &str) -> MailResult<()> {
+        self.client.delete_folder(folder_id).await
     }
 
-    async fn rename_folder(&self, folder_id: Uuid, new_name: &str) -> MailResult<()> {
-        let folder_name = self.get_folder_name(folder_id).await?;
-        self.client.rename_folder(&folder_name, new_name).await
+    async fn rename_folder(&self, folder_id: &str, new_name: &str) -> MailResult<()> {
+        self.client.rename_folder(folder_id, new_name).await
     }
 
-    async fn list_messages(&self, folder_id: Uuid, limit: Option<u32>, page_token: Option<String>) -> MailResult<(Vec<EmailMessage>, Option<String>)> {
-        let folder_name = self.get_folder_name(folder_id).await?;
-        self.client.list_messages(&folder_name, limit, page_token.as_deref(), folder_id).await
+    async fn get_messages(&self, folder_id: &str, limit: Option<u32>) -> MailResult<Vec<MailMessage>> {
+        self.client.list_messages(folder_id, limit, None, Uuid::new_v4()).await
+            .map(|(messages, _)| messages)
+    }
+
+    async fn list_messages(&self, folder_id: &str, limit: Option<u32>) -> MailResult<Vec<MailMessage>> {
+        self.get_messages(folder_id, limit).await
     }
 
     async fn get_message(&self, message_id: &str) -> MailResult<EmailMessage> {
         self.client.get_message(message_id).await
     }
 
-    async fn get_message_raw(&self, message_id: &str) -> MailResult<Vec<u8>> {
-        self.client.get_message_raw(message_id).await
+    async fn get_message_raw(&self, message_id: &str) -> MailResult<String> {
+        let raw_bytes = self.client.get_message_raw(message_id).await?;
+        String::from_utf8(raw_bytes).map_err(|e| MailError::EmailParsing(format!("Invalid UTF-8 in message: {}", e)))
     }
 
-    async fn send_message(&self, message: &EmailMessage) -> MailResult<String> {
-        self.client.send_message(message).await
+    async fn send_message(&self, message: &NewMessage) -> MailResult<String> {
+        let email_message = self.convert_new_to_email_message(message).await?;
+        self.client.send_message(&email_message).await
     }
 
-    async fn save_draft(&self, message: &EmailMessage) -> MailResult<String> {
-        self.client.save_draft(message).await
+    async fn save_draft(&self, message: &NewMessage) -> MailResult<String> {
+        let email_message = self.convert_new_to_email_message(message).await?;
+        self.client.save_draft(&email_message).await
     }
 
     async fn delete_message(&self, message_id: &str) -> MailResult<()> {
         self.client.delete_message(message_id).await
     }
 
-    async fn move_message(&self, message_id: &str, folder_id: Uuid) -> MailResult<()> {
-        let folder_name = self.get_folder_name(folder_id).await?;
-        self.client.move_message(message_id, &folder_name).await
+    async fn update_message_flags(&self, message_id: &str, flags: MessageFlags) -> MailResult<()> {
+        // Convert MessageFlags struct to IMAP flags
+        let mut flag_parts = Vec::new();
+        
+        if flags.is_seen {
+            flag_parts.push("\\Seen");
+        }
+        if flags.is_flagged {
+            flag_parts.push("\\Flagged");
+        }
+        if flags.is_answered {
+            flag_parts.push("\\Answered");
+        }
+        if flags.is_deleted {
+            flag_parts.push("\\Deleted");
+        }
+        if flags.is_draft {
+            flag_parts.push("\\Draft");
+        }
+        
+        let flags_str = flag_parts.join(" ");
+        self.client.set_flags(message_id, &flags_str).await
     }
 
-    async fn copy_message(&self, message_id: &str, folder_id: Uuid) -> MailResult<String> {
-        let folder_name = self.get_folder_name(folder_id).await?;
-        self.client.copy_message(message_id, &folder_name).await
+    async fn get_message_content(&self, message_id: &str) -> MailResult<String> {
+        let message = self.client.get_message(message_id).await?;
+        // Return body text or body HTML, preferring text
+        if let Some(text) = message.body_text {
+            Ok(text)
+        } else if let Some(html) = message.body_html {
+            Ok(html)
+        } else {
+            Ok(message.snippet)
+        }
+    }
+
+    async fn add_label(&self, message_id: &str, label: &str) -> MailResult<()> {
+        // IMAP doesn't have native labels like Gmail, but we can use keywords if supported
+        self.client.add_label(message_id, label).await
+    }
+
+    async fn remove_label(&self, message_id: &str, label: &str) -> MailResult<()> {
+        // IMAP doesn't have native labels like Gmail, but we can use keywords if supported  
+        self.client.remove_label(message_id, label).await
+    }
+
+    async fn move_message(&self, message_id: &str, target_folder: &str) -> MailResult<()> {
+        self.client.move_message(message_id, target_folder).await
+    }
+
+    async fn copy_message(&self, message_id: &str, target_folder: &str) -> MailResult<()> {
+        self.client.copy_message(message_id, target_folder).await?;
+        Ok(())
     }
 
     async fn mark_read(&self, message_id: &str, read: bool) -> MailResult<()> {
@@ -584,8 +714,8 @@ impl MailProvider for ImapProvider {
         self.client.bulk_operation(operation).await
     }
 
-    async fn search_messages(&self, query: &str, limit: Option<u32>) -> MailResult<EmailSearchResult> {
-        self.client.search_messages(query, limit).await
+    async fn search_messages(&self, query: &str) -> MailResult<Vec<MailMessage>> {
+        self.client.search_messages(query, None).await.map(|result| result.messages)
     }
 
     async fn get_thread(&self, thread_id: &str) -> MailResult<EmailThread> {
@@ -600,29 +730,28 @@ impl MailProvider for ImapProvider {
         self.client.get_attachment(message_id, attachment_id).await
     }
 
-    async fn download_attachment(&self, message_id: &str, attachment_id: &str, path: &str) -> MailResult<()> {
-        let data = self.get_attachment(message_id, attachment_id).await?;
-        tokio::fs::write(path, data).await?;
-        Ok(())
+    async fn download_attachment(&self, message_id: &str, attachment_id: &str) -> MailResult<Vec<u8>> {
+        self.client.get_attachment(message_id, attachment_id).await
     }
 
-    async fn get_sync_changes(&self, sync_token: Option<String>) -> MailResult<SyncResult> {
-        self.client.get_sync_changes(sync_token).await
+    async fn get_sync_changes(&self, since: Option<&str>) -> MailResult<SyncResult> {
+        self.client.get_sync_changes(since.map(|s| s.to_string())).await
     }
 
     async fn get_full_sync_token(&self) -> MailResult<String> {
         self.client.get_full_sync_token().await
     }
 
-    async fn setup_push_notifications(&self, webhook_url: &str) -> MailResult<()> {
+    async fn setup_push_notifications(&self, webhook_url: &str) -> MailResult<String> {
         if self.capabilities.supports_push {
-            self.client.setup_idle_monitoring(webhook_url).await
+            self.client.setup_idle_monitoring(webhook_url).await?;
+            Ok("imap_idle_subscription".to_string())
         } else {
             Err(crate::mail::error::MailError::not_supported("Push notifications", "idle"))
         }
     }
 
-    async fn disable_push_notifications(&self) -> MailResult<()> {
+    async fn disable_push_notifications(&self, _subscription_id: &str) -> MailResult<()> {
         self.client.disable_idle_monitoring().await
     }
 
@@ -640,6 +769,84 @@ impl MailProvider for ImapProvider {
 
     async fn list_filters(&self) -> MailResult<Vec<EmailFilter>> {
         Ok(vec![]) // Return empty list for servers without Sieve support
+    }
+}
+
+impl ImapProvider {
+    /// Convert NewMessage to EmailMessage for internal use
+    async fn convert_new_to_email_message(&self, message: &NewMessage) -> MailResult<EmailMessage> {
+        let from_address = EmailAddress {
+            name: None,
+            address: self.config.username.clone(),
+            email: self.config.username.clone(),
+        };
+        
+        let to_addresses: Vec<EmailAddress> = message.to.iter()
+            .map(|email| EmailAddress {
+                name: None,
+                address: email.clone(),
+                email: email.clone(),
+            })
+            .collect();
+            
+        let cc_addresses: Vec<EmailAddress> = message.cc.iter()
+            .map(|email| EmailAddress {
+                name: None,
+                address: email.clone(),
+                email: email.clone(),
+            })
+            .collect();
+            
+        let bcc_addresses: Vec<EmailAddress> = message.bcc.iter()
+            .map(|email| EmailAddress {
+                name: None,
+                address: email.clone(),
+                email: email.clone(),
+            })
+            .collect();
+
+        Ok(EmailMessage {
+            id: Uuid::new_v4(),
+            account_id: Uuid::new_v4(), // TODO: Should be passed from context
+            provider_id: "imap".to_string(),
+            thread_id: Uuid::new_v4(),
+            subject: message.subject.clone(),
+            body_html: message.body_html.clone(),
+            body_text: message.body_text.clone(),
+            snippet: message.body_text.clone().unwrap_or_else(|| message.subject.clone()),
+            from: from_address,
+            to: to_addresses,
+            cc: cc_addresses,
+            bcc: bcc_addresses,
+            reply_to: vec![],
+            date: chrono::Utc::now(),
+            flags: EmailFlags {
+                is_read: false,
+                is_starred: false,
+                is_trashed: false,
+                is_spam: false,
+                is_important: false,
+                is_archived: false,
+                is_draft: false,
+                is_sent: false,
+                has_attachments: !message.attachments.is_empty(),
+            },
+            labels: vec![],
+            folder: "INBOX".to_string(),
+            folder_id: None,
+            importance: crate::mail::types::MessageImportance::Normal,
+            priority: crate::mail::types::MessagePriority::Normal,
+            size: 0, // Will be set when message is actually created
+            attachments: vec![], // TODO: Convert attachment file paths to MailAttachment objects
+            headers: std::collections::HashMap::new(),
+            message_id: format!("{}@imap", Uuid::new_v4()),
+            message_id_header: None,
+            in_reply_to: None,
+            references: vec![],
+            encryption: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        })
     }
 }
 

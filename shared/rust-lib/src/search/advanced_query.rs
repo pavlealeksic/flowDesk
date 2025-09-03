@@ -566,16 +566,16 @@ impl AdvancedQueryBuilder {
     pub fn build_query(&self, expression: &QueryExpression) -> SearchResultType<Box<dyn Query>> {
         debug!("Building advanced query: {}", expression.query);
         
-        let mut boolean_query = BooleanQuery::new(vec![]);
+        let mut clauses = Vec::new();
         
         // Parse main query
         if !expression.query.is_empty() {
             match self.query_parser.parse_query(&expression.query) {
                 Ok(query) => {
-                    boolean_query.add_clause(tantivy::query::Occur::Must, query);
+                    clauses.push((tantivy::query::Occur::Must, query));
                 }
                 Err(e) => {
-                    return Err(SearchError::query_parsing_error(
+                    return Err(SearchError::query_error(
                         format!("Failed to parse main query: {}", e)
                     ));
                 }
@@ -586,28 +586,33 @@ impl AdvancedQueryBuilder {
         if let Some(field_queries) = &expression.field_queries {
             for field_query in field_queries {
                 let query = self.build_field_query(field_query)?;
-                boolean_query.add_clause(tantivy::query::Occur::Must, query);
+                clauses.push((tantivy::query::Occur::Must, query));
             }
         }
         
         // Add boolean logic queries
         if let Some(boolean_logic) = &expression.boolean_logic {
-            self.apply_boolean_logic(&mut boolean_query, boolean_logic)?;
+            let logic_clauses = self.build_boolean_logic(boolean_logic)?;
+            clauses.extend(logic_clauses);
         }
         
         // Add filter queries
         if let Some(filters) = &expression.filters {
             let filter_query = self.build_filter_query(filters)?;
-            boolean_query.add_clause(tantivy::query::Occur::Filter, filter_query);
+            clauses.push((tantivy::query::Occur::Must, filter_query));
         }
         
-        Ok(Box::new(boolean_query))
+        if clauses.is_empty() {
+            Ok(Box::new(tantivy::query::AllQuery))
+        } else {
+            Ok(Box::new(BooleanQuery::from(clauses)))
+        }
     }
     
     /// Build field-specific query
     fn build_field_query(&self, field_query: &FieldQuery) -> SearchResultType<Box<dyn Query>> {
         let field = self.get_field_by_name(&field_query.field)
-            .ok_or_else(|| SearchError::invalid_field(&field_query.field))?;
+            .ok_or_else(|| SearchError::query_error(format!("Invalid field: {}", field_query.field)))?;
         
         let query: Box<dyn Query> = match field_query.query_type {
             FieldQueryType::Term => {
@@ -634,7 +639,7 @@ impl AdvancedQueryBuilder {
                 match field_parser.parse_query(&field_query.query) {
                     Ok(query) => query,
                     Err(e) => {
-                        return Err(SearchError::query_parsing_error(
+                        return Err(SearchError::query_error(
                             format!("Failed to parse field query: {}", e)
                         ));
                     }
@@ -651,16 +656,17 @@ impl AdvancedQueryBuilder {
     }
     
     /// Apply boolean logic to query
-    fn apply_boolean_logic(
+    fn build_boolean_logic(
         &self,
-        boolean_query: &mut BooleanQuery,
         logic: &BooleanQueryLogic,
-    ) -> SearchResultType<()> {
+    ) -> SearchResultType<Vec<(tantivy::query::Occur, Box<dyn Query>)>> {
+        let mut clauses = Vec::new();
+        
         // Add MUST clauses
         if let Some(must_clauses) = &logic.must {
             for clause in must_clauses {
                 let query = self.build_query_clause(clause)?;
-                boolean_query.add_clause(tantivy::query::Occur::Must, query);
+                clauses.push((tantivy::query::Occur::Must, query));
             }
         }
         
@@ -668,7 +674,7 @@ impl AdvancedQueryBuilder {
         if let Some(should_clauses) = &logic.should {
             for clause in should_clauses {
                 let query = self.build_query_clause(clause)?;
-                boolean_query.add_clause(tantivy::query::Occur::Should, query);
+                clauses.push((tantivy::query::Occur::Should, query));
             }
         }
         
@@ -676,7 +682,7 @@ impl AdvancedQueryBuilder {
         if let Some(must_not_clauses) = &logic.must_not {
             for clause in must_not_clauses {
                 let query = self.build_query_clause(clause)?;
-                boolean_query.add_clause(tantivy::query::Occur::MustNot, query);
+                clauses.push((tantivy::query::Occur::MustNot, query));
             }
         }
         
@@ -684,18 +690,18 @@ impl AdvancedQueryBuilder {
         if let Some(filter_clauses) = &logic.filter {
             for clause in filter_clauses {
                 let query = self.build_query_clause(clause)?;
-                boolean_query.add_clause(tantivy::query::Occur::Filter, query);
+                clauses.push((tantivy::query::Occur::Must, query));
             }
         }
         
-        Ok(())
+        Ok(clauses)
     }
     
     /// Build individual query clause
     fn build_query_clause(&self, clause: &QueryClause) -> SearchResultType<Box<dyn Query>> {
         let field = if let Some(field_name) = &clause.field {
             self.get_field_by_name(field_name)
-                .ok_or_else(|| SearchError::invalid_field(field_name))?
+                .ok_or_else(|| SearchError::query_error(format!("Invalid field: {}", field_name)))?
         } else {
             self.fields.content // Default to content field
         };
@@ -705,7 +711,7 @@ impl AdvancedQueryBuilder {
                 match self.query_parser.parse_query(&clause.value) {
                     Ok(query) => query,
                     Err(e) => {
-                        return Err(SearchError::query_parsing_error(
+                        return Err(SearchError::query_error(
                             format!("Failed to parse match clause: {}", e)
                         ));
                     }
@@ -827,10 +833,11 @@ impl AdvancedQueryBuilder {
         let start_value = start_date.map(|d| tantivy::DateTime::from_timestamp_secs(d.timestamp()));
         let end_value = end_date.map(|d| tantivy::DateTime::from_timestamp_secs(d.timestamp()));
         
-        let range_query = RangeQuery::new_date_bounds(
-            field,
-            tantivy::query::Bound::Included(start_value.unwrap_or(tantivy::DateTime::MIN)),
-            tantivy::query::Bound::Included(end_value.unwrap_or(tantivy::DateTime::MAX)),
+        let start_term = Term::from_field_date(field, start_value.unwrap_or(tantivy::DateTime::MIN));
+        let end_term = Term::from_field_date(field, end_value.unwrap_or(tantivy::DateTime::MAX));
+        let range_query = RangeQuery::new(
+            std::ops::Bound::Included(start_term),
+            std::ops::Bound::Included(end_term)
         );
         
         Ok(Box::new(range_query))
@@ -900,13 +907,13 @@ impl AdvancedQueryBuilder {
                 (Some(start), Some(end))
             }
             RelativeDateFilter::ThisWeek => {
-                let days_since_monday = now.weekday().num_days_from_monday();
+                let days_since_monday = now.format("%u").to_string().parse::<u32>().unwrap_or(1) - 1;
                 let start = now - chrono::Duration::days(days_since_monday as i64);
                 let start = start.date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc();
                 (Some(start), Some(now))
             }
             RelativeDateFilter::LastWeek => {
-                let days_since_monday = now.weekday().num_days_from_monday();
+                let days_since_monday = now.format("%u").to_string().parse::<u32>().unwrap_or(1) - 1;
                 let this_monday = now - chrono::Duration::days(days_since_monday as i64);
                 let last_monday = this_monday - chrono::Duration::days(7);
                 let last_sunday = this_monday - chrono::Duration::seconds(1);
@@ -926,27 +933,36 @@ impl AdvancedQueryBuilder {
                 (Some(start), Some(now))
             }
             RelativeDateFilter::ThisMonth => {
-                let start = now.date_naive().with_day(1).unwrap().and_hms_opt(0, 0, 0).unwrap().and_utc();
+                let current_date = now.date_naive();
+                let year = current_date.format("%Y").to_string().parse::<i32>().unwrap_or(2024);
+                let month = current_date.format("%m").to_string().parse::<u32>().unwrap_or(1);
+                let start_date = chrono::NaiveDate::from_ymd_opt(year, month, 1).unwrap();
+                let start = start_date.and_hms_opt(0, 0, 0).unwrap().and_utc();
                 (Some(start), Some(now))
             }
             RelativeDateFilter::LastMonth => {
-                let first_of_month = now.date_naive().with_day(1).unwrap();
-                let first_of_last_month = if first_of_month.month() == 1 {
-                    chrono::NaiveDate::from_ymd_opt(first_of_month.year() - 1, 12, 1).unwrap()
+                let current_date = now.date_naive();
+                let year = current_date.format("%Y").to_string().parse::<i32>().unwrap_or(2024);
+                let month = current_date.format("%m").to_string().parse::<u32>().unwrap_or(1);
+                let first_of_month = chrono::NaiveDate::from_ymd_opt(year, month, 1).unwrap();
+                let first_of_last_month = if month == 1 {
+                    chrono::NaiveDate::from_ymd_opt(year - 1, 12, 1).unwrap()
                 } else {
-                    chrono::NaiveDate::from_ymd_opt(first_of_month.year(), first_of_month.month() - 1, 1).unwrap()
+                    chrono::NaiveDate::from_ymd_opt(year, month - 1, 1).unwrap()
                 };
                 let start = first_of_last_month.and_hms_opt(0, 0, 0).unwrap().and_utc();
                 let end = (first_of_month - chrono::Duration::seconds(1)).and_hms_opt(23, 59, 59).unwrap().and_utc();
                 (Some(start), Some(end))
             }
             RelativeDateFilter::ThisYear => {
-                let start = chrono::NaiveDate::from_ymd_opt(now.year(), 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap().and_utc();
+                let current_year = now.format("%Y").to_string().parse::<i32>().unwrap_or(2024);
+                let start = chrono::NaiveDate::from_ymd_opt(current_year, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap().and_utc();
                 (Some(start), Some(now))
             }
             RelativeDateFilter::LastYear => {
-                let start = chrono::NaiveDate::from_ymd_opt(now.year() - 1, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap().and_utc();
-                let end = chrono::NaiveDate::from_ymd_opt(now.year() - 1, 12, 31).unwrap().and_hms_opt(23, 59, 59).unwrap().and_utc();
+                let last_year = now.format("%Y").to_string().parse::<i32>().unwrap_or(2024) - 1;
+                let start = chrono::NaiveDate::from_ymd_opt(last_year, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap().and_utc();
+                let end = chrono::NaiveDate::from_ymd_opt(last_year, 12, 31).unwrap().and_hms_opt(23, 59, 59).unwrap().and_utc();
                 (Some(start), Some(end))
             }
         }

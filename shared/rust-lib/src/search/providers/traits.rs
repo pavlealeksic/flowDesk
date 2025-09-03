@@ -1,10 +1,10 @@
 //! Traits for search providers
 
 use crate::search::{
-    SearchQuery, SearchResult as SearchResultType, SearchError, SearchDocument, 
+    SearchQuery, SearchResult, SearchError, SearchDocument, 
     ProviderResponse, IndexingJob,
 };
-use super::{ProviderInfo, ProviderStats, ProviderHealth, ProviderAuth};
+use super::{ProviderInfo, ProviderStats, ProviderHealth, ProviderAuth, AuthType};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use serde_json::Value;
@@ -16,90 +16,90 @@ pub trait SearchProvider: Send + Sync {
     fn get_info(&self) -> &ProviderInfo;
     
     /// Initialize the provider with configuration
-    async fn initialize(&mut self, config: Value) -> SearchResultType<()>;
+    async fn initialize(&mut self, config: Value) -> SearchResult<()>;
     
     /// Check if the provider is properly configured and authenticated
     async fn is_ready(&self) -> bool;
     
     /// Perform a search query
-    async fn search(&self, query: &SearchQuery) -> SearchResultType<ProviderResponse>;
+    async fn search(&self, query: &SearchQuery) -> SearchResult<ProviderResponse>;
     
     /// Get documents for indexing (for providers that support local indexing)
-    async fn get_documents(&self, last_sync: Option<chrono::DateTime<chrono::Utc>>) -> SearchResultType<Vec<SearchDocument>>;
+    async fn get_documents(&self, last_sync: Option<chrono::DateTime<chrono::Utc>>) -> SearchResult<Vec<SearchDocument>>;
     
     /// Get provider statistics
-    async fn get_stats(&self) -> SearchResultType<ProviderStats>;
+    async fn get_stats(&self) -> SearchResult<ProviderStats>;
     
     /// Perform health check
-    async fn health_check(&self) -> SearchResultType<ProviderHealth>;
+    async fn health_check(&self) -> SearchResult<ProviderHealth>;
     
     /// Handle authentication (if required)
-    async fn authenticate(&mut self, auth_data: HashMap<String, String>) -> SearchResultType<ProviderAuth>;
+    async fn authenticate(&mut self, auth_data: HashMap<String, String>) -> SearchResult<ProviderAuth>;
     
     /// Refresh authentication tokens (if applicable)
-    async fn refresh_auth(&mut self) -> SearchResultType<()>;
+    async fn refresh_auth(&mut self) -> SearchResult<()>;
     
     /// Shutdown the provider and cleanup resources
-    async fn shutdown(&mut self) -> SearchResultType<()>;
+    async fn shutdown(&mut self) -> SearchResult<()>;
 }
 
 /// Trait for providers that support real-time indexing
 #[async_trait]
 pub trait RealtimeProvider: SearchProvider {
     /// Start real-time monitoring for changes
-    async fn start_realtime_monitoring(&mut self) -> SearchResultType<()>;
+    async fn start_realtime_monitoring(&mut self) -> SearchResult<()>;
     
     /// Stop real-time monitoring
-    async fn stop_realtime_monitoring(&mut self) -> SearchResultType<()>;
+    async fn stop_realtime_monitoring(&mut self) -> SearchResult<()>;
     
     /// Get real-time changes since last check
-    async fn get_realtime_changes(&self) -> SearchResultType<Vec<RealtimeChange>>;
+    async fn get_realtime_changes(&self) -> SearchResult<Vec<RealtimeChange>>;
     
     /// Subscribe to real-time change notifications
-    async fn subscribe_to_changes(&mut self, callback: Box<dyn RealtimeCallback>) -> SearchResultType<()>;
+    async fn subscribe_to_changes(&mut self, callback: Box<dyn RealtimeCallback>) -> SearchResult<()>;
 }
 
 /// Trait for providers that support batch operations
 #[async_trait]
 pub trait BatchProvider: SearchProvider {
     /// Perform batch indexing operation
-    async fn batch_index(&self, batch_size: usize) -> SearchResultType<IndexingJob>;
+    async fn batch_index(&self, batch_size: usize) -> SearchResult<IndexingJob>;
     
     /// Get batch processing status
-    async fn get_batch_status(&self, job_id: &str) -> SearchResultType<IndexingJob>;
+    async fn get_batch_status(&self, job_id: &str) -> SearchResult<IndexingJob>;
     
     /// Cancel a batch operation
-    async fn cancel_batch(&self, job_id: &str) -> SearchResultType<()>;
+    async fn cancel_batch(&self, job_id: &str) -> SearchResult<()>;
 }
 
 /// Trait for providers that support advanced filtering
 #[async_trait]
 pub trait FilterableProvider: SearchProvider {
     /// Get available filter fields for this provider
-    async fn get_filter_fields(&self) -> SearchResultType<Vec<FilterField>>;
+    async fn get_filter_fields(&self) -> SearchResult<Vec<FilterField>>;
     
     /// Validate filter queries before execution
-    async fn validate_filters(&self, filters: &[crate::search::SearchFilter]) -> SearchResultType<Vec<FilterValidationResult>>;
+    async fn validate_filters(&self, filters: &[crate::search::SearchFilter]) -> SearchResult<Vec<FilterValidationResult>>;
 }
 
 /// Trait for providers that support faceted search
 #[async_trait]
 pub trait FacetProvider: SearchProvider {
     /// Get available facet fields
-    async fn get_facet_fields(&self) -> SearchResultType<Vec<FacetField>>;
+    async fn get_facet_fields(&self) -> SearchResult<Vec<FacetField>>;
     
     /// Get facet values for a field
-    async fn get_facet_values(&self, field: &str, query: &SearchQuery) -> SearchResultType<Vec<FacetValue>>;
+    async fn get_facet_values(&self, field: &str, query: &SearchQuery) -> SearchResult<Vec<FacetValue>>;
 }
 
 /// Trait for providers that can provide search suggestions
 #[async_trait]
 pub trait SuggestionProvider: SearchProvider {
     /// Get search suggestions based on partial input
-    async fn get_suggestions(&self, partial_query: &str, limit: usize) -> SearchResultType<Vec<Suggestion>>;
+    async fn get_suggestions(&self, partial_query: &str, limit: usize) -> SearchResult<Vec<Suggestion>>;
     
     /// Get popular queries for this provider
-    async fn get_popular_queries(&self, limit: usize) -> SearchResultType<Vec<PopularQuery>>;
+    async fn get_popular_queries(&self, limit: usize) -> SearchResult<Vec<PopularQuery>>;
 }
 
 /// Real-time change notification
@@ -137,8 +137,8 @@ pub enum ChangeType {
 /// Callback trait for real-time change notifications
 #[async_trait]
 pub trait RealtimeCallback: Send + Sync {
-    async fn on_change(&self, change: RealtimeChange) -> SearchResultType<()>;
-    async fn on_error(&self, error: SearchError) -> SearchResultType<()>;
+    async fn on_change(&self, change: RealtimeChange) -> SearchResult<()>;
+    async fn on_error(&self, error: SearchError) -> SearchResult<()>;
 }
 
 /// Filter field definition
@@ -337,15 +337,15 @@ impl BaseProvider {
     }
     
     /// Get configuration value
-    pub fn get_config_value<T>(&self, key: &str) -> SearchResultType<T>
+    pub fn get_config_value<T>(&self, key: &str) -> SearchResult<T>
     where
         T: serde::de::DeserializeOwned,
     {
-        self.config
+        let value = self.config
             .get(key)
-            .ok_or_else(|| SearchError::config_error(format!("Missing config key: {}", key)))?
-            .clone()
-            .try_into()
+            .ok_or_else(|| SearchError::config_error(format!("Missing config key: {}", key)))?;
+        
+        serde_json::from_value(value.clone())
             .map_err(|_| SearchError::config_error(format!("Invalid config value for key: {}", key)))
     }
     
@@ -358,26 +358,5 @@ impl BaseProvider {
     }
 }
 
-/// Macro to help implement common provider functionality
-#[macro_export]
-macro_rules! impl_base_provider {
-    ($provider:ident) => {
-        async fn get_stats(&self) -> SearchResultType<ProviderStats> {
-            Ok(self.base.stats.clone())
-        }
-        
-        fn get_info(&self) -> &ProviderInfo {
-            &self.base.info
-        }
-        
-        async fn is_ready(&self) -> bool {
-            self.base.initialized && 
-            (self.base.info.auth_requirements.auth_type == AuthType::None || self.base.is_authenticated())
-        }
-        
-        async fn shutdown(&mut self) -> SearchResultType<()> {
-            self.base.initialized = false;
-            Ok(())
-        }
-    };
-}
+// Helper implementation for common provider functionality
+// This should be implemented manually in each provider due to async_trait limitations

@@ -31,38 +31,48 @@ pub struct ProviderFactory;
 
 impl ProviderFactory {
     pub fn create_provider(
-        provider_type: MailProvider,
+        provider_type: crate::mail::types::MailProvider,
         config: ProviderAccountConfig,
-    ) -> MailResult<Arc<dyn MailProvider>> {
+    ) -> MailResult<Arc<dyn MailProviderTrait>> {
         match provider_type {
-            MailProvider::Gmail => {
-                // Would create GmailProvider instance
-                Err(crate::mail::error::MailError::not_implemented("Gmail provider creation"))
+            crate::mail::types::MailProvider::Gmail => {
+                let provider = GmailProvider::new(config)?;
+                Ok(Arc::new(provider))
             }
-            MailProvider::Outlook => {
-                // Would create OutlookProvider instance  
-                Err(crate::mail::error::MailError::not_implemented("Outlook provider creation"))
+            crate::mail::types::MailProvider::Outlook => {
+                let provider = OutlookProvider::new(config)?;
+                Ok(Arc::new(provider))
             }
-            _ => Err(crate::mail::error::MailError::not_implemented("Provider not yet supported"))
+            crate::mail::types::MailProvider::Imap => {
+                let provider = ImapProvider::new(config)?;
+                Ok(Arc::new(provider))
+            }
+            crate::mail::types::MailProvider::Exchange => {
+                // Exchange can use Graph API (same as Outlook)
+                let provider = OutlookProvider::new(config)?;
+                Ok(Arc::new(provider))
+            }
         }
     }
 }
 
 /// Sync result for provider operations
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SyncResult {
     pub success: bool,
     pub messages_synced: usize,
     pub errors: Vec<String>,
+    pub changes: Vec<SyncChange>,
 }
 
 /// Sync change events
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum SyncChange {
     MessageAdded(MailMessage),
     MessageUpdated(MailMessage),
     MessageDeleted(String),
     FolderAdded(MailFolder),
+    FolderUpdated(MailFolder),
     FolderDeleted(String),
 }
 
@@ -138,7 +148,7 @@ pub trait MailProvider: Send + Sync {
     async fn get_attachment(&self, message_id: &str, attachment_id: &str) -> MailResult<Vec<u8>> {
         self.download_attachment(message_id, attachment_id).await
     }
-    async fn get_sync_changes(&self, since: Option<&str>) -> MailResult<Vec<SyncChange>>;
+    async fn get_sync_changes(&self, since: Option<&str>) -> MailResult<SyncResult>;
     async fn get_full_sync_token(&self) -> MailResult<String>;
     async fn setup_push_notifications(&self, webhook_url: &str) -> MailResult<String>;
     async fn disable_push_notifications(&self, subscription_id: &str) -> MailResult<()>;

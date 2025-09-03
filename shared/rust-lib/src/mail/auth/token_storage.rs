@@ -256,12 +256,13 @@ impl TokenStorage {
         let data = tokio::fs::read(path).await?;
         let stored_data: HashMap<Uuid, EncryptedCredentials> = serde_json::from_slice(&data)?;
 
+        let count = stored_data.len();
         {
             let mut cache = self.cache.write().await;
             *cache = stored_data;
         }
 
-        tracing::debug!("Loaded {} credential entries from file", cache.len());
+        tracing::debug!("Loaded {} credential entries from file", count);
         Ok(())
     }
 

@@ -28,8 +28,10 @@ use crate::calendar::{
     CalendarResult, CalendarError, CalendarAccount, Calendar, 
     CalendarEvent, CreateCalendarEventInput, UpdateCalendarEventInput,
     FreeBusyQuery, FreeBusyResponse, CalendarProvider, 
-    EventReminder, ConferencingInfo, WebhookSubscription
+    EventReminder, ConferencingInfo
 };
+
+// Note: SyncStatus, BatchOperationRequest, BatchOperationResult, WebhookNotification, and WebhookSubscription are defined later in this file
 
 /// Provider factory for creating calendar provider instances
 pub struct CalendarProviderFactory;
@@ -49,10 +51,19 @@ impl CalendarProviderFactory {
                     }),
                 };
                 
+                // Extract credentials from account config
+                let credentials = config.oauth_tokens.clone().unwrap_or_else(|| {
+                    crate::calendar::CalendarAccountCredentials {
+                        access_token: String::new(),
+                        refresh_token: None,
+                        expires_at: None,
+                    }
+                });
+                
                 Ok(Box::new(GoogleCalendarProvider::new(
-                    account.id.clone(),
+                    account.id.to_string(),
                     config.clone(),
-                    account.credentials.clone(),
+                    Some(credentials),
                 )?))
             },
             CalendarProvider::Outlook => {
@@ -66,13 +77,22 @@ impl CalendarProviderFactory {
                     }),
                 };
                 
+                // Extract credentials from account config
+                let credentials = config.oauth_tokens.clone().unwrap_or_else(|| {
+                    crate::calendar::CalendarAccountCredentials {
+                        access_token: String::new(),
+                        refresh_token: None,
+                        expires_at: None,
+                    }
+                });
+                
                 Ok(Box::new(OutlookCalendarProvider::new(
-                    account.id.clone(),
+                    account.id.to_string(),
                     config.clone(),
-                    account.credentials.clone(),
+                    Some(credentials),
                 )?))
             },
-            CalendarProvider::CalDav | CalendarProvider::ICloud | CalendarProvider::Fastmail => {
+            CalendarProvider::CalDAV | CalendarProvider::CalDav | CalendarProvider::ICloud | CalendarProvider::Fastmail => {
                 let config = match &account.config {
                     crate::calendar::CalendarAccountConfig::CalDav(config) => config,
                     _ => return Err(CalendarError::ValidationError {
@@ -83,10 +103,19 @@ impl CalendarProviderFactory {
                     }),
                 };
                 
+                // Extract credentials from account config
+                let credentials = config.oauth_tokens.clone().unwrap_or_else(|| {
+                    crate::calendar::CalendarAccountCredentials {
+                        access_token: String::new(),
+                        refresh_token: None,
+                        expires_at: None,
+                    }
+                });
+                
                 Ok(Box::new(CalDavProvider::new(
-                    account.id.clone(),
+                    account.id.to_string(),
                     config.clone(),
-                    account.credentials.clone(),
+                    Some(credentials),
                 )?))
             },
             CalendarProvider::Exchange => {
@@ -179,6 +208,22 @@ impl CalendarProviderFactory {
                 rate_limit_rpm: 120,
                 batch_operations: true,
             },
+            CalendarProvider::CalDAV => ProviderCapabilities {
+                supports_webhooks: false,
+                supports_push_notifications: false,
+                supports_recurring_events: true,
+                supports_attendees: true,
+                supports_free_busy: true,
+                supports_conferencing: false,
+                supports_attachments: true,
+                supports_reminders: true,
+                supports_colors: false,
+                supports_multiple_calendars: true,
+                supports_calendar_sharing: false,
+                max_event_duration_days: None,
+                rate_limit_rpm: 60,
+                batch_operations: false,
+            },
         }
     }
 }
@@ -239,6 +284,12 @@ pub struct SyncStatus {
     pub error_count: u64,
     /// Last error message
     pub last_error: Option<String>,
+    /// Error message (alternative field name)
+    pub error_message: Option<String>,
+    /// Number of calendars synced
+    pub calendars_synced: u32,
+    /// Number of events synced
+    pub events_synced: u32,
 }
 
 /// Batch operation request

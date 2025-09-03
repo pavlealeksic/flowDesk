@@ -1,9 +1,11 @@
 use async_trait::async_trait;
-use crate::mail::{OAuthTokens, MailMessage, MailFolder, FolderType, AuthManager};
+use crate::mail::{OAuthTokens, MailMessage, MailFolder, MailFolderType, AuthManager, EmailMessage, EmailAddress, EmailFlags, MessageImportance, MessagePriority, FolderSyncStatus};
 use crate::mail::providers::traits::ImapProvider;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use reqwest::Client;
+use uuid::Uuid;
+// chrono::Utc import removed - unused
 
 pub struct GmailProvider {
     tokens: Arc<Mutex<OAuthTokens>>,
@@ -12,7 +14,32 @@ pub struct GmailProvider {
 }
 
 impl GmailProvider {
-    pub async fn new(
+    pub fn new(config: crate::mail::types::ProviderAccountConfig) -> crate::mail::error::MailResult<Self> {
+        use crate::mail::error::MailError;
+        
+        // Extract OAuth tokens from config
+        let tokens = match config {
+            crate::mail::types::ProviderAccountConfig::Gmail(gmail_config) => {
+                if let Some(oauth_tokens) = gmail_config.oauth_tokens {
+                    oauth_tokens
+                } else {
+                    return Err(MailError::invalid("Missing OAuth tokens for Gmail"));
+                }
+            }
+            _ => return Err(MailError::invalid("Invalid provider config for Gmail")),
+        };
+
+        // Create a basic auth manager instance (would need proper dependency injection)
+        let auth_manager = Arc::new(AuthManager::new());
+
+        Ok(Self {
+            tokens: Arc::new(Mutex::new(tokens)),
+            auth_manager,
+            client: Client::new(),
+        })
+    }
+
+    pub async fn new_with_auth(
         tokens: OAuthTokens,
         auth_manager: Arc<AuthManager>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
@@ -29,7 +56,7 @@ impl GmailProvider {
         if self.auth_manager.is_token_expired(&tokens) {
             if let Some(refresh_token) = &tokens.refresh_token {
                 let new_tokens = self.auth_manager.refresh_access_token(
-                    &crate::mail::MailProvider::Gmail,
+                    crate::mail::types::MailProvider::Gmail,
                     refresh_token,
                 ).await?;
                 *tokens = new_tokens;
@@ -110,25 +137,31 @@ impl ImapProvider for GmailProvider {
             for label in labels {
                 if let (Some(id), Some(name)) = (label["id"].as_str(), label["name"].as_str()) {
                     let folder_type = match id {
-                        "INBOX" => FolderType::Inbox,
-                        "SENT" => FolderType::Sent,
-                        "DRAFT" => FolderType::Drafts,
-                        "TRASH" => FolderType::Trash,
-                        "SPAM" => FolderType::Spam,
-                        _ => FolderType::Custom(name.to_string()),
+                        "INBOX" => MailFolderType::Inbox,
+                        "SENT" => MailFolderType::Sent,
+                        "DRAFT" => MailFolderType::Drafts,
+                        "TRASH" => MailFolderType::Trash,
+                        "SPAM" => MailFolderType::Spam,
+                        _ => MailFolderType::Custom,
                     };
 
                     let message_count = label["messagesTotal"].as_u64().unwrap_or(0) as u32;
                     let unread_count = label["messagesUnread"].as_u64().unwrap_or(0) as u32;
 
                     folders.push(MailFolder {
-                        id: id.to_string(),
+                        id: Uuid::new_v4(),
+                        account_id: Uuid::nil(), // Will be set by caller
                         name: name.to_string(),
-                        path: id.to_string(),
+                        display_name: name.to_string(),
                         folder_type,
-                        message_count,
-                        unread_count,
+                        parent_id: None,
+                        path: id.to_string(),
+                        attributes: vec![],
+                        message_count: message_count as i32,
+                        unread_count: unread_count as i32,
+                        is_selectable: true,
                         can_select: true,
+                        sync_status: FolderSyncStatus::default(),
                     });
                 }
             }
@@ -205,7 +238,7 @@ impl ImapProvider for GmailProvider {
         // Create RFC 2822 message
         let email_content = format!(
             "To: {}\r\nSubject: {}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n{}",
-            message.to_addresses.join(", "),
+            message.to.iter().map(|addr| &addr.address).cloned().collect::<Vec<_>>().join(", "),
             message.subject,
             message.body_text.as_deref().unwrap_or("")
         );
@@ -230,12 +263,13 @@ impl ImapProvider for GmailProvider {
 }
 
 impl GmailProvider {
-    fn parse_gmail_message(&self, msg_data: &serde_json::Value, folder: &str) -> Result<MailMessage, Box<dyn std::error::Error + Send + Sync>> {
-        let id = msg_data["id"].as_str().unwrap_or("").to_string();
-        let thread_id = msg_data["threadId"].as_str().map(|s| s.to_string());
+    fn parse_gmail_message(&self, msg_data: &serde_json::Value, folder: &str) -> Result<EmailMessage, Box<dyn std::error::Error + Send + Sync>> {
+        let id = Uuid::new_v4(); // Gmail message ID is provider-specific
+        let thread_id = Uuid::new_v4(); // Will be mapped from Gmail thread ID
         
         let payload = &msg_data["payload"];
-        let headers = payload["headers"].as_array().unwrap_or(&vec![]);
+        let empty_headers = vec![];
+        let headers = payload["headers"].as_array().unwrap_or(&empty_headers);
         
         let mut subject = String::new();
         let mut from_address = String::new();
@@ -276,31 +310,54 @@ impl GmailProvider {
             .map(|ts| chrono::DateTime::from_timestamp_millis(ts).unwrap_or_default())
             .unwrap_or_else(chrono::Utc::now);
 
-        Ok(MailMessage {
+        Ok(EmailMessage {
             id,
-            account_id: "".to_string(), // Will be filled by caller
-            folder: folder.to_string(),
+            account_id: Uuid::nil(), // Will be filled by caller
+            provider_id: msg_data["id"].as_str().unwrap_or("").to_string(),
             thread_id,
             subject,
-            from_address,
-            from_name,
-            to_addresses,
-            cc_addresses,
-            bcc_addresses: vec![],
-            reply_to: None,
-            body_text: None, // Would need to extract from payload
             body_html: None, // Would need to extract from payload
-            is_read,
-            is_starred,
-            is_important,
-            has_attachments: false, // Would need to check parts
-            received_at,
-            sent_at: None,
-            attachments: vec![],
+            body_text: None, // Would need to extract from payload
+            snippet: msg_data["snippet"].as_str().unwrap_or("").to_string(),
+            from: EmailAddress {
+                email: from_address.clone(),
+                address: from_address,
+                name: Some(from_name),
+            },
+            to: to_addresses.into_iter().map(|email| EmailAddress { email: email.clone(), address: email, name: None }).collect(),
+            cc: cc_addresses.into_iter().map(|email| EmailAddress { email: email.clone(), address: email, name: None }).collect(),
+            bcc: vec![],
+            reply_to: vec![],
+            date: received_at,
+            flags: EmailFlags {
+                is_read,
+                is_starred,
+                is_trashed: false,
+                is_spam: false,
+                is_important: false,
+                is_archived: false,
+                is_draft: false,
+                is_sent: false,
+                has_attachments: payload["parts"].as_array()
+                    .map(|parts| !parts.is_empty())
+                    .unwrap_or(false),
+            },
             labels: label_ids,
-            message_id: None, // Would extract from headers
-            in_reply_to: None, // Would extract from headers
-            references: vec![], // Would extract from headers
+            folder: folder.to_string(),
+            importance: if is_important { MessageImportance::High } else { MessageImportance::Normal },
+            priority: MessagePriority::Normal,
+            size: 0, // Would need to calculate
+            headers: std::collections::HashMap::new(),
+            message_id: msg_data["id"].as_str().unwrap_or("").to_string(),
+            message_id_header: msg_data["id"].as_str().map(|s| s.to_string()),
+            in_reply_to: None,
+            references: vec![],
+            encryption: None,
+            attachments: vec![],
+            folder_id: None,
+            // has_attachments is stored in flags.has_attachments
+            created_at: received_at,
+            updated_at: received_at,
         })
     }
 }

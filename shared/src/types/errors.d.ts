@@ -401,8 +401,8 @@ export declare const FlowDeskErrorSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     code: string;
     message: string;
-    category: "unknown" | "validation" | "authentication" | "authorization" | "not_found" | "conflict" | "rate_limit" | "external" | "internal" | "network" | "timeout" | "sync" | "plugin" | "billing" | "license" | "security" | "quota" | "maintenance";
-    severity: "low" | "high" | "critical" | "medium";
+    category: "validation" | "unknown" | "billing" | "license" | "network" | "plugin" | "authentication" | "authorization" | "security" | "not_found" | "conflict" | "rate_limit" | "external" | "internal" | "timeout" | "sync" | "quota" | "maintenance";
+    severity: "high" | "low" | "critical" | "medium";
     timestamp: Date;
     retryable: boolean;
     description?: string | undefined;
@@ -416,8 +416,8 @@ export declare const FlowDeskErrorSchema: z.ZodObject<{
 }, {
     code: string;
     message: string;
-    category: "unknown" | "validation" | "authentication" | "authorization" | "not_found" | "conflict" | "rate_limit" | "external" | "internal" | "network" | "timeout" | "sync" | "plugin" | "billing" | "license" | "security" | "quota" | "maintenance";
-    severity: "low" | "high" | "critical" | "medium";
+    category: "validation" | "unknown" | "billing" | "license" | "network" | "plugin" | "authentication" | "authorization" | "security" | "not_found" | "conflict" | "rate_limit" | "external" | "internal" | "timeout" | "sync" | "quota" | "maintenance";
+    severity: "high" | "low" | "critical" | "medium";
     timestamp: Date;
     retryable: boolean;
     description?: string | undefined;

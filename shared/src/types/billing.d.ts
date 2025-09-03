@@ -836,7 +836,7 @@ export declare const SubscriptionSchema: z.ZodObject<{
     }, "strip", z.ZodTypeAny, {
         id: string;
         name: string;
-        type: "custom" | "plugins" | "storage" | "feature" | "seats" | "api_calls";
+        type: "custom" | "storage" | "feature" | "seats" | "api_calls" | "plugins";
         price: number;
         quantity: number;
         description?: string | undefined;
@@ -844,7 +844,7 @@ export declare const SubscriptionSchema: z.ZodObject<{
     }, {
         id: string;
         name: string;
-        type: "custom" | "plugins" | "storage" | "feature" | "seats" | "api_calls";
+        type: "custom" | "storage" | "feature" | "seats" | "api_calls" | "plugins";
         price: number;
         quantity: number;
         description?: string | undefined;
@@ -861,18 +861,18 @@ export declare const SubscriptionSchema: z.ZodObject<{
         promoCode: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
         id: string;
-        type: "fixed" | "percentage" | "free_trial";
-        duration: "once" | "repeating" | "forever";
         value: number;
+        type: "percentage" | "fixed" | "free_trial";
+        duration: "once" | "repeating" | "forever";
         startDate: Date;
         durationInMonths?: number | undefined;
         endDate?: Date | undefined;
         promoCode?: string | undefined;
     }, {
         id: string;
-        type: "fixed" | "percentage" | "free_trial";
-        duration: "once" | "repeating" | "forever";
         value: number;
+        type: "percentage" | "fixed" | "free_trial";
+        duration: "once" | "repeating" | "forever";
         startDate: Date;
         durationInMonths?: number | undefined;
         endDate?: Date | undefined;
@@ -907,12 +907,11 @@ export declare const SubscriptionSchema: z.ZodObject<{
     id: string;
     createdAt: Date;
     updatedAt: Date;
-    status: "active" | "paused" | "canceled" | "past_due" | "unpaid" | "trialing" | "expired" | "incomplete" | "incomplete_expired";
-    interval: "monthly" | "yearly" | "lifetime";
-    metadata: Record<string, string>;
+    status: "active" | "canceled" | "past_due" | "unpaid" | "trialing" | "expired" | "paused" | "incomplete" | "incomplete_expired";
     plan: "free" | "pro" | "team" | "enterprise";
     stripeCustomerId: string;
     organizationId: string;
+    interval: "monthly" | "yearly" | "lifetime";
     pricing: {
         currency: string;
         basePrice: number;
@@ -951,12 +950,13 @@ export declare const SubscriptionSchema: z.ZodObject<{
     addOns: {
         id: string;
         name: string;
-        type: "custom" | "plugins" | "storage" | "feature" | "seats" | "api_calls";
+        type: "custom" | "storage" | "feature" | "seats" | "api_calls" | "plugins";
         price: number;
         quantity: number;
         description?: string | undefined;
         metadata?: Record<string, any> | undefined;
     }[];
+    metadata: Record<string, string>;
     tax: {
         type: string;
         rate: number;
@@ -972,9 +972,9 @@ export declare const SubscriptionSchema: z.ZodObject<{
     cancelationReason?: string | undefined;
     discount?: {
         id: string;
-        type: "fixed" | "percentage" | "free_trial";
-        duration: "once" | "repeating" | "forever";
         value: number;
+        type: "percentage" | "fixed" | "free_trial";
+        duration: "once" | "repeating" | "forever";
         startDate: Date;
         durationInMonths?: number | undefined;
         endDate?: Date | undefined;
@@ -984,12 +984,11 @@ export declare const SubscriptionSchema: z.ZodObject<{
     id: string;
     createdAt: Date;
     updatedAt: Date;
-    status: "active" | "paused" | "canceled" | "past_due" | "unpaid" | "trialing" | "expired" | "incomplete" | "incomplete_expired";
-    interval: "monthly" | "yearly" | "lifetime";
-    metadata: Record<string, string>;
+    status: "active" | "canceled" | "past_due" | "unpaid" | "trialing" | "expired" | "paused" | "incomplete" | "incomplete_expired";
     plan: "free" | "pro" | "team" | "enterprise";
     stripeCustomerId: string;
     organizationId: string;
+    interval: "monthly" | "yearly" | "lifetime";
     pricing: {
         currency: string;
         basePrice: number;
@@ -1028,12 +1027,13 @@ export declare const SubscriptionSchema: z.ZodObject<{
     addOns: {
         id: string;
         name: string;
-        type: "custom" | "plugins" | "storage" | "feature" | "seats" | "api_calls";
+        type: "custom" | "storage" | "feature" | "seats" | "api_calls" | "plugins";
         price: number;
         quantity: number;
         description?: string | undefined;
         metadata?: Record<string, any> | undefined;
     }[];
+    metadata: Record<string, string>;
     tax: {
         type: string;
         rate: number;
@@ -1049,9 +1049,9 @@ export declare const SubscriptionSchema: z.ZodObject<{
     cancelationReason?: string | undefined;
     discount?: {
         id: string;
-        type: "fixed" | "percentage" | "free_trial";
-        duration: "once" | "repeating" | "forever";
         value: number;
+        type: "percentage" | "fixed" | "free_trial";
+        duration: "once" | "repeating" | "forever";
         startDate: Date;
         durationInMonths?: number | undefined;
         endDate?: Date | undefined;
@@ -1156,12 +1156,11 @@ export declare const LicenseSchema: z.ZodObject<{
     id: string;
     createdAt: Date;
     updatedAt: Date;
-    status: "active" | "suspended" | "expired" | "revoked";
+    status: "active" | "expired" | "suspended" | "revoked";
     type: "subscription" | "plugin" | "addon";
-    metadata: Record<string, string>;
-    features: string[];
     plan: "free" | "pro" | "team" | "enterprise";
     organizationId: string;
+    features: string[];
     limits: {
         maxMembers: number;
         maxWorkspaces: number;
@@ -1173,6 +1172,7 @@ export declare const LicenseSchema: z.ZodObject<{
         premiumFeatures: string[];
         enterpriseFeatures: string[];
     };
+    metadata: Record<string, string>;
     subscriptionId: string;
     licenseKey: string;
     devices: {
@@ -1198,12 +1198,11 @@ export declare const LicenseSchema: z.ZodObject<{
     id: string;
     createdAt: Date;
     updatedAt: Date;
-    status: "active" | "suspended" | "expired" | "revoked";
+    status: "active" | "expired" | "suspended" | "revoked";
     type: "subscription" | "plugin" | "addon";
-    metadata: Record<string, string>;
-    features: string[];
     plan: "free" | "pro" | "team" | "enterprise";
     organizationId: string;
+    features: string[];
     limits: {
         maxMembers: number;
         maxWorkspaces: number;
@@ -1215,6 +1214,7 @@ export declare const LicenseSchema: z.ZodObject<{
         premiumFeatures: string[];
         enterpriseFeatures: string[];
     };
+    metadata: Record<string, string>;
     subscriptionId: string;
     licenseKey: string;
     devices: {
@@ -1251,16 +1251,16 @@ export declare const LicenseDeviceSchema: z.ZodObject<{
         model: z.ZodOptional<z.ZodString>;
         fingerprint: z.ZodString;
     }, "strip", z.ZodTypeAny, {
-        fingerprint: string;
-        os: string;
         version: string;
+        os: string;
         arch: string;
+        fingerprint: string;
         model?: string | undefined;
     }, {
-        fingerprint: string;
-        os: string;
         version: string;
+        os: string;
         arch: string;
+        fingerprint: string;
         model?: string | undefined;
     }>;
     status: z.ZodEnum<["active", "inactive", "suspended", "revoked"]>;
@@ -1300,20 +1300,20 @@ export declare const LicenseDeviceSchema: z.ZodObject<{
     id: string;
     createdAt: Date;
     updatedAt: Date;
-    userId: string;
     name: string;
-    status: "active" | "suspended" | "inactive" | "revoked";
+    status: "active" | "suspended" | "revoked" | "inactive";
     type: "desktop" | "mobile" | "web";
+    organizationId: string;
+    userId: string;
+    metadata: Record<string, string>;
+    licenseId: string;
     platform: {
-        fingerprint: string;
-        os: string;
         version: string;
+        os: string;
         arch: string;
+        fingerprint: string;
         model?: string | undefined;
     };
-    metadata: Record<string, string>;
-    organizationId: string;
-    licenseId: string;
     appVersion: string;
     lastSeen: Date;
     activation: {
@@ -1331,20 +1331,20 @@ export declare const LicenseDeviceSchema: z.ZodObject<{
     id: string;
     createdAt: Date;
     updatedAt: Date;
-    userId: string;
     name: string;
-    status: "active" | "suspended" | "inactive" | "revoked";
+    status: "active" | "suspended" | "revoked" | "inactive";
     type: "desktop" | "mobile" | "web";
+    organizationId: string;
+    userId: string;
+    metadata: Record<string, string>;
+    licenseId: string;
     platform: {
-        fingerprint: string;
-        os: string;
         version: string;
+        os: string;
         arch: string;
+        fingerprint: string;
         model?: string | undefined;
     };
-    metadata: Record<string, string>;
-    organizationId: string;
-    licenseId: string;
     appVersion: string;
     lastSeen: Date;
     activation: {

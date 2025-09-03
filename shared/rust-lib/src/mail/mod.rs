@@ -16,8 +16,10 @@ pub mod database;
 pub mod engine;
 pub mod error;
 pub mod providers;
+pub mod scheduler;
 pub mod server_configs;
 pub mod sync;
+pub mod template_engine;
 pub mod threading;
 pub mod types;
 pub mod utils;
@@ -48,8 +50,8 @@ pub async fn init_mail_engine(config: MailEngineConfig) -> MailResult<MailEngine
     tracing::info!("Initializing Flow Desk Mail Engine");
 
     let database = MailDatabase::new(&config.database_path).await?;
-    let auth_manager = AuthManager::new(&config.auth_config).await?;
-    let sync_engine = SyncEngine::new(config.sync_config.clone());
+    let auth_manager = AuthManager::new().await.map_err(|e| MailError::configuration(&format!("Failed to create auth manager: {}", e)))?;
+    let sync_engine = SyncEngine::new(Arc::new(database.clone()));
     let threading_engine = ThreadingEngine::new();
 
     let engine = MailEngine::new(

@@ -82,6 +82,7 @@ impl MailSyncManager {
     pub fn start_background_sync(&self, account_id: String) {
         let sync_states = self.sync_states.clone();
         let database = self.database.clone();
+        let account_id_for_task = account_id.clone();
         
         let handle = tokio::spawn(async move {
             let mut interval = interval(Duration::from_secs(30));
@@ -90,7 +91,7 @@ impl MailSyncManager {
                 interval.tick().await;
                 
                 // Check if we should sync
-                let should_sync = if let Some(state) = sync_states.get(&account_id) {
+                let should_sync = if let Some(state) = sync_states.get(&account_id_for_task) {
                     !state.is_syncing && 
                     (state.last_sync.is_none() || 
                      state.last_sync.unwrap().elapsed() >= state.sync_interval)
@@ -100,7 +101,7 @@ impl MailSyncManager {
 
                 if should_sync {
                     // Perform sync logic here
-                    tracing::debug!("Background sync for account: {}", account_id);
+                    tracing::debug!("Background sync for account: {}", account_id_for_task);
                 }
             }
         });
@@ -147,6 +148,35 @@ pub struct SyncResult {
     pub success: bool,
     pub messages_synced: usize,
     pub errors: Vec<String>,
+}
+
+impl MailSyncManager {
+    pub async fn start_account_sync(&self, account_id: String) {
+        self.start_background_sync(account_id);
+    }
+
+    pub fn stop_account_sync(&self, account_id: &str) {
+        self.stop_background_sync(account_id);
+    }
+
+    pub fn stop_all_syncs(&self) {
+        // Stop all active syncs
+        for entry in self.active_syncs.iter() {
+            entry.value().abort();
+        }
+        self.active_syncs.clear();
+        self.sync_states.clear();
+    }
+
+    pub async fn get_account_status(&self, account_id: uuid::Uuid) -> Result<crate::mail::types::MailAccountStatus, Box<dyn std::error::Error + Send + Sync>> {
+        // Check if account is currently syncing
+        if self.active_syncs.contains_key(&account_id.to_string()) {
+            Ok(crate::mail::types::MailAccountStatus::Active)
+        } else {
+            // Return last known status or default
+            Ok(crate::mail::types::MailAccountStatus::Active)
+        }
+    }
 }
 
 // Type alias for compatibility

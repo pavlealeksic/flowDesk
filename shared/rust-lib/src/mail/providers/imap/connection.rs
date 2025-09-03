@@ -2,24 +2,216 @@
 
 use super::ImapConfig;
 use crate::mail::error::{MailError, MailResult};
-use async_imap::{Client, Session};
+use async_imap::{Client, Session, imap_proto};
 use async_native_tls::{TlsConnector, TlsStream};
+use tokio_util::compat::{Compat, TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt, FuturesAsyncReadCompatExt};
+use tokio::net::TcpStream;
+use secrecy::ExposeSecret;
 use std::{
     collections::VecDeque,
     sync::Arc,
     time::{Duration, Instant},
 };
+
+// Type aliases for cleaner code
+type TlsCompatStream = TlsStream<Compat<TcpStream>>;
+type TcpCompatStream = Compat<TcpStream>;
+
+/// Enum to handle both TLS and plain IMAP sessions
+pub enum ImapSession {
+    Tls(Session<TlsCompatStream>),
+    Plain(Session<TcpCompatStream>),
+}
+
+impl ImapSession {
+    /// Execute a NOOP command
+    pub async fn noop(&mut self) -> Result<(), async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(session) => session.noop().await,
+            ImapSession::Plain(session) => session.noop().await,
+        }
+    }
+    
+    /// Logout and close the session
+    pub async fn logout(self) -> Result<(), async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(mut session) => session.logout().await,
+            ImapSession::Plain(mut session) => session.logout().await,
+        }
+    }
+
+    /// Select a folder
+    pub async fn select(&mut self, folder: &str) -> Result<async_imap::types::Mailbox, async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(session) => session.select(folder).await,
+            ImapSession::Plain(session) => session.select(folder).await,
+        }
+    }
+
+    /// Fetch messages by UID
+    pub async fn uid_fetch(&mut self, sequence_set: impl AsRef<str>, query: &str) -> Result<Vec<async_imap::types::Fetch>, async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(session) => {
+                let stream = session.uid_fetch(sequence_set, query).await?;
+                stream.try_collect().await
+            },
+            ImapSession::Plain(session) => {
+                let stream = session.uid_fetch(sequence_set, query).await?;
+                stream.try_collect().await
+            },
+        }
+    }
+
+    /// Search for messages
+    pub async fn search(&mut self, query: impl AsRef<str>) -> Result<std::collections::HashSet<u32>, async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(session) => session.search(query).await,
+            ImapSession::Plain(session) => session.search(query).await,
+        }
+    }
+
+    /// Append message to folder
+    pub async fn append(&mut self, folder: &str, message: &[u8]) -> Result<(), async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(session) => session.append(folder, None, None, message).await.map(|_| ()),
+            ImapSession::Plain(session) => session.append(folder, None, None, message).await.map(|_| ()),
+        }
+    }
+
+    /// Store flags for messages
+    pub async fn uid_store(&mut self, sequence_set: impl AsRef<str>, query: impl AsRef<str>) -> Result<Vec<async_imap::types::Fetch>, async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(session) => {
+                let stream = session.uid_store(sequence_set, query).await?;
+                stream.try_collect().await
+            },
+            ImapSession::Plain(session) => {
+                let stream = session.uid_store(sequence_set, query).await?;
+                stream.try_collect().await
+            },
+        }
+    }
+
+    /// Expunge deleted messages
+    pub async fn expunge(&mut self) -> Result<Vec<u32>, async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(session) => {
+                let stream = session.expunge().await?;
+                stream.try_collect().await
+            },
+            ImapSession::Plain(session) => {
+                let stream = session.expunge().await?;
+                stream.try_collect().await
+            },
+        }
+    }
+
+    /// Get server capabilities
+    pub async fn capabilities(&mut self) -> Result<async_imap::types::Capabilities, async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(session) => session.capabilities().await,
+            ImapSession::Plain(session) => session.capabilities().await,
+        }
+    }
+
+    /// Run a custom command
+    pub async fn run_command(&mut self, command: &str) -> Result<imap_proto::RequestId, async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(session) => session.run_command(command).await,
+            ImapSession::Plain(session) => session.run_command(command).await,
+        }
+    }
+
+    /// UID copy messages
+    pub async fn uid_copy(&mut self, uid_set: &str, mailbox_name: &str) -> Result<(), async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(session) => session.uid_copy(uid_set, mailbox_name).await,
+            ImapSession::Plain(session) => session.uid_copy(uid_set, mailbox_name).await,
+        }
+    }
+
+    /// UID move messages
+    pub async fn uid_mv(&mut self, uid_set: &str, mailbox_name: &str) -> Result<(), async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(session) => session.uid_mv(uid_set, mailbox_name).await,
+            ImapSession::Plain(session) => session.uid_mv(uid_set, mailbox_name).await,
+        }
+    }
+
+    /// UID search messages
+    pub async fn uid_search(&mut self, query: &str) -> Result<std::collections::HashSet<u32>, async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(session) => session.uid_search(query).await,
+            ImapSession::Plain(session) => session.uid_search(query).await,
+        }
+    }
+
+    /// List folders
+    pub async fn list(&mut self, reference_name: Option<&str>, mailbox_name: Option<&str>) -> Result<Vec<async_imap::types::Name>, async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(session) => {
+                let stream = session.list(reference_name, mailbox_name).await?;
+                stream.try_collect().await
+            },
+            ImapSession::Plain(session) => {
+                let stream = session.list(reference_name, mailbox_name).await?;
+                stream.try_collect().await
+            },
+        }
+    }
+
+    /// Create a mailbox
+    pub async fn create(&mut self, mailbox_name: &str) -> Result<(), async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(session) => session.create(mailbox_name).await.map(|_| ()),
+            ImapSession::Plain(session) => session.create(mailbox_name).await.map(|_| ()),
+        }
+    }
+
+    /// Subscribe to a mailbox
+    pub async fn subscribe(&mut self, mailbox_name: &str) -> Result<(), async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(session) => session.subscribe(mailbox_name).await.map(|_| ()),
+            ImapSession::Plain(session) => session.subscribe(mailbox_name).await.map(|_| ()),
+        }
+    }
+
+    /// Unsubscribe from a mailbox
+    pub async fn unsubscribe(&mut self, mailbox_name: &str) -> Result<(), async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(session) => session.unsubscribe(mailbox_name).await.map(|_| ()),
+            ImapSession::Plain(session) => session.unsubscribe(mailbox_name).await.map(|_| ()),
+        }
+    }
+
+    /// Delete a mailbox
+    pub async fn delete(&mut self, mailbox_name: &str) -> Result<(), async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(session) => session.delete(mailbox_name).await.map(|_| ()),
+            ImapSession::Plain(session) => session.delete(mailbox_name).await.map(|_| ()),
+        }
+    }
+
+    /// Rename a mailbox
+    pub async fn rename(&mut self, from: &str, to: &str) -> Result<(), async_imap::error::Error> {
+        match self {
+            ImapSession::Tls(session) => session.rename(from, to).await.map(|_| ()),
+            ImapSession::Plain(session) => session.rename(from, to).await.map(|_| ()),
+        }
+    }
+}
+
 use tokio::{
-    net::TcpStream,
     sync::{Mutex, RwLock, Semaphore},
     time::sleep,
 };
 use tracing::{debug, error, info, warn};
+use futures::{AsyncRead, AsyncWrite, StreamExt, TryStreamExt};
 
 /// IMAP connection wrapper with automatic reconnection
 pub struct ImapConnection {
     config: ImapConfig,
-    session: Option<Session<TlsStream<TcpStream>>>,
+    session: Option<ImapSession>,
     last_used: Instant,
     connection_id: u64,
     is_idle: bool,
@@ -49,21 +241,25 @@ impl ImapConnection {
             self.config.connection_timeout,
             TcpStream::connect(&addr)
         ).await
-        .map_err(|_| MailError::timeout("IMAP connection"))?
+        .map_err(|_| MailError::timeout("IMAP connection", 30))?
         .map_err(|e| MailError::connection(&format!("Failed to connect to {}: {}", addr, e)))?;
 
         let session = if self.config.imap_tls {
             // TLS connection
             let connector = TlsConnector::new();
-            let tls_stream = connector.connect(&self.config.imap_host, tcp_stream).await
+            let tls_stream = connector.connect(&self.config.imap_host, tcp_stream.compat()).await
                 .map_err(|e| MailError::connection(&format!("TLS handshake failed: {}", e)))?;
             
+            // The TLS stream is already in futures format, so just use it directly
             let client = Client::new(tls_stream);
-            self.authenticate(client).await?
+            let session = self.authenticate(client).await?;
+            ImapSession::Tls(session)
         } else {
-            // Plain connection (not recommended for production)
-            let client = Client::new(tcp_stream);
-            self.authenticate(client).await?
+            // Plain connection (not recommended for production) 
+            let compat_stream = tcp_stream.compat();  
+            let client = Client::new(compat_stream);
+            let session = self.authenticate(client).await?;
+            ImapSession::Plain(session)
         };
 
         self.session = Some(session);
@@ -74,7 +270,10 @@ impl ImapConnection {
     }
 
     /// Authenticate with the IMAP server
-    async fn authenticate(&self, client: Client<TlsStream<TcpStream>>) -> MailResult<Session<TlsStream<TlsStream<TcpStream>>>> {
+    async fn authenticate<T>(&self, client: Client<T>) -> MailResult<Session<T>> 
+    where 
+        T: AsyncRead + AsyncWrite + Unpin + Send + std::fmt::Debug,
+    {
         let session = if self.config.enable_oauth2 {
             // OAuth2 SASL authentication
             if let Some(ref mechanism) = self.config.oauth2_mechanism {
@@ -84,7 +283,7 @@ impl ImapConnection {
                     self.config.password.expose_secret()
                 );
                 
-                client.authenticate(mechanism, &oauth_string).await
+                client.login(&self.config.username, &oauth_string).await
                     .map_err(|e| MailError::authentication(&format!("OAuth2 authentication failed: {:?}", e)))?
             } else {
                 return Err(MailError::authentication("OAuth2 enabled but no mechanism specified"));
@@ -122,7 +321,7 @@ impl ImapConnection {
     }
 
     /// Get the underlying IMAP session
-    pub fn session(&mut self) -> MailResult<&mut Session<TlsStream<TcpStream>>> {
+    pub fn session(&mut self) -> MailResult<&mut ImapSession> {
         self.last_used = Instant::now();
         self.session.as_mut()
             .ok_or_else(|| MailError::connection("No active IMAP session"))
@@ -170,12 +369,37 @@ pub struct ImapConnectionPool {
     health_check_task: Option<tokio::task::JoinHandle<()>>,
 }
 
+impl Clone for ImapConnectionPool {
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+            connections: Arc::clone(&self.connections),
+            active_connections: Arc::clone(&self.active_connections),
+            semaphore: Arc::clone(&self.semaphore),
+            next_connection_id: Arc::clone(&self.next_connection_id),
+            health_check_task: None, // Don't clone the health check task
+        }
+    }
+}
+
 impl ImapConnectionPool {
+    /// Create uninitialized connection pool (for sync constructor compatibility)
+    pub fn new_uninitialized() -> Self {
+        Self {
+            config: ImapConfig::default(),
+            connections: Arc::new(Mutex::new(VecDeque::new())),
+            active_connections: Arc::new(RwLock::new(0)),
+            semaphore: Arc::new(Semaphore::new(1)),
+            next_connection_id: Arc::new(Mutex::new(1)),
+            health_check_task: None,
+        }
+    }
+
     /// Create new connection pool
     pub async fn new(config: ImapConfig) -> MailResult<Self> {
         let max_connections = config.max_connections;
         
-        let pool = Self {
+        let mut pool = Self {
             config,
             connections: Arc::new(Mutex::new(VecDeque::new())),
             active_connections: Arc::new(RwLock::new(0)),
@@ -190,10 +414,8 @@ impl ImapConnectionPool {
             health_check_pool.health_check_loop().await;
         });
 
-        Ok(Self {
-            health_check_task: Some(health_check_task),
-            ..pool
-        })
+        pool.health_check_task = Some(health_check_task);
+        Ok(pool)
     }
 
     /// Get a connection from the pool
@@ -323,19 +545,6 @@ impl ImapConnectionPool {
         }
 
         info!("IMAP connection pool shutdown completed");
-    }
-}
-
-impl Clone for ImapConnectionPool {
-    fn clone(&self) -> Self {
-        Self {
-            config: self.config.clone(),
-            connections: Arc::clone(&self.connections),
-            active_connections: Arc::clone(&self.active_connections),
-            semaphore: Arc::clone(&self.semaphore),
-            next_connection_id: Arc::clone(&self.next_connection_id),
-            health_check_task: None, // Don't clone the health check task
-        }
     }
 }
 

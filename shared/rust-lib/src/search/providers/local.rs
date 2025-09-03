@@ -1,8 +1,9 @@
 //! Local files search provider
 
 use crate::search::{
-    SearchQuery, SearchResult as SearchResultType, SearchError, SearchDocument, ProviderResponse,
-    ContentType, ProviderType, DocumentMetadata, LocationInfo, SearchResult as SearchResultItem,
+    SearchQuery, SearchError, SearchDocument, ProviderResponse,
+    ContentType, ProviderType, DocumentMetadata, LocationInfo,
+    types::SearchResult, error::SearchResult as MethodResult,
 };
 use super::{
     SearchProvider, ProviderInfo, ProviderCapabilities, AuthRequirements, AuthType, ProviderStats,
@@ -41,7 +42,7 @@ pub struct LocalFilesProvider {
 
 impl LocalFilesProvider {
     /// Create a new local files provider
-    pub async fn new(config: Value) -> SearchResultType<Self> {
+    pub async fn new(config: Value) -> MethodResult<Self> {
         let info = Self::get_provider_info();
         let base = BaseProvider::new(info);
         
@@ -191,7 +192,7 @@ impl LocalFilesProvider {
     }
     
     /// Extract text content from file
-    async fn extract_file_content(&self, path: &Path) -> SearchResultType<String> {
+    async fn extract_file_content(&self, path: &Path) -> MethodResult<String> {
         match path.extension().and_then(|ext| ext.to_str()) {
             Some("pdf") => {
                 // For PDF files, we'd use a PDF text extraction library
@@ -217,15 +218,16 @@ impl LocalFilesProvider {
     }
     
     /// Create search document from file
-    async fn create_document_from_file(&self, path: &Path) -> SearchResultType<SearchDocument> {
+    async fn create_document_from_file(&self, path: &Path) -> MethodResult<SearchDocument> {
         let metadata = fs::metadata(path).await?;
         let content = self.extract_file_content(path).await?;
         
         // Generate document ID based on file path and modification time
         let mut hasher = Sha256::new();
         hasher.update(path.to_string_lossy().as_bytes());
-        hasher.update(metadata.modified()?.duration_since(std::time::UNIX_EPOCH)?.as_secs().to_le_bytes());
-        let doc_id = format!("local_file_{:x}", hasher.finalize());
+        hasher.update(metadata.modified()?.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs().to_le_bytes());
+        let hash = hasher.finalize();
+        let doc_id = format!("local_file_{:x}", hash);
         
         // Extract file information
         let file_name = path.file_name()
@@ -296,7 +298,7 @@ impl LocalFilesProvider {
             indexing_info: crate::search::IndexingInfo {
                 indexed_at: Utc::now(),
                 version: 1,
-                checksum: format!("{:x}", hasher.finalize()),
+                checksum: format!("{:x}", hash),
                 index_type: crate::search::IndexType::Full,
             },
         })
@@ -325,7 +327,7 @@ impl SearchProvider for LocalFilesProvider {
     }
     
     #[instrument(skip(self, config))]
-    async fn initialize(&mut self, config: Value) -> SearchResultType<()> {
+    async fn initialize(&mut self, config: Value) -> MethodResult<()> {
         info!("Initializing local files provider");
         
         self.base.config = config.clone();
@@ -385,7 +387,7 @@ impl SearchProvider for LocalFilesProvider {
     }
     
     #[instrument(skip(self, query))]
-    async fn search(&self, query: &SearchQuery) -> SearchResultType<ProviderResponse> {
+    async fn search(&self, query: &SearchQuery) -> MethodResult<ProviderResponse> {
         debug!("Searching local files for: {}", query.query);
         
         let start_time = std::time::Instant::now();
@@ -418,7 +420,7 @@ impl SearchProvider for LocalFilesProvider {
                     if document.title.to_lowercase().contains(&query.query.to_lowercase()) ||
                        document.content.to_lowercase().contains(&query.query.to_lowercase()) {
                         
-                        results.push(SearchResultItem {
+                        results.push(SearchResult {
                             id: document.id.clone(),
                             title: document.title.clone(),
                             description: document.summary.clone(),
@@ -460,7 +462,7 @@ impl SearchProvider for LocalFilesProvider {
     }
     
     #[instrument(skip(self))]
-    async fn get_documents(&self, _last_sync: Option<DateTime<Utc>>) -> SearchResultType<Vec<SearchDocument>> {
+    async fn get_documents(&self, _last_sync: Option<DateTime<Utc>>) -> MethodResult<Vec<SearchDocument>> {
         debug!("Getting documents from local files");
         
         let mut documents = Vec::new();
@@ -486,12 +488,12 @@ impl SearchProvider for LocalFilesProvider {
         Ok(documents)
     }
     
-    async fn get_stats(&self) -> SearchResultType<ProviderStats> {
+    async fn get_stats(&self) -> MethodResult<ProviderStats> {
         Ok(self.base.stats.clone())
     }
     
     #[instrument(skip(self))]
-    async fn health_check(&self) -> SearchResultType<ProviderHealth> {
+    async fn health_check(&self) -> MethodResult<ProviderHealth> {
         debug!("Performing health check for local files provider");
         
         let start_time = std::time::Instant::now();
@@ -538,7 +540,7 @@ impl SearchProvider for LocalFilesProvider {
         })
     }
     
-    async fn authenticate(&mut self, _auth_data: HashMap<String, String>) -> SearchResultType<ProviderAuth> {
+    async fn authenticate(&mut self, _auth_data: HashMap<String, String>) -> MethodResult<ProviderAuth> {
         // Local files provider doesn't require authentication
         Ok(ProviderAuth {
             provider_id: self.base.info.id.clone(),
@@ -551,12 +553,12 @@ impl SearchProvider for LocalFilesProvider {
         })
     }
     
-    async fn refresh_auth(&mut self) -> SearchResultType<()> {
+    async fn refresh_auth(&mut self) -> MethodResult<()> {
         // No authentication to refresh
         Ok(())
     }
     
-    async fn shutdown(&mut self) -> SearchResultType<()> {
+    async fn shutdown(&mut self) -> MethodResult<()> {
         info!("Shutting down local files provider");
         self.base.initialized = false;
         Ok(())

@@ -1,23 +1,39 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, Suspense, lazy } from 'react'
 import { Provider } from 'react-redux'
 import { store } from './store'
 import { useAppDispatch, useAppSelector } from './store'
 import { loadThemeSettings, applyTheme } from './store/slices/themeSlice'
 import { loadWorkspaces } from './store/slices/workspaceSlice'
 import {
-  MailLayout,
-  CalendarViews,
   PluginPanels,
   NotificationsHub,
   SearchInterface,
   SettingsPanels,
   cn
 } from './components'
+import { AccessibilityProvider } from './contexts/AccessibilityContext'
+import ColorBlindnessFilters from './components/accessibility/ColorBlindnessFilters'
+import AccessibilitySettings from './components/accessibility/AccessibilitySettings'
+
+// Lazy load heavy components to reduce initial bundle size
+const MailLayout = lazy(() => import('./components/mail/MailLayout').then(m => ({ default: m.MailLayout })))
+const CalendarViews = lazy(() => import('./components/calendar/CalendarViews').then(m => ({ default: m.CalendarViews })))
+
+// Loading fallback component
+const ComponentLoader: React.FC<{ name: string }> = ({ name }) => (
+  <div className="h-full flex items-center justify-center">
+    <div className="text-center">
+      <div className="text-2xl mb-2">⏳</div>
+      <p className="text-sm text-muted-foreground">Loading {name}...</p>
+    </div>
+  </div>
+)
 import FlowDeskLeftRail from './components/layout/FlowDeskLeftRail'
 import ServicesSidebar from './components/layout/ServicesSidebar'
 import AddServiceModal from './components/workspace/AddServiceModal'
 import EditServiceModal from './components/workspace/EditServiceModal'
 import { useMemoryCleanup } from './hooks/useMemoryCleanup'
+import { usePerformanceMonitor, useBundleMonitor } from './hooks/usePerformanceMonitor'
 import type { Workspace } from '../types/preload'
 import './App.css'
 
@@ -48,6 +64,7 @@ function AppContent() {
   const [showAddServiceModal, setShowAddServiceModal] = useState(false)
   const [showEditServiceModal, setShowEditServiceModal] = useState(false)
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null)
+  const [showAccessibilitySettings, setShowAccessibilitySettings] = useState(false)
 
   // Memory management
   const memoryCleanup = useMemoryCleanup({
@@ -55,6 +72,16 @@ function AppContent() {
     cleanupInterval: 30000,
     enablePerfMonitoring: process.env.NODE_ENV === 'development'
   })
+
+  // Performance monitoring
+  const performanceMonitor = usePerformanceMonitor({
+    componentName: 'App',
+    enabled: __DEV__,
+    logToConsole: __DEV__
+  })
+  
+  // Monitor bundle loading in development
+  useBundleMonitor()
 
   // Initialize theme and workspace data - wait for preload script
   useEffect(() => {
@@ -129,12 +156,17 @@ function AppContent() {
             e.preventDefault()
             setActiveView('workspace')
             break
+          case ',':
+            e.preventDefault()
+            setShowAccessibilitySettings(true)
+            break
         }
       }
       
       if (e.key === 'Escape') {
         setShowSearchOverlay(false)
         setShowNotifications(false)
+        setShowAccessibilitySettings(false)
       }
     }
 
@@ -145,14 +177,20 @@ function AppContent() {
   const renderMainContent = useMemo(() => {
     switch (activeView) {
       case 'mail':
-        return <MailLayout className="h-full" />
+        return (
+          <Suspense fallback={<ComponentLoader name="Mail" />}>
+            <MailLayout className="h-full" />
+          </Suspense>
+        )
       case 'calendar':
         return (
-          <CalendarViews
-            className="h-full"
-            onEventClick={(event) => console.log('Event clicked:', event)}
-            onCreateEvent={() => console.log('Create event')}
-          />
+          <Suspense fallback={<ComponentLoader name="Calendar" />}>
+            <CalendarViews
+              className="h-full"
+              onEventClick={(event) => console.log('Event clicked:', event)}
+              onCreateEvent={() => console.log('Create event')}
+            />
+          </Suspense>
         )
       case 'workspace':
         if (activeServiceId) {
@@ -192,13 +230,26 @@ function AppContent() {
 
   return (
     <div className="h-screen flex overflow-hidden bg-background text-foreground">
+      {/* Skip Links for Screen Readers */}
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
+      <a href="#navigation" className="skip-link">
+        Skip to navigation
+      </a>
+
+      {/* Color Blindness Filters */}
+      <ColorBlindnessFilters />
+
       {/* Primary Sidebar (Far Left) - Mail, Calendar, Workspaces */}
-      <FlowDeskLeftRail
-        onViewSelect={setActiveView}
-        onWorkspaceSelect={setActiveWorkspaceId}
-        activeView={activeView}
-        activeWorkspaceId={activeWorkspaceId}
-      />
+      <nav id="navigation" role="navigation" aria-label="Main navigation">
+        <FlowDeskLeftRail
+          onViewSelect={setActiveView}
+          onWorkspaceSelect={setActiveWorkspaceId}
+          activeView={activeView}
+          activeWorkspaceId={activeWorkspaceId}
+        />
+      </nav>
 
       {/* Secondary Sidebar - Services for Selected Workspace */}
       {activeView === 'workspace' && (
@@ -243,7 +294,7 @@ function AppContent() {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Main App View */}
-        <div className="flex-1 overflow-hidden relative">
+        <main id="main-content" className="flex-1 overflow-hidden relative" role="main" aria-label="Main application content">
           {renderMainContent}
           
           {/* Plugin Panels Overlay */}
@@ -253,13 +304,19 @@ function AppContent() {
             onPluginClose={(id) => console.log('Close plugin:', id)}
             onPluginSettings={(id) => console.log('Plugin settings:', id)}
           />
-        </div>
+        </main>
       </div>
 
       {/* Search Overlay */}
       {showSearchOverlay && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-start justify-center pt-20">
+        <div 
+          className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-start justify-center pt-20"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="search-title"
+        >
           <div className="w-full max-w-2xl mx-4">
+            <h2 id="search-title" className="sr-only">Search</h2>
             <SearchInterface
               autoFocus
               onResultSelect={(result) => {
@@ -274,13 +331,32 @@ function AppContent() {
 
       {/* Notifications Overlay */}
       {showNotifications && (
-        <div className="fixed top-4 right-4 z-50 w-96">
+        <aside 
+          className="fixed top-4 right-4 z-50 w-96"
+          role="complementary"
+          aria-label="Notifications"
+        >
           <NotificationsHub
             onNotificationAction={(id, action) => {
               console.log('Notification action:', id)
               action()
             }}
             onNotificationDismiss={(id) => console.log('Dismiss notification:', id)}
+          />
+        </aside>
+      )}
+
+      {/* Accessibility Settings Overlay */}
+      {showAccessibilitySettings && (
+        <div 
+          className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="accessibility-title"
+        >
+          <AccessibilitySettings
+            isOpen={showAccessibilitySettings}
+            onClose={() => setShowAccessibilitySettings(false)}
           />
         </div>
       )}
@@ -319,7 +395,9 @@ function AppContent() {
 function App() {
   return (
     <Provider store={store}>
-      <AppContent />
+      <AccessibilityProvider>
+        <AppContent />
+      </AccessibilityProvider>
     </Provider>
   )
 }

@@ -624,43 +624,43 @@ export declare const NotificationSchema: z.ZodObject<{
             pluginId: z.ZodOptional<z.ZodString>;
             automationId: z.ZodOptional<z.ZodString>;
         }, "strip", z.ZodTypeAny, {
-            calendarId?: string | undefined;
             accountId?: string | undefined;
+            calendarId?: string | undefined;
             pluginId?: string | undefined;
             automationId?: string | undefined;
         }, {
-            calendarId?: string | undefined;
             accountId?: string | undefined;
+            calendarId?: string | undefined;
             pluginId?: string | undefined;
             automationId?: string | undefined;
         }>>;
     }, "strip", z.ZodTypeAny, {
         source: string;
-        url?: string | undefined;
         icon?: string | undefined;
-        image?: string | undefined;
+        url?: string | undefined;
         context?: {
-            calendarId?: string | undefined;
             accountId?: string | undefined;
+            calendarId?: string | undefined;
             pluginId?: string | undefined;
             automationId?: string | undefined;
         } | undefined;
         sourceId?: string | undefined;
         sourceType?: string | undefined;
+        image?: string | undefined;
         payload?: Record<string, any> | undefined;
     }, {
         source: string;
-        url?: string | undefined;
         icon?: string | undefined;
-        image?: string | undefined;
+        url?: string | undefined;
         context?: {
-            calendarId?: string | undefined;
             accountId?: string | undefined;
+            calendarId?: string | undefined;
             pluginId?: string | undefined;
             automationId?: string | undefined;
         } | undefined;
         sourceId?: string | undefined;
         sourceType?: string | undefined;
+        image?: string | undefined;
         payload?: Record<string, any> | undefined;
     }>;
     metadata: z.ZodObject<{
@@ -755,8 +755,8 @@ export declare const NotificationSchema: z.ZodObject<{
         type: "button" | "inline" | "quick_reply";
         label: string;
         dismissOnAction: boolean;
-        url?: string | undefined;
         icon?: string | undefined;
+        url?: string | undefined;
         command?: string | undefined;
         payload?: Record<string, any> | undefined;
         style?: "primary" | "secondary" | "destructive" | undefined;
@@ -765,8 +765,8 @@ export declare const NotificationSchema: z.ZodObject<{
         type: "button" | "inline" | "quick_reply";
         label: string;
         dismissOnAction: boolean;
-        url?: string | undefined;
         icon?: string | undefined;
+        url?: string | undefined;
         command?: string | undefined;
         payload?: Record<string, any> | undefined;
         style?: "primary" | "secondary" | "destructive" | undefined;
@@ -779,30 +779,26 @@ export declare const NotificationSchema: z.ZodObject<{
     createdAt: z.ZodDate;
     updatedAt: z.ZodDate;
 }, "strip", z.ZodTypeAny, {
+    title: string;
+    actions: {
+        id: string;
+        type: "button" | "inline" | "quick_reply";
+        label: string;
+        dismissOnAction: boolean;
+        icon?: string | undefined;
+        url?: string | undefined;
+        command?: string | undefined;
+        payload?: Record<string, any> | undefined;
+        style?: "primary" | "secondary" | "destructive" | undefined;
+    }[];
     id: string;
     createdAt: Date;
     updatedAt: Date;
-    userId: string;
-    status: "read" | "sent" | "failed" | "pending" | "expired" | "delivered" | "dismissed";
-    title: string;
-    data: {
-        source: string;
-        url?: string | undefined;
-        icon?: string | undefined;
-        image?: string | undefined;
-        context?: {
-            calendarId?: string | undefined;
-            accountId?: string | undefined;
-            pluginId?: string | undefined;
-            automationId?: string | undefined;
-        } | undefined;
-        sourceId?: string | undefined;
-        sourceType?: string | undefined;
-        payload?: Record<string, any> | undefined;
-    };
+    status: "sent" | "failed" | "pending" | "expired" | "delivered" | "read" | "dismissed";
+    priority: "normal" | "high" | "low" | "critical" | "urgent";
     type: string;
-    priority: "normal" | "low" | "high" | "critical" | "urgent";
     message: string;
+    userId: string;
     metadata: {
         tags: string[];
         threadId?: string | undefined;
@@ -822,49 +818,49 @@ export declare const NotificationSchema: z.ZodObject<{
             variant: string;
         } | undefined;
     };
-    actions: {
-        id: string;
-        type: "button" | "inline" | "quick_reply";
-        label: string;
-        dismissOnAction: boolean;
-        url?: string | undefined;
+    data: {
+        source: string;
         icon?: string | undefined;
-        command?: string | undefined;
+        url?: string | undefined;
+        context?: {
+            accountId?: string | undefined;
+            calendarId?: string | undefined;
+            pluginId?: string | undefined;
+            automationId?: string | undefined;
+        } | undefined;
+        sourceId?: string | undefined;
+        sourceType?: string | undefined;
+        image?: string | undefined;
         payload?: Record<string, any> | undefined;
-        style?: "primary" | "secondary" | "destructive" | undefined;
-    }[];
+    };
     channels: string[];
-    workspaceId?: string | undefined;
-    expiresAt?: Date | undefined;
     scheduledFor?: Date | undefined;
+    expiresAt?: Date | undefined;
+    workspaceId?: string | undefined;
     deliveredAt?: Date | undefined;
     readAt?: Date | undefined;
     dismissedAt?: Date | undefined;
 }, {
+    title: string;
+    actions: {
+        id: string;
+        type: "button" | "inline" | "quick_reply";
+        label: string;
+        dismissOnAction: boolean;
+        icon?: string | undefined;
+        url?: string | undefined;
+        command?: string | undefined;
+        payload?: Record<string, any> | undefined;
+        style?: "primary" | "secondary" | "destructive" | undefined;
+    }[];
     id: string;
     createdAt: Date;
     updatedAt: Date;
-    userId: string;
-    status: "read" | "sent" | "failed" | "pending" | "expired" | "delivered" | "dismissed";
-    title: string;
-    data: {
-        source: string;
-        url?: string | undefined;
-        icon?: string | undefined;
-        image?: string | undefined;
-        context?: {
-            calendarId?: string | undefined;
-            accountId?: string | undefined;
-            pluginId?: string | undefined;
-            automationId?: string | undefined;
-        } | undefined;
-        sourceId?: string | undefined;
-        sourceType?: string | undefined;
-        payload?: Record<string, any> | undefined;
-    };
+    status: "sent" | "failed" | "pending" | "expired" | "delivered" | "read" | "dismissed";
+    priority: "normal" | "high" | "low" | "critical" | "urgent";
     type: string;
-    priority: "normal" | "low" | "high" | "critical" | "urgent";
     message: string;
+    userId: string;
     metadata: {
         tags: string[];
         threadId?: string | undefined;
@@ -884,21 +880,25 @@ export declare const NotificationSchema: z.ZodObject<{
             variant: string;
         } | undefined;
     };
-    actions: {
-        id: string;
-        type: "button" | "inline" | "quick_reply";
-        label: string;
-        dismissOnAction: boolean;
-        url?: string | undefined;
+    data: {
+        source: string;
         icon?: string | undefined;
-        command?: string | undefined;
+        url?: string | undefined;
+        context?: {
+            accountId?: string | undefined;
+            calendarId?: string | undefined;
+            pluginId?: string | undefined;
+            automationId?: string | undefined;
+        } | undefined;
+        sourceId?: string | undefined;
+        sourceType?: string | undefined;
+        image?: string | undefined;
         payload?: Record<string, any> | undefined;
-        style?: "primary" | "secondary" | "destructive" | undefined;
-    }[];
+    };
     channels: string[];
-    workspaceId?: string | undefined;
-    expiresAt?: Date | undefined;
     scheduledFor?: Date | undefined;
+    expiresAt?: Date | undefined;
+    workspaceId?: string | undefined;
     deliveredAt?: Date | undefined;
     readAt?: Date | undefined;
     dismissedAt?: Date | undefined;
@@ -918,12 +918,12 @@ export declare const NotificationRuleSchema: z.ZodObject<{
         caseSensitive: z.ZodOptional<z.ZodBoolean>;
     }, "strip", z.ZodTypeAny, {
         field: string;
-        operator: "equals" | "contains" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in";
+        operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in";
         value?: any;
         caseSensitive?: boolean | undefined;
     }, {
         field: string;
-        operator: "equals" | "contains" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in";
+        operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in";
         value?: any;
         caseSensitive?: boolean | undefined;
     }>, "many">;
@@ -956,55 +956,55 @@ export declare const NotificationRuleSchema: z.ZodObject<{
     createdAt: z.ZodDate;
     updatedAt: z.ZodDate;
 }, "strip", z.ZodTypeAny, {
+    actions: {
+        type: string;
+        params: Record<string, any>;
+    }[];
     id: string;
     createdAt: Date;
     updatedAt: Date;
-    userId: string;
     name: string;
+    enabled: boolean;
+    conditions: {
+        field: string;
+        operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in";
+        value?: any;
+        caseSensitive?: boolean | undefined;
+    }[];
+    priority: number;
+    userId: string;
     stats: {
         triggerCount: number;
         affectedNotifications: number;
         successRate: number;
         lastTriggered?: Date | undefined;
     };
-    priority: number;
-    conditions: {
-        field: string;
-        operator: "equals" | "contains" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in";
-        value?: any;
-        caseSensitive?: boolean | undefined;
-    }[];
-    actions: {
-        type: string;
-        params: Record<string, any>;
-    }[];
-    enabled: boolean;
     description?: string | undefined;
     workspaceId?: string | undefined;
 }, {
+    actions: {
+        type: string;
+        params: Record<string, any>;
+    }[];
     id: string;
     createdAt: Date;
     updatedAt: Date;
-    userId: string;
     name: string;
+    enabled: boolean;
+    conditions: {
+        field: string;
+        operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in";
+        value?: any;
+        caseSensitive?: boolean | undefined;
+    }[];
+    priority: number;
+    userId: string;
     stats: {
         triggerCount: number;
         affectedNotifications: number;
         successRate: number;
         lastTriggered?: Date | undefined;
     };
-    priority: number;
-    conditions: {
-        field: string;
-        operator: "equals" | "contains" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in";
-        value?: any;
-        caseSensitive?: boolean | undefined;
-    }[];
-    actions: {
-        type: string;
-        params: Record<string, any>;
-    }[];
-    enabled: boolean;
     description?: string | undefined;
     workspaceId?: string | undefined;
 }>;
@@ -1024,8 +1024,8 @@ export declare const NotificationDigestSchema: z.ZodObject<{
         batchTimeout: z.ZodOptional<z.ZodNumber>;
         timezone: z.ZodString;
     }, "strip", z.ZodTypeAny, {
-        timezone: string;
         type: "scheduled" | "immediate" | "batch";
+        timezone: string;
         frequency?: "monthly" | "hourly" | "daily" | "weekly" | undefined;
         batchSize?: number | undefined;
         timeOfDay?: string | undefined;
@@ -1033,8 +1033,8 @@ export declare const NotificationDigestSchema: z.ZodObject<{
         dayOfMonth?: number | undefined;
         batchTimeout?: number | undefined;
     }, {
-        timezone: string;
         type: "scheduled" | "immediate" | "batch";
+        timezone: string;
         frequency?: "monthly" | "hourly" | "daily" | "weekly" | undefined;
         batchSize?: number | undefined;
         timeOfDay?: string | undefined;
@@ -1070,11 +1070,11 @@ export declare const NotificationDigestSchema: z.ZodObject<{
             maxGroups: z.ZodNumber;
         }, "strip", z.ZodTypeAny, {
             enabled: boolean;
-            groupBy: "source" | "type" | "priority" | "date";
+            groupBy: "priority" | "type" | "date" | "source";
             maxGroups: number;
         }, {
             enabled: boolean;
-            groupBy: "source" | "type" | "priority" | "date";
+            groupBy: "priority" | "type" | "date" | "source";
             maxGroups: number;
         }>>;
         styling: z.ZodOptional<z.ZodObject<{
@@ -1091,14 +1091,14 @@ export declare const NotificationDigestSchema: z.ZodObject<{
             fontSize: "small" | "medium" | "large";
         }>>;
     }, "strip", z.ZodTypeAny, {
-        format: "text" | "html" | "markdown";
         subject: string;
+        format: "text" | "html" | "markdown";
         itemTemplate: string;
         header?: string | undefined;
         footer?: string | undefined;
         grouping?: {
             enabled: boolean;
-            groupBy: "source" | "type" | "priority" | "date";
+            groupBy: "priority" | "type" | "date" | "source";
             maxGroups: number;
         } | undefined;
         styling?: {
@@ -1107,14 +1107,14 @@ export declare const NotificationDigestSchema: z.ZodObject<{
             fontSize: "small" | "medium" | "large";
         } | undefined;
     }, {
-        format: "text" | "html" | "markdown";
         subject: string;
+        format: "text" | "html" | "markdown";
         itemTemplate: string;
         header?: string | undefined;
         footer?: string | undefined;
         grouping?: {
             enabled: boolean;
-            groupBy: "source" | "type" | "priority" | "date";
+            groupBy: "priority" | "type" | "date" | "source";
             maxGroups: number;
         } | undefined;
         styling?: {
@@ -1152,8 +1152,15 @@ export declare const NotificationDigestSchema: z.ZodObject<{
     id: string;
     createdAt: Date;
     updatedAt: Date;
-    userId: string;
     name: string;
+    enabled: boolean;
+    userId: string;
+    filters: {
+        field: string;
+        operator: string;
+        value?: any;
+        caseSensitive?: boolean | undefined;
+    }[];
     stats: {
         totalSent: number;
         totalNotifications: number;
@@ -1162,17 +1169,10 @@ export declare const NotificationDigestSchema: z.ZodObject<{
         openRate?: number | undefined;
         clickRate?: number | undefined;
     };
-    filters: {
-        field: string;
-        operator: string;
-        value?: any;
-        caseSensitive?: boolean | undefined;
-    }[];
-    enabled: boolean;
     channels: string[];
     schedule: {
-        timezone: string;
         type: "scheduled" | "immediate" | "batch";
+        timezone: string;
         frequency?: "monthly" | "hourly" | "daily" | "weekly" | undefined;
         batchSize?: number | undefined;
         timeOfDay?: string | undefined;
@@ -1181,14 +1181,14 @@ export declare const NotificationDigestSchema: z.ZodObject<{
         batchTimeout?: number | undefined;
     };
     template: {
-        format: "text" | "html" | "markdown";
         subject: string;
+        format: "text" | "html" | "markdown";
         itemTemplate: string;
         header?: string | undefined;
         footer?: string | undefined;
         grouping?: {
             enabled: boolean;
-            groupBy: "source" | "type" | "priority" | "date";
+            groupBy: "priority" | "type" | "date" | "source";
             maxGroups: number;
         } | undefined;
         styling?: {
@@ -1202,8 +1202,15 @@ export declare const NotificationDigestSchema: z.ZodObject<{
     id: string;
     createdAt: Date;
     updatedAt: Date;
-    userId: string;
     name: string;
+    enabled: boolean;
+    userId: string;
+    filters: {
+        field: string;
+        operator: string;
+        value?: any;
+        caseSensitive?: boolean | undefined;
+    }[];
     stats: {
         totalSent: number;
         totalNotifications: number;
@@ -1212,17 +1219,10 @@ export declare const NotificationDigestSchema: z.ZodObject<{
         openRate?: number | undefined;
         clickRate?: number | undefined;
     };
-    filters: {
-        field: string;
-        operator: string;
-        value?: any;
-        caseSensitive?: boolean | undefined;
-    }[];
-    enabled: boolean;
     channels: string[];
     schedule: {
-        timezone: string;
         type: "scheduled" | "immediate" | "batch";
+        timezone: string;
         frequency?: "monthly" | "hourly" | "daily" | "weekly" | undefined;
         batchSize?: number | undefined;
         timeOfDay?: string | undefined;
@@ -1231,14 +1231,14 @@ export declare const NotificationDigestSchema: z.ZodObject<{
         batchTimeout?: number | undefined;
     };
     template: {
-        format: "text" | "html" | "markdown";
         subject: string;
+        format: "text" | "html" | "markdown";
         itemTemplate: string;
         header?: string | undefined;
         footer?: string | undefined;
         grouping?: {
             enabled: boolean;
-            groupBy: "source" | "type" | "priority" | "date";
+            groupBy: "priority" | "type" | "date" | "source";
             maxGroups: number;
         } | undefined;
         styling?: {

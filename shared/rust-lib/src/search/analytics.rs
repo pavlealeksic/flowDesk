@@ -554,13 +554,13 @@ impl AnalyticsManager {
         }
         
         // Update hourly patterns
-        let hour = Utc::now().hour() as usize;
+        let hour = Utc::now().format("%H").to_string().parse::<usize>().unwrap_or(0);
         if hour < 24 {
             self.usage_stats.hourly_patterns[hour] += 1;
         }
         
         // Update daily patterns
-        let day = Utc::now().weekday().num_days_from_sunday() as usize;
+        let day = Utc::now().format("%w").to_string().parse::<usize>().unwrap_or(0);
         if day < 7 {
             self.usage_stats.daily_patterns[day] += 1;
         }

@@ -5,6 +5,24 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
+/// Email address with optional display name
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct EmailAddress {
+    pub address: String,
+    pub name: Option<String>,
+    pub email: String, // Alias for address for compatibility
+}
+
+impl Default for EmailAddress {
+    fn default() -> Self {
+        Self {
+            name: None,
+            address: "unknown@example.com".to_string(),
+            email: "unknown@example.com".to_string(),
+        }
+    }
+}
+
 /// Mail provider types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MailProvider {
@@ -72,6 +90,8 @@ pub struct MailAccount {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub provider_config: ProviderAccountConfig,
+    pub config: ProviderAccountConfig,
+    pub sync_status: Option<MailSyncStatus>,
 }
 
 /// Provider-specific account configuration
@@ -128,12 +148,14 @@ pub struct EmailMessage {
     pub flags: EmailFlags,
     pub labels: Vec<String>,
     pub folder: String,
+    pub folder_id: Option<Uuid>,
     pub importance: MessageImportance,
     pub priority: MessagePriority,
     pub size: i64,
     pub attachments: Vec<EmailAttachment>,
     pub headers: HashMap<String, String>,
     pub message_id: String,
+    pub message_id_header: Option<String>, // Alias for message_id for compatibility
     pub in_reply_to: Option<String>,
     pub references: Vec<String>,
     pub encryption: Option<EmailEncryption>,
@@ -141,12 +163,6 @@ pub struct EmailMessage {
     pub updated_at: DateTime<Utc>,
 }
 
-/// Email address representation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EmailAddress {
-    pub name: Option<String>,
-    pub address: String,
-}
 
 /// Email message flags
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -184,11 +200,14 @@ pub struct EmailAttachment {
     pub id: String,
     pub filename: String,
     pub mime_type: String,
+    pub content_type: String, // Alias for mime_type for compatibility
     pub size: i64,
     pub content_id: Option<String>,
     pub is_inline: bool,
+    pub inline: bool, // Alias for is_inline for compatibility
     pub download_url: Option<String>,
     pub local_path: Option<String>,
+    pub data: Option<Vec<u8>>, // Attachment data when available
 }
 
 /// Email encryption information
@@ -224,6 +243,7 @@ pub struct EmailThread {
     pub account_id: Uuid,
     pub subject: String,
     pub message_ids: Vec<Uuid>,
+    pub messages: Vec<EmailMessage>,
     pub participants: Vec<EmailAddress>,
     pub labels: Vec<String>,
     pub flags: ThreadFlags,
@@ -255,6 +275,7 @@ pub struct MailFolder {
     pub message_count: i32,
     pub unread_count: i32,
     pub is_selectable: bool,
+    pub can_select: bool,
     pub sync_status: FolderSyncStatus,
 }
 
@@ -295,6 +316,19 @@ pub struct EmailFilter {
     pub stop_processing: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    // Additional direct filter fields for easier access
+    pub subject_keywords: Vec<String>,
+    pub from_addresses: Vec<String>,
+    pub to_addresses: Vec<String>,
+    pub body_keywords: Vec<String>,
+    pub has_attachment: Option<bool>,
+    pub target_folder_id: Option<Uuid>,
+    pub mark_as_read: Option<bool>,
+    pub mark_as_important: Option<bool>,
+    pub apply_label: Option<String>,
+    pub forward_to: Option<String>,
+    pub delete_message: Option<bool>,
+    pub mark_as_spam: Option<bool>,
 }
 
 /// Filter condition
@@ -385,7 +419,7 @@ pub struct SignatureUsage {
     pub conditions: Option<Vec<FilterCondition>>,
 }
 
-/// Email template
+/// Email template with enhanced features
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmailTemplate {
     pub id: Uuid,
@@ -397,15 +431,23 @@ pub struct EmailTemplate {
     pub body_html: String,
     pub body_text: String,
     pub variables: Vec<TemplateVariable>,
+    pub conditionals: Vec<TemplateConditional>,
     pub usage_count: i32,
     pub is_favorite: bool,
+    pub is_shared: bool,
+    pub is_public: bool,
     pub tags: Vec<String>,
+    pub template_type: TemplateType,
+    pub formatting_settings: TemplateFormatting,
+    pub permissions: TemplatePermissions,
+    pub version: i32,
+    pub parent_id: Option<Uuid>, // For template versioning
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub last_used_at: Option<DateTime<Utc>>,
 }
 
-/// Template variable definition
+/// Template variable definition with enhanced features
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemplateVariable {
     pub key: String,
@@ -414,16 +456,35 @@ pub struct TemplateVariable {
     pub default_value: Option<String>,
     pub is_required: bool,
     pub description: Option<String>,
+    pub placeholder: Option<String>,
+    pub validation_rules: Vec<ValidationRule>,
+    pub options: Option<Vec<String>>, // For select/dropdown variables
+    pub min_length: Option<i32>,
+    pub max_length: Option<i32>,
+    pub format_pattern: Option<String>, // Regex pattern for validation
+    pub auto_complete_source: Option<AutoCompleteSource>,
 }
 
-/// Variable types for templates
+/// Variable types for templates with enhanced options
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum VariableType {
     Text,
     Email,
     Date,
+    DateTime,
+    Time,
     Number,
     Boolean,
+    Select,
+    MultiSelect,
+    Url,
+    Phone,
+    Address,
+    Currency,
+    Percentage,
+    RichText,
+    Image,
+    File,
 }
 
 /// Mail sync status
@@ -518,6 +579,8 @@ pub enum BulkOperationType {
     Star,
     Unstar,
     Delete,
+    Archive,
+    Spam,
     Move,
     AddLabel,
     RemoveLabel,
@@ -631,6 +694,7 @@ pub struct OAuthTokens {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImapConfig {
     pub server: String,
+    pub host: String,
     pub port: u16,
     pub use_tls: bool,
     pub username: String,
@@ -687,3 +751,320 @@ impl Default for MessageFlags {
 pub type MailMessage = EmailMessage;
 pub type MailAttachment = EmailAttachment;
 pub type FolderType = MailFolderType;
+
+// Add convenience methods to EmailMessage
+impl EmailMessage {
+    pub fn is_read(&self) -> bool {
+        self.flags.is_read
+    }
+
+    pub fn is_starred(&self) -> bool {
+        self.flags.is_starred
+    }
+
+    pub fn is_important(&self) -> bool {
+        self.flags.is_important
+    }
+
+    pub fn has_attachments(&self) -> bool {
+        self.flags.has_attachments
+    }
+
+    pub fn received_at(&self) -> DateTime<Utc> {
+        self.date
+    }
+}
+
+// Enhanced template and scheduling types
+
+/// Template conditional logic
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateConditional {
+    pub id: String,
+    pub condition_type: ConditionalType,
+    pub condition_expression: String,
+    pub true_content: String,
+    pub false_content: Option<String>,
+    pub variables_referenced: Vec<String>,
+}
+
+/// Template conditional types
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConditionalType {
+    IfElse,
+    Switch,
+    Loop,
+    Show,
+    Hide,
+}
+
+/// Template type classification
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TemplateType {
+    Email,
+    Reply,
+    Forward,
+    Newsletter,
+    Marketing,
+    Transactional,
+    Internal,
+    Meeting,
+    FollowUp,
+    Custom,
+}
+
+/// Template formatting settings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateFormatting {
+    pub font_family: Option<String>,
+    pub font_size: Option<i32>,
+    pub line_height: Option<f32>,
+    pub text_color: Option<String>,
+    pub background_color: Option<String>,
+    pub signature_position: SignaturePosition,
+    pub include_signature: bool,
+    pub auto_format: bool,
+    pub preserve_formatting: bool,
+}
+
+/// Template permissions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplatePermissions {
+    pub can_edit: Vec<Uuid>, // User IDs who can edit
+    pub can_view: Vec<Uuid>, // User IDs who can view
+    pub can_use: Vec<Uuid>,  // User IDs who can use
+    pub is_organization_wide: bool,
+    pub visibility: TemplateVisibility,
+}
+
+/// Template visibility levels
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TemplateVisibility {
+    Private,
+    Team,
+    Organization,
+    Public,
+}
+
+/// Signature positioning
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SignaturePosition {
+    Below,
+    Above,
+    None,
+}
+
+/// Validation rule for template variables
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValidationRule {
+    pub rule_type: ValidationType,
+    pub parameters: HashMap<String, serde_json::Value>,
+    pub error_message: String,
+}
+
+/// Validation types
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ValidationType {
+    Required,
+    MinLength,
+    MaxLength,
+    Regex,
+    Email,
+    Url,
+    Number,
+    Date,
+    Custom,
+}
+
+/// Auto-completion source
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutoCompleteSource {
+    pub source_type: AutoCompleteType,
+    pub endpoint: Option<String>,
+    pub static_values: Option<Vec<String>>,
+    pub query_parameter: Option<String>,
+}
+
+/// Auto-completion types
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AutoCompleteType {
+    Static,
+    Dynamic,
+    Contacts,
+    Companies,
+    Projects,
+    Tags,
+    Custom,
+}
+
+/// Enhanced scheduled email with timezone support
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScheduledEmail {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub account_id: Uuid,
+    pub template_id: Option<Uuid>,
+    pub to: Vec<EmailAddress>,
+    pub cc: Vec<EmailAddress>,
+    pub bcc: Vec<EmailAddress>,
+    pub subject: String,
+    pub body_html: String,
+    pub body_text: String,
+    pub attachments: Vec<EmailAttachment>,
+    pub scheduled_time: DateTime<Utc>,
+    pub timezone: String, // IANA timezone identifier
+    pub status: ScheduleStatus,
+    pub recurring: Option<RecurringSettings>,
+    pub send_attempts: i32,
+    pub max_attempts: i32,
+    pub priority: SchedulePriority,
+    pub metadata: HashMap<String, serde_json::Value>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub sent_at: Option<DateTime<Utc>>,
+    pub last_attempt_at: Option<DateTime<Utc>>,
+    pub error_message: Option<String>,
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+/// Schedule status
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ScheduleStatus {
+    Pending,
+    Sending,
+    Sent,
+    Failed,
+    Cancelled,
+    Expired,
+    Paused,
+}
+
+/// Schedule priority
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SchedulePriority {
+    Low,
+    Normal,
+    High,
+    Urgent,
+}
+
+/// Recurring email settings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecurringSettings {
+    pub pattern: RecurringPattern,
+    pub interval: i32,
+    pub end_type: RecurringEndType,
+    pub end_date: Option<DateTime<Utc>>,
+    pub occurrence_count: Option<i32>,
+    pub days_of_week: Option<Vec<u8>>, // 0-6, Sunday = 0
+    pub day_of_month: Option<i32>,
+    pub month_of_year: Option<i32>,
+    pub skip_weekends: bool,
+    pub skip_holidays: bool,
+    pub last_sent: Option<DateTime<Utc>>,
+    pub next_scheduled: Option<DateTime<Utc>>,
+}
+
+/// Recurring pattern types
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RecurringPattern {
+    Daily,
+    Weekly,
+    Monthly,
+    Yearly,
+    Weekdays,
+    Custom,
+}
+
+/// Recurring end types
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RecurringEndType {
+    Never,
+    Date,
+    Occurrences,
+}
+
+/// Template category with enhanced metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateCategory {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub icon: Option<String>,
+    pub color: Option<String>,
+    pub parent_id: Option<Uuid>,
+    pub sort_order: i32,
+    pub is_system: bool,
+    pub template_count: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Template usage statistics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateUsageStats {
+    pub template_id: Uuid,
+    pub total_uses: i32,
+    pub uses_this_month: i32,
+    pub uses_this_week: i32,
+    pub last_used_at: Option<DateTime<Utc>>,
+    pub average_rating: Option<f32>,
+    pub user_ratings: HashMap<Uuid, i32>,
+    pub conversion_rate: Option<f32>, // If tracking responses
+}
+
+/// Email template library
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemplateLibrary {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub owner_id: Uuid,
+    pub is_public: bool,
+    pub templates: Vec<Uuid>, // Template IDs
+    pub categories: Vec<Uuid>, // Category IDs
+    pub subscribers: Vec<Uuid>, // User IDs subscribed to this library
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Default implementations for new types
+impl Default for TemplateFormatting {
+    fn default() -> Self {
+        Self {
+            font_family: None,
+            font_size: None,
+            line_height: None,
+            text_color: None,
+            background_color: None,
+            signature_position: SignaturePosition::Below,
+            include_signature: true,
+            auto_format: false,
+            preserve_formatting: false,
+        }
+    }
+}
+
+impl Default for TemplatePermissions {
+    fn default() -> Self {
+        Self {
+            can_edit: Vec::new(),
+            can_view: Vec::new(),
+            can_use: Vec::new(),
+            is_organization_wide: false,
+            visibility: TemplateVisibility::Private,
+        }
+    }
+}
+
+impl Default for SchedulePriority {
+    fn default() -> Self {
+        Self::Normal
+    }
+}
+
+impl Default for TemplateType {
+    fn default() -> Self {
+        Self::Email
+    }
+}

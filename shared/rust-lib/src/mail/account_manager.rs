@@ -1,13 +1,13 @@
 use crate::mail::{
-    server_configs::{get_predefined_configs, get_config_by_domain, ServerConfig, AuthMethod},
+    server_configs::{get_predefined_configs, get_config_by_domain, ServerConfig, SecurityType},
     error::{MailError, MailResult},
-    types::*,
     auth::AuthManager,
-    providers::imap::ImapProvider,
+    providers::{imap::{ImapProvider, ImapConfig}, MailProvider as MailProviderTrait},
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
+use tracing::info;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,7 +65,7 @@ impl Default for AccountSyncSettings {
 
 pub struct AccountManager {
     accounts: RwLock<HashMap<String, MailAccountConfig>>,
-    providers: RwLock<HashMap<String, Box<dyn MailProvider>>>,
+    providers: RwLock<HashMap<String, Box<dyn MailProviderTrait>>>,
     auth_manager: Arc<AuthManager>,
 }
 
@@ -87,7 +87,9 @@ impl AccountManager {
     ) -> MailResult<String> {
         // Auto-detect server configuration based on email domain
         let server_config = get_config_by_domain(&email)
-            .ok_or_else(|| MailError::UnsupportedProvider(format!("No configuration found for domain in: {}", email)))?;
+            .ok_or_else(|| MailError::UnsupportedProvider { 
+                provider: format!("No configuration found for domain in: {}", email) 
+            })?;
 
         let account_id = Uuid::new_v4().to_string();
         let auth_config = AccountAuthConfig::Password {
@@ -160,7 +162,9 @@ impl AccountManager {
         expires_at: chrono::DateTime<chrono::Utc>,
     ) -> MailResult<String> {
         let mut gmail_config = get_predefined_configs().get("gmail")
-            .ok_or_else(|| MailError::ConfigurationError("Gmail config not found".to_string()))?
+            .ok_or_else(|| MailError::ConfigurationError { 
+                message: "Gmail config not found".to_string() 
+            })?
             .clone();
 
         let account_id = Uuid::new_v4().to_string();
@@ -195,11 +199,11 @@ impl AccountManager {
 
     /// Test account connection
     async fn test_account_connection(&self, account: &MailAccountConfig) -> MailResult<()> {
+        // Convert to IMAP config
+        let imap_config = Self::convert_to_imap_config(&account.server_config, &account.auth_config)?;
+        
         // Create temporary IMAP provider for testing
-        let imap_provider = ImapProvider::new(
-            account.server_config.clone(),
-            account.auth_config.clone(),
-        ).await?;
+        let imap_provider = ImapProvider::new(imap_config).await?;
 
         // Test connection
         imap_provider.test_connection().await?;
@@ -236,7 +240,9 @@ impl AccountManager {
             info!("Removed mail account: {}", account_id);
             Ok(())
         } else {
-            Err(MailError::AccountNotFound(account_id.to_string()))
+            Err(MailError::AccountNotFound { 
+                account_id: account_id.to_string() 
+            })
         }
     }
 
@@ -254,7 +260,9 @@ impl AccountManager {
             info!("Updated account settings: {}", account_id);
             Ok(())
         } else {
-            Err(MailError::AccountNotFound(account_id.to_string()))
+            Err(MailError::AccountNotFound { 
+                account_id: account_id.to_string() 
+            })
         }
     }
 
@@ -268,13 +276,57 @@ impl AccountManager {
             info!("Set account {} enabled: {}", account_id, enabled);
             Ok(())
         } else {
-            Err(MailError::AccountNotFound(account_id.to_string()))
+            Err(MailError::AccountNotFound { 
+                account_id: account_id.to_string() 
+            })
         }
     }
 
     /// Get available server configurations
     pub fn get_available_configs(&self) -> HashMap<String, ServerConfig> {
         get_predefined_configs()
+    }
+
+    /// Convert ServerConfig and AccountAuthConfig to ImapConfig
+    fn convert_to_imap_config(server_config: &ServerConfig, auth_config: &AccountAuthConfig) -> MailResult<ImapConfig> {
+        let (username, password) = match auth_config {
+            AccountAuthConfig::Password { username, password } => {
+                (username.clone(), password.clone())
+            }
+            AccountAuthConfig::AppPassword { username, app_password } => {
+                (username.clone(), app_password.clone())
+            }
+            AccountAuthConfig::OAuth2 { access_token, .. } => {
+                // For OAuth2, we'll use the access token as the password
+                // The username might be extracted from the email or set differently
+                ("oauth".to_string(), access_token.clone())
+            }
+        };
+
+        let imap_tls = matches!(server_config.imap_security, SecurityType::Tls);
+        let smtp_tls = matches!(server_config.smtp_security, SecurityType::Tls);
+
+        Ok(ImapConfig {
+            imap_host: server_config.imap_host.clone(),
+            imap_port: server_config.imap_port,
+            imap_tls,
+            smtp_host: server_config.smtp_host.clone(),
+            smtp_port: server_config.smtp_port,
+            smtp_tls,
+            username,
+            password: secrecy::Secret::new(password),
+            connection_timeout: std::time::Duration::from_secs(30),
+            idle_timeout: std::time::Duration::from_secs(1800),
+            max_connections: 5,
+            enable_idle: true,
+            enable_compression: false,
+            enable_oauth2: matches!(auth_config, AccountAuthConfig::OAuth2 { .. }),
+            oauth2_mechanism: if matches!(auth_config, AccountAuthConfig::OAuth2 { .. }) {
+                Some("XOAUTH2".to_string())
+            } else {
+                None
+            },
+        })
     }
 
     /// Refresh OAuth token for account
@@ -284,23 +336,30 @@ impl AccountManager {
         if let Some(account) = accounts.get_mut(account_id) {
             match &account.auth_config {
                 AccountAuthConfig::OAuth2 { refresh_token, .. } => {
-                    // Use AuthManager to refresh token
-                    let new_tokens = self.auth_manager.refresh_token(&account.server_config.name, refresh_token).await?;
+                    // Use Gmail provider for OAuth refresh (this should be determined dynamically)
+                    let provider_enum = crate::mail::types::MailProvider::Gmail;
+                    let new_tokens = self.auth_manager.refresh_access_token(provider_enum, refresh_token).await?;
                     
                     account.auth_config = AccountAuthConfig::OAuth2 {
                         access_token: new_tokens.access_token,
                         refresh_token: new_tokens.refresh_token.unwrap_or_else(|| refresh_token.clone()),
-                        expires_at: chrono::Utc::now() + chrono::Duration::seconds(new_tokens.expires_in as i64),
+                        expires_at: new_tokens.expires_at.unwrap_or_else(|| {
+                            chrono::Utc::now() + chrono::Duration::hours(1) // Default 1 hour expiry
+                        }),
                     };
                     account.updated_at = chrono::Utc::now();
                     
                     info!("Refreshed OAuth token for account: {}", account_id);
                     Ok(())
                 }
-                _ => Err(MailError::AuthenticationError("Account does not use OAuth2".to_string())),
+                _ => Err(MailError::AuthenticationError { 
+                    message: "Account does not use OAuth2".to_string() 
+                }),
             }
         } else {
-            Err(MailError::AccountNotFound(account_id.to_string()))
+            Err(MailError::AccountNotFound { 
+                account_id: account_id.to_string() 
+            })
         }
     }
 }
@@ -308,7 +367,7 @@ impl AccountManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mail::auth::AuthConfig;
+    use crate::mail::config::AuthConfig;
 
     #[tokio::test]
     async fn test_account_manager() {
@@ -320,7 +379,7 @@ mod tests {
             redirect_uri: "http://localhost:8080".to_string(),
         };
         
-        let auth_manager = Arc::new(AuthManager::new(&auth_config).await.unwrap());
+        let auth_manager = Arc::new(AuthManager::new());
         let account_manager = AccountManager::new(auth_manager);
 
         // Test getting available configs

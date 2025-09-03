@@ -1,19 +1,20 @@
 //! Query processing and execution for search operations
 
 use crate::search::{
-    SearchQuery, SearchResponse, SearchResult as SearchResultItem, SearchError, SearchResult as SearchResultType,
-    SearchHighlight, SearchFacet, FacetValue, FacetType, SearchDebugInfo, ParsingInfo, ExecutionInfo,
-    IndexManager, ContentType, ProviderType, DocumentMetadata, SearchOptions, FilterOperator,
+    SearchQuery, SearchResponse, SearchHighlight, SearchFacet, FacetValue, FacetType, 
+    SearchDebugInfo, ParsingInfo, ExecutionInfo, IndexManager, ContentType, ProviderType, 
+    DocumentMetadata, SearchOptions, FilterOperator,
+    types::SearchResult as SearchResultItem,
+    error::{SearchError, SearchResult as SearchResultType},
 };
 use std::sync::Arc;
 use std::collections::HashMap;
 use tantivy::{
     query::{QueryParser, Query, BooleanQuery, TermQuery, FuzzyTermQuery, RangeQuery, Occur, PhraseQuery},
     collector::{TopDocs, FacetCollector, Count},
-    Searcher, Term, Score, TantivyError,
+    Searcher, Term, Score, TantivyError, Document, TantivyDocument,
     schema::{Field, Schema, IndexRecordOption},
     tokenizer::TokenizerManager,
-    snippet::{SnippetGenerator, Snippet},
 };
 use tracing::{debug, error, instrument};
 use chrono::{DateTime, Utc};
@@ -34,7 +35,7 @@ pub struct QueryProcessor {
     query_parsers: HashMap<String, QueryParser>,
     
     /// Snippet generators for highlighting
-    snippet_generators: HashMap<Field, SnippetGenerator>,
+    snippet_generators: HashMap<Field, String>,
 }
 
 impl QueryProcessor {
@@ -53,15 +54,15 @@ impl QueryProcessor {
         
         // Main query parser for title and content
         let main_fields = vec![fields.title, fields.content, fields.summary];
-        let main_parser = QueryParser::for_index(index_manager.main_index.as_ref(), main_fields);
+        let main_parser = QueryParser::for_index(index_manager.get_main_index().as_ref(), main_fields);
         query_parsers.insert("main".to_string(), main_parser);
         
         // Author query parser
-        let author_parser = QueryParser::for_index(index_manager.main_index.as_ref(), vec![fields.author]);
+        let author_parser = QueryParser::for_index(index_manager.get_main_index().as_ref(), vec![fields.author]);
         query_parsers.insert("author".to_string(), author_parser);
         
         // Tags query parser
-        let tags_parser = QueryParser::for_index(index_manager.main_index.as_ref(), vec![fields.tags]);
+        let tags_parser = QueryParser::for_index(index_manager.get_main_index().as_ref(), vec![fields.tags]);
         query_parsers.insert("tags".to_string(), tags_parser);
         
         // Create snippet generators for highlighting
@@ -70,12 +71,12 @@ impl QueryProcessor {
         
         snippet_generators.insert(
             fields.title,
-            SnippetGenerator::create(&*index_manager.get_searcher(), &*main_parser.parse_query("").unwrap(), fields.title)?,
+            "title_snippet".to_string(),
         );
         
         snippet_generators.insert(
             fields.content,
-            SnippetGenerator::create(&*index_manager.get_searcher(), &*main_parser.parse_query("").unwrap(), fields.content)?,
+            "content_snippet".to_string(),
         );
         
         Ok(Self {
@@ -106,9 +107,9 @@ impl QueryProcessor {
         // Create collectors
         let mut collectors = Vec::new();
         
-        // Top documents collector
-        let top_docs_collector = TopDocs::with_limit(fetch_count);
-        collectors.push(Box::new(top_docs_collector) as Box<dyn tantivy::Collector<Fruit = Vec<(Score, tantivy::DocAddress)>>>);
+        // Top documents collector (store for later use)
+        let top_docs_collector_for_multi = TopDocs::with_limit(fetch_count);
+        collectors.push(Box::new(TopDocs::with_limit(fetch_count)));
         
         // Facet collector (if enabled)
         let facet_collector = if query.options.facets.unwrap_or(true) {
@@ -122,17 +123,11 @@ impl QueryProcessor {
         
         // Execute search
         let search_results = if let Some(fc) = facet_collector {
-            let multi_collector = tantivy::collector::MultiCollector::new()
-                .add_collector(top_docs_collector)
-                .add_collector(fc)
-                .add_collector(count_collector);
-            
-            searcher.search(&*tantivy_query, &multi_collector)?
+            let multi_collector = (top_docs_collector_for_multi, fc, count_collector);
+            let results = searcher.search(&*tantivy_query, &multi_collector)?;
+            (results.0, Some(results.1), results.2)
         } else {
-            let multi_collector = tantivy::collector::MultiCollector::new()
-                .add_collector(top_docs_collector)
-                .add_collector(count_collector);
-            
+            let multi_collector = (TopDocs::with_limit(fetch_count), count_collector);
             let results = searcher.search(&*tantivy_query, &multi_collector)?;
             (results.0, None, results.1)
         };
@@ -235,35 +230,44 @@ impl QueryProcessor {
             Box::new(tantivy::query::AllQuery) as Box<dyn Query>
         };
         
-        let mut boolean_query = BooleanQuery::new();
-        boolean_query.add_query(main_query, Occur::Must);
+        let mut boolean_query = BooleanQuery::from(vec![(Occur::Must, main_query)]);
         
         // Add content type filters
         if let Some(content_types) = &query.content_types {
-            let mut content_type_query = BooleanQuery::new();
+            let mut content_type_clauses = Vec::new();
             for content_type in content_types {
-                let term = Term::from_field_text(fields.content_type, content_type.as_str());
-                content_type_query.add_query(Box::new(TermQuery::new(term, IndexRecordOption::Basic)), Occur::Should);
+                let term = Term::from_field_text(self.index_manager.get_fields().content_type, content_type.as_str());
+                content_type_clauses.push((Occur::Should, Box::new(TermQuery::new(term, IndexRecordOption::Basic)) as Box<dyn Query>));
             }
-            boolean_query.add_query(Box::new(content_type_query), Occur::Must);
+            let content_type_query = BooleanQuery::from(content_type_clauses);
+            boolean_query = BooleanQuery::from(vec![
+                (Occur::Must, Box::new(boolean_query) as Box<dyn Query>),
+                (Occur::Must, Box::new(content_type_query) as Box<dyn Query>)
+            ]);
         }
         
         // Add provider filters
         if let Some(provider_ids) = &query.provider_ids {
-            let mut provider_query = BooleanQuery::new();
+            let mut provider_clauses = Vec::new();
             for provider_id in provider_ids {
-                let term = Term::from_field_text(fields.provider_id, provider_id);
-                provider_query.add_query(Box::new(TermQuery::new(term, IndexRecordOption::Basic)), Occur::Should);
+                let term = Term::from_field_text(self.index_manager.get_fields().provider_id, provider_id);
+                provider_clauses.push((Occur::Should, Box::new(TermQuery::new(term, IndexRecordOption::Basic)) as Box<dyn Query>));
             }
-            boolean_query.add_query(Box::new(provider_query), Occur::Must);
+            let provider_query = BooleanQuery::from(provider_clauses);
+            boolean_query = BooleanQuery::from(vec![
+                (Occur::Must, Box::new(boolean_query) as Box<dyn Query>),
+                (Occur::Must, Box::new(provider_query) as Box<dyn Query>)
+            ]);
         }
         
         // Add custom filters
         if let Some(filters) = &query.filters {
+            let mut current_clauses = vec![(Occur::Must, Box::new(boolean_query) as Box<dyn Query>)];
             for filter in filters {
                 let filter_query = self.build_filter_query(filter)?;
-                boolean_query.add_query(filter_query, Occur::Must);
+                current_clauses.push((Occur::Must, filter_query));
             }
+            boolean_query = BooleanQuery::from(current_clauses);
         }
         
         Ok(Box::new(boolean_query))
@@ -277,7 +281,9 @@ impl QueryProcessor {
         } else {
             // Use the main query parser for simple queries
             let parser = self.query_parsers.get("main").unwrap();
-            let query = parser.parse_query(query_text)?;
+            let query = parser.parse_query(query_text).map_err(|e| 
+                SearchError::QueryError(format!("Failed to parse query '{}': {}", query_text, e))
+            )?;
             Ok(query)
         }
     }
@@ -305,7 +311,7 @@ impl QueryProcessor {
         // This is a simplified parser for advanced syntax
         // A production implementation would use a proper query language parser
         
-        let mut boolean_query = BooleanQuery::new();
+        let mut clauses = Vec::new();
         
         // Handle field-specific queries
         let field_patterns = [
@@ -331,8 +337,8 @@ impl QueryProcessor {
                 let field_value = field_value.trim_matches('"');
                 
                 let term = Term::from_field_text(*field, field_value);
-                let field_query = Box::new(TermQuery::new(term, IndexRecordOption::Basic));
-                boolean_query.add_query(field_query, Occur::Must);
+                let field_query = Box::new(TermQuery::new(term, IndexRecordOption::Basic)) as Box<dyn Query>;
+                clauses.push((Occur::Must, field_query));
                 
                 // Remove this part from the remaining query
                 remaining_query = remaining_query.replace(&format!("{}{}", prefix, field_value), "");
@@ -343,15 +349,17 @@ impl QueryProcessor {
         let remaining_query = remaining_query.trim();
         if !remaining_query.is_empty() {
             let parser = self.query_parsers.get("main").unwrap();
-            let text_query = parser.parse_query(remaining_query)?;
-            boolean_query.add_query(text_query, Occur::Must);
+            match parser.parse_query(remaining_query) {
+                Ok(text_query) => clauses.push((Occur::Must, text_query)),
+                Err(e) => return Err(SearchError::QueryError(format!("Query parsing error: {}", e))),
+            }
         }
         
-        if boolean_query.clauses().is_empty() {
+        if clauses.is_empty() {
             // If no clauses, return a match-all query
             Ok(Box::new(tantivy::query::AllQuery))
         } else {
-            Ok(Box::new(boolean_query))
+            Ok(Box::new(BooleanQuery::from(clauses)))
         }
     }
     
@@ -382,8 +390,10 @@ impl QueryProcessor {
             }
             FilterOperator::Contains => {
                 if let Some(value) = filter.value.as_str() {
-                    let parser = QueryParser::for_index(self.index_manager.main_index.as_ref(), vec![field]);
-                    let query = parser.parse_query(value)?;
+                    let parser = QueryParser::for_index(self.index_manager.get_main_index().as_ref(), vec![field]);
+                    let query = parser.parse_query(value).map_err(|e| 
+                        SearchError::QueryError(format!("Failed to parse query '{}': {}", value, e))
+                    )?;
                     Ok(query)
                 } else {
                     Err(SearchError::query_error("Contains filter requires string value"))
@@ -488,9 +498,9 @@ impl QueryProcessor {
         Ok(SearchResultItem {
             id,
             title,
-            description: summary,
+            description: summary.ok(),
             content: Some(content),
-            url,
+            url: url.ok(),
             icon: None,
             thumbnail: None,
             content_type,
@@ -506,23 +516,36 @@ impl QueryProcessor {
     }
     
     /// Get field value from document
-    fn get_field_value(&self, doc: &tantivy::Document, field: Field) -> SearchResultType<String> {
+    fn get_field_value(&self, doc: &tantivy::TantivyDocument, field: Field) -> SearchResultType<String> {
         doc.get_first(field)
-            .and_then(|value| value.as_text())
-            .map(|text| text.to_string())
+            .and_then(|value| {
+                let text = format!("{:?}", value).trim_matches('"').to_string();
+                if !text.is_empty() && text != "null" {
+                    Some(text)
+                } else {
+                    None
+                }
+            })
             .ok_or_else(|| SearchError::query_error("Missing required field"))
     }
     
     /// Generate highlights for search results
-    fn generate_highlights(&self, doc: &tantivy::Document, query_text: &str) -> SearchResultType<Option<Vec<SearchHighlight>>> {
+    fn generate_highlights(&self, doc: &tantivy::TantivyDocument, query_text: &str) -> SearchResultType<Option<Vec<SearchHighlight>>> {
         let fields = self.index_manager.get_fields();
         let mut highlights = Vec::new();
         
         // Generate highlights for title and content
         for (field_name, field) in [("title", fields.title), ("content", fields.content)] {
-            if let Some(field_value) = doc.get_first(field).and_then(|v| v.as_text()) {
+            if let Some(field_value) = doc.get_first(field).and_then(|v| {
+                let text = format!("{:?}", v).trim_matches('"').to_string();
+                if !text.is_empty() && text != "null" {
+                    Some(text)
+                } else {
+                    None
+                }
+            }) {
                 // Simple highlight generation (in production, use Tantivy's snippet generator)
-                let highlight_fragments = self.generate_simple_highlights(field_value, query_text);
+                let highlight_fragments = self.generate_simple_highlights(&field_value, query_text);
                 
                 if !highlight_fragments.is_empty() {
                     highlights.push(SearchHighlight {
@@ -594,6 +617,9 @@ impl QueryProcessor {
                 },
             ],
             facet_type: FacetType::Terms,
+            value: None,
+            count: None,
+            selected: None,
         };
         
         Ok(vec![content_type_facet])

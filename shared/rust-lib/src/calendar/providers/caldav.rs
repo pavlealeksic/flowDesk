@@ -54,7 +54,7 @@ impl CalDavProvider {
 #[async_trait]
 impl CalendarProviderTrait for CalDavProvider {
     fn provider_type(&self) -> CalendarProvider {
-        self.config.provider
+        CalendarProvider::CalDav
     }
 
     fn account_id(&self) -> &str {

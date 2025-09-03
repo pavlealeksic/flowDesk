@@ -1,7 +1,7 @@
 //! Provider manager for coordinating multiple search providers
 
 use crate::search::{
-    SearchQuery, SearchResult as SearchResultType, SearchError, ProviderResponse, 
+    SearchQuery, SearchResult as SearchResult, SearchError, ProviderResponse, 
     ProviderConfig, ErrorContext, SearchErrorContext,
 };
 use super::{SearchProvider, ProviderFactory, ProviderStats, ProviderHealth, HealthStatus};
@@ -66,7 +66,7 @@ impl Default for ProviderMetrics {
 impl ProviderManager {
     /// Create a new provider manager
     #[instrument]
-    pub async fn new(configs: Vec<ProviderConfig>) -> SearchResultType<Self> {
+    pub async fn new(configs: Vec<ProviderConfig>) -> SearchResult<Self> {
         info!("Initializing provider manager with {} providers", configs.len());
         
         let manager = Self {
@@ -91,7 +91,7 @@ impl ProviderManager {
     
     /// Add a new provider
     #[instrument(skip(self, config), fields(provider_id = %config.id))]
-    pub async fn add_provider(&self, config: ProviderConfig) -> SearchResultType<()> {
+    pub async fn add_provider(&self, config: ProviderConfig) -> SearchResult<()> {
         info!("Adding provider: {}", config.id);
         
         let context = SearchErrorContext::new("add_provider")
@@ -111,15 +111,17 @@ impl ProviderManager {
         let provider_id = config.id.clone();
         self.providers.insert(provider_id.clone(), Arc::new(RwLock::new(provider)));
         
-        {
+        let (weight, enabled) = {
             let mut configs = self.configs.write().await;
             configs.insert(provider_id.clone(), config);
-        }
+            let config_ref = configs.get(&provider_id).unwrap();
+            (config_ref.weight, config_ref.enabled)
+        };
         
-        // Initialize metrics
+        // Initialize metrics  
         self.metrics.insert(provider_id.clone(), ProviderMetrics {
-            weight: config.weight,
-            enabled: config.enabled,
+            weight,
+            enabled,
             ..Default::default()
         });
         
@@ -129,7 +131,7 @@ impl ProviderManager {
     
     /// Remove a provider
     #[instrument(skip(self), fields(provider_id = %provider_id))]
-    pub async fn remove_provider(&self, provider_id: &str) -> SearchResultType<()> {
+    pub async fn remove_provider(&self, provider_id: &str) -> SearchResult<()> {
         info!("Removing provider: {}", provider_id);
         
         if let Some((_, provider_arc)) = self.providers.remove(provider_id) {
@@ -158,7 +160,7 @@ impl ProviderManager {
         &self,
         query: &SearchQuery,
         provider_ids: &[String],
-    ) -> SearchResultType<Vec<ProviderResponse>> {
+    ) -> SearchResult<Vec<ProviderResponse>> {
         debug!("Searching {} providers", provider_ids.len());
         
         let mut search_futures = Vec::new();
@@ -236,7 +238,7 @@ impl ProviderManager {
     }
     
     /// Get all provider statistics
-    pub async fn get_all_provider_stats(&self) -> SearchResultType<HashMap<String, ProviderStats>> {
+    pub async fn get_all_provider_stats(&self) -> SearchResult<HashMap<String, ProviderStats>> {
         let mut all_stats = HashMap::new();
         
         for provider_entry in self.providers.iter() {
@@ -258,7 +260,7 @@ impl ProviderManager {
     
     /// Check health of all providers
     #[instrument(skip(self))]
-    pub async fn check_health(&self) -> SearchResultType<bool> {
+    pub async fn check_health(&self) -> SearchResult<bool> {
         debug!("Performing health check on all providers");
         
         let mut overall_healthy = true;
@@ -308,7 +310,7 @@ impl ProviderManager {
     
     /// Enable or disable a provider
     #[instrument(skip(self), fields(provider_id = %provider_id))]
-    pub async fn set_provider_enabled(&self, provider_id: &str, enabled: bool) -> SearchResultType<()> {
+    pub async fn set_provider_enabled(&self, provider_id: &str, enabled: bool) -> SearchResult<()> {
         if let Some(mut metrics) = self.metrics.get_mut(provider_id) {
             metrics.enabled = enabled;
             info!("Provider {} {}", provider_id, if enabled { "enabled" } else { "disabled" });
@@ -321,7 +323,7 @@ impl ProviderManager {
     
     /// Update provider weight for query distribution
     #[instrument(skip(self), fields(provider_id = %provider_id))]
-    pub async fn set_provider_weight(&self, provider_id: &str, weight: f32) -> SearchResultType<()> {
+    pub async fn set_provider_weight(&self, provider_id: &str, weight: f32) -> SearchResult<()> {
         if let Some(mut metrics) = self.metrics.get_mut(provider_id) {
             metrics.weight = weight;
             debug!("Provider {} weight set to {}", provider_id, weight);

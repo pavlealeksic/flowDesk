@@ -926,14 +926,14 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             invitedBy: z.ZodOptional<z.ZodString>;
             permissions: z.ZodArray<z.ZodString, "many">;
         }, "strip", z.ZodTypeAny, {
-            userId: string;
             role: "owner" | "admin" | "member" | "viewer";
+            userId: string;
             permissions: string[];
             joinedAt: Date;
             invitedBy?: string | undefined;
         }, {
-            userId: string;
             role: "owner" | "admin" | "member" | "viewer";
+            userId: string;
             permissions: string[];
             joinedAt: Date;
             invitedBy?: string | undefined;
@@ -944,16 +944,16 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
         id: string;
         createdAt: Date;
         name: string;
-        type: "team" | "personal" | "organization";
         tags: string[];
+        type: "team" | "personal" | "organization";
         ownerId: string;
-        description?: string | undefined;
         icon?: string | undefined;
+        description?: string | undefined;
         organizationId?: string | undefined;
         teamId?: string | undefined;
         members?: {
-            userId: string;
             role: "owner" | "admin" | "member" | "viewer";
+            userId: string;
             permissions: string[];
             joinedAt: Date;
             invitedBy?: string | undefined;
@@ -962,16 +962,16 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
         id: string;
         createdAt: Date;
         name: string;
-        type: "team" | "personal" | "organization";
         tags: string[];
+        type: "team" | "personal" | "organization";
         ownerId: string;
-        description?: string | undefined;
         icon?: string | undefined;
+        description?: string | undefined;
         organizationId?: string | undefined;
         teamId?: string | undefined;
         members?: {
-            userId: string;
             role: "owner" | "admin" | "member" | "viewer";
+            userId: string;
             permissions: string[];
             joinedAt: Date;
             invitedBy?: string | undefined;
@@ -987,7 +987,7 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             highContrast: z.ZodBoolean;
             colorBlindFriendly: z.ZodBoolean;
         }, "strip", z.ZodTypeAny, {
-            mode: "auto" | "light" | "dark";
+            mode: "light" | "dark" | "auto";
             accentColor: string;
             fontFamily: string;
             fontSize: "small" | "medium" | "large";
@@ -995,7 +995,7 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             colorBlindFriendly: boolean;
             customTheme?: string | undefined;
         }, {
-            mode: "auto" | "light" | "dark";
+            mode: "light" | "dark" | "auto";
             accentColor: string;
             fontFamily: string;
             fontSize: "small" | "medium" | "large";
@@ -1087,38 +1087,38 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
                 endTime: z.ZodString;
                 days: z.ZodArray<z.ZodNumber, "many">;
             }, "strip", z.ZodTypeAny, {
+                enabled: boolean;
                 startTime: string;
                 endTime: string;
-                enabled: boolean;
                 days: number[];
             }, {
+                enabled: boolean;
                 startTime: string;
                 endTime: string;
-                enabled: boolean;
                 days: number[];
             }>;
         }, "strip", z.ZodTypeAny, {
-            desktop: boolean;
-            push: boolean;
             sound: boolean;
+            push: boolean;
+            desktop: boolean;
             emailDigest: boolean;
             soundFile: string;
             doNotDisturb: {
+                enabled: boolean;
                 startTime: string;
                 endTime: string;
-                enabled: boolean;
                 days: number[];
             };
         }, {
-            desktop: boolean;
-            push: boolean;
             sound: boolean;
+            push: boolean;
+            desktop: boolean;
             emailDigest: boolean;
             soundFile: string;
             doNotDisturb: {
+                enabled: boolean;
                 startTime: string;
                 endTime: string;
-                enabled: boolean;
                 days: number[];
             };
         }>;
@@ -1130,36 +1130,36 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             autoSync: z.ZodBoolean;
             checkUpdates: z.ZodBoolean;
         }, "strip", z.ZodTypeAny, {
-            autoSync: boolean;
             autoStart: boolean;
             restoreWorkspace: boolean;
             defaultApps: string[];
             layout: string;
+            autoSync: boolean;
             checkUpdates: boolean;
         }, {
-            autoSync: boolean;
             autoStart: boolean;
             restoreWorkspace: boolean;
             defaultApps: string[];
             layout: string;
+            autoSync: boolean;
             checkUpdates: boolean;
         }>;
     }, "strip", z.ZodTypeAny, {
         notifications: {
-            desktop: boolean;
-            push: boolean;
             sound: boolean;
+            push: boolean;
+            desktop: boolean;
             emailDigest: boolean;
             soundFile: string;
             doNotDisturb: {
+                enabled: boolean;
                 startTime: string;
                 endTime: string;
-                enabled: boolean;
                 days: number[];
             };
         };
         theme: {
-            mode: "auto" | "light" | "dark";
+            mode: "light" | "dark" | "auto";
             accentColor: string;
             fontFamily: string;
             fontSize: "small" | "medium" | "large";
@@ -1194,29 +1194,29 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             voiceCommands: boolean;
         };
         startup: {
-            autoSync: boolean;
             autoStart: boolean;
             restoreWorkspace: boolean;
             defaultApps: string[];
             layout: string;
+            autoSync: boolean;
             checkUpdates: boolean;
         };
     }, {
         notifications: {
-            desktop: boolean;
-            push: boolean;
             sound: boolean;
+            push: boolean;
+            desktop: boolean;
             emailDigest: boolean;
             soundFile: string;
             doNotDisturb: {
+                enabled: boolean;
                 startTime: string;
                 endTime: string;
-                enabled: boolean;
                 days: number[];
             };
         };
         theme: {
-            mode: "auto" | "light" | "dark";
+            mode: "light" | "dark" | "auto";
             accentColor: string;
             fontFamily: string;
             fontSize: "small" | "medium" | "large";
@@ -1251,11 +1251,11 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             voiceCommands: boolean;
         };
         startup: {
-            autoSync: boolean;
             autoStart: boolean;
             restoreWorkspace: boolean;
             defaultApps: string[];
             layout: string;
+            autoSync: boolean;
             checkUpdates: boolean;
         };
     }>;
@@ -1271,22 +1271,22 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             lastUpdateCheck: z.ZodOptional<z.ZodDate>;
             autoUpdate: z.ZodBoolean;
         }, "strip", z.ZodTypeAny, {
-            data: Record<string, any>;
-            version: string;
+            enabled: boolean;
             settings: Record<string, any>;
+            version: string;
             permissions: string[];
             pluginId: string;
-            enabled: boolean;
             autoUpdate: boolean;
+            data: Record<string, any>;
             lastUpdateCheck?: Date | undefined;
         }, {
-            data: Record<string, any>;
-            version: string;
+            enabled: boolean;
             settings: Record<string, any>;
+            version: string;
             permissions: string[];
             pluginId: string;
-            enabled: boolean;
             autoUpdate: boolean;
+            data: Record<string, any>;
             lastUpdateCheck?: Date | undefined;
         }>>;
         global: z.ZodObject<{
@@ -1307,13 +1307,13 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
         }>;
     }, "strip", z.ZodTypeAny, {
         plugins: Record<string, {
-            data: Record<string, any>;
-            version: string;
+            enabled: boolean;
             settings: Record<string, any>;
+            version: string;
             permissions: string[];
             pluginId: string;
-            enabled: boolean;
             autoUpdate: boolean;
+            data: Record<string, any>;
             lastUpdateCheck?: Date | undefined;
         }>;
         global: {
@@ -1324,13 +1324,13 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
         };
     }, {
         plugins: Record<string, {
-            data: Record<string, any>;
-            version: string;
+            enabled: boolean;
             settings: Record<string, any>;
+            version: string;
             permissions: string[];
             pluginId: string;
-            enabled: boolean;
             autoUpdate: boolean;
+            data: Record<string, any>;
             lastUpdateCheck?: Date | undefined;
         }>;
         global: {
@@ -1518,22 +1518,22 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             compress: z.ZodBoolean;
             encrypt: z.ZodBoolean;
         }, "strip", z.ZodTypeAny, {
-            location: string;
-            frequency: "hourly" | "daily" | "weekly";
             enabled: boolean;
+            frequency: "hourly" | "daily" | "weekly";
+            location: string;
             retentionCount: number;
             compress: boolean;
             encrypt: boolean;
         }, {
-            location: string;
-            frequency: "hourly" | "daily" | "weekly";
             enabled: boolean;
+            frequency: "hourly" | "daily" | "weekly";
+            location: string;
             retentionCount: number;
             compress: boolean;
             encrypt: boolean;
         }>;
     }, "strip", z.ZodTypeAny, {
-        autoSync: boolean;
+        enabled: boolean;
         encryption: {
             algorithm: "chacha20poly1305" | "aes256gcm";
             kdf: "argon2id" | "pbkdf2";
@@ -1549,21 +1549,21 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
                 lastRotation?: Date | undefined;
             };
         };
-        enabled: boolean;
+        autoSync: boolean;
         intervalMinutes: number;
         conflictResolution: "manual" | "latest" | "merge";
         excludePatterns: string[];
         backup: {
-            location: string;
-            frequency: "hourly" | "daily" | "weekly";
             enabled: boolean;
+            frequency: "hourly" | "daily" | "weekly";
+            location: string;
             retentionCount: number;
             compress: boolean;
             encrypt: boolean;
         };
         transport?: any;
     }, {
-        autoSync: boolean;
+        enabled: boolean;
         encryption: {
             algorithm: "chacha20poly1305" | "aes256gcm";
             kdf: "argon2id" | "pbkdf2";
@@ -1579,14 +1579,14 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
                 lastRotation?: Date | undefined;
             };
         };
-        enabled: boolean;
+        autoSync: boolean;
         intervalMinutes: number;
         conflictResolution: "manual" | "latest" | "merge";
         excludePatterns: string[];
         backup: {
-            location: string;
-            frequency: "hourly" | "daily" | "weekly";
             enabled: boolean;
+            frequency: "hourly" | "daily" | "weekly";
+            location: string;
             retentionCount: number;
             compress: boolean;
             encrypt: boolean;
@@ -1601,69 +1601,31 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
         userId: z.ZodString;
     }, "strip", z.ZodTypeAny, {
         userId: string;
-        deviceId: string;
         timestamp: Date;
+        deviceId: string;
     }, {
         userId: string;
-        deviceId: string;
         timestamp: Date;
+        deviceId: string;
     }>;
 }, "strip", z.ZodTypeAny, {
-    version: string;
-    workspace: {
-        id: string;
-        createdAt: Date;
-        name: string;
-        type: "team" | "personal" | "organization";
-        tags: string[];
-        ownerId: string;
-        description?: string | undefined;
-        icon?: string | undefined;
-        organizationId?: string | undefined;
-        teamId?: string | undefined;
-        members?: {
-            userId: string;
-            role: "owner" | "admin" | "member" | "viewer";
-            permissions: string[];
-            joinedAt: Date;
-            invitedBy?: string | undefined;
-        }[] | undefined;
-    };
     notifications: Record<string, any>;
-    plugins: {
-        plugins: Record<string, {
-            data: Record<string, any>;
-            version: string;
-            settings: Record<string, any>;
-            permissions: string[];
-            pluginId: string;
-            enabled: boolean;
-            autoUpdate: boolean;
-            lastUpdateCheck?: Date | undefined;
-        }>;
-        global: {
-            autoUpdate: boolean;
-            updateCheckInterval: number;
-            allowBeta: boolean;
-            dataDirectory: string;
-        };
-    };
     preferences: {
         notifications: {
-            desktop: boolean;
-            push: boolean;
             sound: boolean;
+            push: boolean;
+            desktop: boolean;
             emailDigest: boolean;
             soundFile: string;
             doNotDisturb: {
+                enabled: boolean;
                 startTime: string;
                 endTime: string;
-                enabled: boolean;
                 days: number[];
             };
         };
         theme: {
-            mode: "auto" | "light" | "dark";
+            mode: "light" | "dark" | "auto";
             accentColor: string;
             fontFamily: string;
             fontSize: "small" | "medium" | "large";
@@ -1698,17 +1660,36 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             voiceCommands: boolean;
         };
         startup: {
-            autoSync: boolean;
             autoStart: boolean;
             restoreWorkspace: boolean;
             defaultApps: string[];
             layout: string;
+            autoSync: boolean;
             checkUpdates: boolean;
         };
     };
+    version: string;
     automations: Record<string, any>;
+    plugins: {
+        plugins: Record<string, {
+            enabled: boolean;
+            settings: Record<string, any>;
+            version: string;
+            permissions: string[];
+            pluginId: string;
+            autoUpdate: boolean;
+            data: Record<string, any>;
+            lastUpdateCheck?: Date | undefined;
+        }>;
+        global: {
+            autoUpdate: boolean;
+            updateCheckInterval: number;
+            allowBeta: boolean;
+            dataDirectory: string;
+        };
+    };
     sync: {
-        autoSync: boolean;
+        enabled: boolean;
         encryption: {
             algorithm: "chacha20poly1305" | "aes256gcm";
             kdf: "argon2id" | "pbkdf2";
@@ -1724,19 +1705,38 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
                 lastRotation?: Date | undefined;
             };
         };
-        enabled: boolean;
+        autoSync: boolean;
         intervalMinutes: number;
         conflictResolution: "manual" | "latest" | "merge";
         excludePatterns: string[];
         backup: {
-            location: string;
-            frequency: "hourly" | "daily" | "weekly";
             enabled: boolean;
+            frequency: "hourly" | "daily" | "weekly";
+            location: string;
             retentionCount: number;
             compress: boolean;
             encrypt: boolean;
         };
         transport?: any;
+    };
+    workspace: {
+        id: string;
+        createdAt: Date;
+        name: string;
+        tags: string[];
+        type: "team" | "personal" | "organization";
+        ownerId: string;
+        icon?: string | undefined;
+        description?: string | undefined;
+        organizationId?: string | undefined;
+        teamId?: string | undefined;
+        members?: {
+            role: "owner" | "admin" | "member" | "viewer";
+            userId: string;
+            permissions: string[];
+            joinedAt: Date;
+            invitedBy?: string | undefined;
+        }[] | undefined;
     };
     apps: Record<string, any>;
     keybindings: {
@@ -1765,65 +1765,27 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
     ui: Record<string, any>;
     lastModified: {
         userId: string;
-        deviceId: string;
         timestamp: Date;
+        deviceId: string;
     };
 }, {
-    version: string;
-    workspace: {
-        id: string;
-        createdAt: Date;
-        name: string;
-        type: "team" | "personal" | "organization";
-        tags: string[];
-        ownerId: string;
-        description?: string | undefined;
-        icon?: string | undefined;
-        organizationId?: string | undefined;
-        teamId?: string | undefined;
-        members?: {
-            userId: string;
-            role: "owner" | "admin" | "member" | "viewer";
-            permissions: string[];
-            joinedAt: Date;
-            invitedBy?: string | undefined;
-        }[] | undefined;
-    };
     notifications: Record<string, any>;
-    plugins: {
-        plugins: Record<string, {
-            data: Record<string, any>;
-            version: string;
-            settings: Record<string, any>;
-            permissions: string[];
-            pluginId: string;
-            enabled: boolean;
-            autoUpdate: boolean;
-            lastUpdateCheck?: Date | undefined;
-        }>;
-        global: {
-            autoUpdate: boolean;
-            updateCheckInterval: number;
-            allowBeta: boolean;
-            dataDirectory: string;
-        };
-    };
     preferences: {
         notifications: {
-            desktop: boolean;
-            push: boolean;
             sound: boolean;
+            push: boolean;
+            desktop: boolean;
             emailDigest: boolean;
             soundFile: string;
             doNotDisturb: {
+                enabled: boolean;
                 startTime: string;
                 endTime: string;
-                enabled: boolean;
                 days: number[];
             };
         };
         theme: {
-            mode: "auto" | "light" | "dark";
+            mode: "light" | "dark" | "auto";
             accentColor: string;
             fontFamily: string;
             fontSize: "small" | "medium" | "large";
@@ -1858,17 +1820,36 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
             voiceCommands: boolean;
         };
         startup: {
-            autoSync: boolean;
             autoStart: boolean;
             restoreWorkspace: boolean;
             defaultApps: string[];
             layout: string;
+            autoSync: boolean;
             checkUpdates: boolean;
         };
     };
+    version: string;
     automations: Record<string, any>;
+    plugins: {
+        plugins: Record<string, {
+            enabled: boolean;
+            settings: Record<string, any>;
+            version: string;
+            permissions: string[];
+            pluginId: string;
+            autoUpdate: boolean;
+            data: Record<string, any>;
+            lastUpdateCheck?: Date | undefined;
+        }>;
+        global: {
+            autoUpdate: boolean;
+            updateCheckInterval: number;
+            allowBeta: boolean;
+            dataDirectory: string;
+        };
+    };
     sync: {
-        autoSync: boolean;
+        enabled: boolean;
         encryption: {
             algorithm: "chacha20poly1305" | "aes256gcm";
             kdf: "argon2id" | "pbkdf2";
@@ -1884,19 +1865,38 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
                 lastRotation?: Date | undefined;
             };
         };
-        enabled: boolean;
+        autoSync: boolean;
         intervalMinutes: number;
         conflictResolution: "manual" | "latest" | "merge";
         excludePatterns: string[];
         backup: {
-            location: string;
-            frequency: "hourly" | "daily" | "weekly";
             enabled: boolean;
+            frequency: "hourly" | "daily" | "weekly";
+            location: string;
             retentionCount: number;
             compress: boolean;
             encrypt: boolean;
         };
         transport?: any;
+    };
+    workspace: {
+        id: string;
+        createdAt: Date;
+        name: string;
+        tags: string[];
+        type: "team" | "personal" | "organization";
+        ownerId: string;
+        icon?: string | undefined;
+        description?: string | undefined;
+        organizationId?: string | undefined;
+        teamId?: string | undefined;
+        members?: {
+            role: "owner" | "admin" | "member" | "viewer";
+            userId: string;
+            permissions: string[];
+            joinedAt: Date;
+            invitedBy?: string | undefined;
+        }[] | undefined;
     };
     apps: Record<string, any>;
     keybindings: {
@@ -1925,8 +1925,8 @@ export declare const WorkspaceConfigSchema: z.ZodObject<{
     ui: Record<string, any>;
     lastModified: {
         userId: string;
-        deviceId: string;
         timestamp: Date;
+        deviceId: string;
     };
 }>;
 export declare const SyncStateSchema: z.ZodObject<{
@@ -1938,12 +1938,12 @@ export declare const SyncStateSchema: z.ZodObject<{
         code: z.ZodString;
     }, "strip", z.ZodTypeAny, {
         code: string;
-        timestamp: Date;
         message: string;
+        timestamp: Date;
     }, {
         code: string;
-        timestamp: Date;
         message: string;
+        timestamp: Date;
     }>>;
     stats: z.ZodObject<{
         totalSyncs: z.ZodNumber;
@@ -1976,15 +1976,15 @@ export declare const SyncStateSchema: z.ZodObject<{
         lastSyncDuration: number;
         avgSyncDuration: number;
     };
-    conflicts: number;
     pendingChanges: number;
+    conflicts: number;
     vectorClock: Record<string, number>;
+    lastSync?: Date | undefined;
     lastError?: {
         code: string;
-        timestamp: Date;
         message: string;
+        timestamp: Date;
     } | undefined;
-    lastSync?: Date | undefined;
 }, {
     status: "error" | "idle" | "syncing" | "paused";
     stats: {
@@ -1994,15 +1994,15 @@ export declare const SyncStateSchema: z.ZodObject<{
         lastSyncDuration: number;
         avgSyncDuration: number;
     };
-    conflicts: number;
     pendingChanges: number;
+    conflicts: number;
     vectorClock: Record<string, number>;
+    lastSync?: Date | undefined;
     lastError?: {
         code: string;
-        timestamp: Date;
         message: string;
+        timestamp: Date;
     } | undefined;
-    lastSync?: Date | undefined;
 }>;
 /**
  * Utility types for config operations

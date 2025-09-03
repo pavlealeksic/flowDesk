@@ -10,11 +10,16 @@ use napi_derive::napi;
 pub mod crypto;
 pub mod types;
 pub mod utils;
+pub mod config_sync;
+pub mod vector_clock;
 
 // Full featured modules with real implementations
 pub mod mail;
 pub mod calendar;
 pub mod search;
+pub mod storage;
+pub mod transports;
+// pub mod ai; // Temporarily disabled for audit
 
 // NAPI bindings
 #[cfg(feature = "napi")]

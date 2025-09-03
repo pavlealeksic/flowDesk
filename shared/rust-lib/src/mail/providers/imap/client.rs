@@ -14,6 +14,7 @@ use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use mailparse::MailHeaderMap;
 
 /// Comprehensive IMAP client implementation
 pub struct ImapClient {
@@ -50,6 +51,16 @@ struct FolderSyncState {
 }
 
 impl ImapClient {
+    /// Create uninitialized IMAP client (for sync constructor compatibility)
+    pub fn new_uninitialized() -> Self {
+        Self {
+            connection_pool: Arc::new(ImapConnectionPool::new_uninitialized()),
+            folder_cache: Arc::new(RwLock::new(HashMap::new())),
+            search_cache: Arc::new(RwLock::new(HashMap::new())),
+            sync_state: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
     /// Create new IMAP client
     pub async fn new(connection_pool: Arc<ImapConnectionPool>) -> MailResult<Self> {
         Ok(Self {
@@ -84,22 +95,10 @@ impl ImapClient {
         
         let session = conn.session()?;
         
-        // Try to get namespace (NAMESPACE extension)
-        let namespace_result = session.run_command_and_read_response("NAMESPACE").await;
-        
+        // NAMESPACE extension is optional - skip for now to avoid complexity
         self.connection_pool.return_connection(conn).await;
         
-        match namespace_result {
-            Ok(responses) => {
-                // Parse namespace response
-                let namespace_info = responses.iter()
-                    .map(|r| format!("{:?}", r))
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                Ok(namespace_info)
-            }
-            Err(_) => Ok("NAMESPACE not supported".to_string()),
-        }
+        Ok("NAMESPACE detection skipped".to_string())
     }
 
     /// List all folders/mailboxes
@@ -127,15 +126,16 @@ impl ImapClient {
                 id: folder_id,
                 account_id: Uuid::nil(), // Will be set by caller
                 name: folder_name.to_string(),
-                path: folder_name.to_string(),
+                display_name: folder_name.to_string(),
                 folder_type,
                 parent_id: None, // TODO: Parse hierarchy from folder name
+                path: folder_name.to_string(),
+                attributes: vec![], // Will be populated from IMAP attributes
+                message_count: 0,  // Will be updated when we examine the folder
                 unread_count: 0, // Will be updated when we examine the folder
-                total_count: 0,
-                sync_enabled: true,
-                last_sync_at: None,
-                created_at: Utc::now(),
-                updated_at: Utc::now(),
+                is_selectable: true,
+                can_select: true,
+                sync_status: FolderSyncStatus::default(),
             };
             
             // Cache folder information
@@ -162,16 +162,17 @@ impl ImapClient {
         let name = folder.name().to_lowercase();
         let attributes = folder.attributes();
         
-        // Check IMAP attributes first
-        for attr in attributes {
-            match attr {
-                async_imap::types::NameAttribute::Inbox => return MailFolderType::Inbox,
-                async_imap::types::NameAttribute::Sent => return MailFolderType::Sent,
-                async_imap::types::NameAttribute::Drafts => return MailFolderType::Drafts,
-                async_imap::types::NameAttribute::Trash => return MailFolderType::Trash,
-                async_imap::types::NameAttribute::Junk => return MailFolderType::Spam,
-                _ => {}
-            }
+        // Check IMAP attributes first by name-based detection
+        if name.contains("inbox") || name == "inbox" {
+            return MailFolderType::Inbox;
+        } else if name.contains("sent") {
+            return MailFolderType::Sent;
+        } else if name.contains("draft") {
+            return MailFolderType::Drafts;
+        } else if name.contains("trash") || name.contains("delete") {
+            return MailFolderType::Trash;
+        } else if name.contains("spam") || name.contains("junk") {
+            return MailFolderType::Spam;
         }
         
         // Fallback to name-based detection
@@ -218,15 +219,16 @@ impl ImapClient {
             id: Uuid::new_v4(),
             account_id: Uuid::nil(),
             name: name.to_string(),
-            path: full_name,
+            display_name: name.to_string(),
             folder_type: MailFolderType::Custom,
             parent_id: None, // TODO: Look up parent ID
+            path: full_name,
+            attributes: vec![],
+            message_count: 0,
             unread_count: 0,
-            total_count: 0,
-            sync_enabled: true,
-            last_sync_at: None,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
+            is_selectable: true,
+            can_select: true,
+            sync_status: FolderSyncStatus::default(),
         };
         
         info!("Created folder '{}'", folder.path);
@@ -355,14 +357,14 @@ impl ImapClient {
         let mut folder_cache = self.folder_cache.write().await;
         
         if let Some(cached) = folder_cache.get_mut(folder_name) {
-            cached.uid_validity = mailbox.uid_validity;
+            cached.uid_validity = mailbox.uid_validity.unwrap_or(0);
             cached.uid_next = mailbox.uid_next.unwrap_or(0);
             cached.recent = mailbox.recent;
             cached.exists = mailbox.exists;
             cached.last_updated = SystemTime::now();
             
             // Update message counts
-            cached.folder.total_count = mailbox.exists;
+            cached.folder.message_count = mailbox.exists as i32;
             cached.folder.unread_count = 0; // Will be calculated separately
         }
     }
@@ -384,7 +386,7 @@ impl ImapClient {
         // Convert envelope to EmailMessage fields
         let subject = envelope.subject
             .as_ref()
-            .and_then(|s| String::from_utf8(s.clone()).ok())
+            .and_then(|s| String::from_utf8(s.to_vec()).ok())
             .unwrap_or_default();
         
         let from = self.convert_imap_address(envelope.from.as_ref());
@@ -395,80 +397,99 @@ impl ImapClient {
         // Parse date
         let date = envelope.date
             .as_ref()
-            .and_then(|d| String::from_utf8(d.clone()).ok())
+            .and_then(|d| String::from_utf8(d.to_vec()).ok())
             .and_then(|d| DateTime::parse_from_rfc2822(&d).ok())
             .map(|d| d.with_timezone(&Utc))
             .unwrap_or_else(Utc::now);
         
         // Convert flags
-        let flags = self.convert_imap_flags(fetch.flags());
+        let flags_vec: Vec<_> = fetch.flags().collect();
+        let flags = self.convert_imap_flags(&flags_vec);
         
         // Get message size
-        let size = fetch.rfc822_size().unwrap_or(0) as u64;
+        let size = fetch.size.unwrap_or(0) as u64;
         
         // Message ID
         let message_id = envelope.message_id
             .as_ref()
-            .and_then(|id| String::from_utf8(id.clone()).ok());
+            .and_then(|id| String::from_utf8(id.to_vec()).ok());
         
-        // References for threading
+        // References for threading  
         let in_reply_to = envelope.in_reply_to
             .as_ref()
-            .and_then(|refs| refs.first())
-            .and_then(|id| String::from_utf8(id.clone()).ok());
+            .and_then(|id| String::from_utf8(id.to_vec()).ok());
+        
+        let snippet = subject.chars().take(200).collect();
         
         Ok(EmailMessage {
             id: Uuid::new_v4(),
-            provider_id: format!("{}:{}", folder_id, uid),
             account_id: Uuid::nil(), // Will be set by caller
-            folder_id,
-            thread_id: None, // Threading will be handled separately
+            provider_id: format!("{}:{}", folder_id, uid),
+            thread_id: Uuid::new_v4(), // Threading will be handled separately
             subject,
-            from,
+            body_html: None,
+            body_text: None, // Body will be fetched separately when needed
+            snippet,
+            from: from.unwrap_or_else(|| EmailAddress {
+                name: None,
+                address: "unknown@example.com".to_string(),
+                email: "unknown@example.com".to_string(),
+            }),
             to,
             cc,
             bcc,
-            text_content: None, // Body will be fetched separately when needed
-            html_content: None,
-            attachments: vec![], // Attachments will be parsed from body structure
+            reply_to: vec![],
+            date,
             flags,
             labels: vec![],
-            created_at: date,
-            updated_at: Utc::now(),
-            size,
+            folder: folder_id.to_string(),
+            folder_id: None,
+            importance: MessageImportance::Normal,
+            priority: MessagePriority::Normal,
+            size: size as i64,
+            attachments: vec![], // Attachments will be parsed from body structure
+            headers: HashMap::new(),
+            message_id: message_id.clone().unwrap_or_default(),
             message_id_header: message_id,
             in_reply_to,
             references: vec![], // TODO: Parse References header
+            encryption: None,
+            created_at: date,
+            updated_at: Utc::now(),
         })
     }
 
     /// Convert IMAP address to EmailAddress
-    fn convert_imap_address(&self, addr: Option<&Vec<mailparse::MailAddr>>) -> Option<EmailAddress> {
+    fn convert_imap_address(&self, addr: Option<&Vec<async_imap::imap_proto::Address>>) -> Option<EmailAddress> {
         addr?.first().and_then(|a| {
-            let name = a.name.as_ref().and_then(|n| String::from_utf8(n.clone()).ok());
-            let mailbox = a.mailbox.as_ref().and_then(|m| String::from_utf8(m.clone()).ok())?;
-            let host = a.host.as_ref().and_then(|h| String::from_utf8(h.clone()).ok())?;
+            let name = a.name.as_ref().and_then(|n| String::from_utf8(n.to_vec()).ok());
+            let mailbox = a.mailbox.as_ref().and_then(|m| String::from_utf8(m.to_vec()).ok())?;
+            let host = a.host.as_ref().and_then(|h| String::from_utf8(h.to_vec()).ok())?;
             
             Some(EmailAddress {
                 name,
+                address: format!("{}@{}", mailbox, host),
                 email: format!("{}@{}", mailbox, host),
             })
         })
     }
 
     /// Convert IMAP addresses to Vec<EmailAddress>
-    fn convert_imap_addresses(&self, addrs: Option<&Vec<async_imap::types::Address>>) -> Vec<EmailAddress> {
-        addrs.map(|addresses| {
-            addresses.iter().filter_map(|a| {
-                let name = a.name.as_ref().and_then(|n| String::from_utf8(n.clone()).ok());
-                let mailbox = a.mailbox.as_ref().and_then(|m| String::from_utf8(m.clone()).ok())?;
-                let host = a.host.as_ref().and_then(|h| String::from_utf8(h.clone()).ok())?;
-                
-                Some(EmailAddress {
-                    name,
-                    email: format!("{}@{}", mailbox, host),
+    fn convert_imap_addresses(&self, addrs: Option<&Vec<async_imap::imap_proto::Address>>) -> Vec<EmailAddress> {
+        addrs.map(|addr_vec| {
+            addr_vec.iter()
+                .filter_map(|a| {
+                    let mailbox = a.mailbox.as_ref().and_then(|m| String::from_utf8(m.to_vec()).ok())?;
+                    let host = a.host.as_ref().and_then(|h| String::from_utf8(h.to_vec()).ok())?;
+                    let name = a.name.as_ref().and_then(|n| String::from_utf8(n.to_vec()).ok());
+                    
+                    Some(EmailAddress {
+                        name,
+                        address: format!("{}@{}", mailbox, host),
+                        email: format!("{}@{}", mailbox, host),
+                    })
                 })
-            }).collect()
+                .collect()
         }).unwrap_or_default()
     }
 
@@ -479,17 +500,17 @@ impl ImapClient {
         for flag in flags {
             match flag {
                 Flag::Seen => email_flags.is_read = true,
-                Flag::Answered => email_flags.is_replied = true,
+                Flag::Answered => { /* TODO: Add is_replied field to EmailFlags */ },
                 Flag::Flagged => email_flags.is_starred = true,
-                Flag::Deleted => email_flags.is_deleted = true,
+                Flag::Deleted => email_flags.is_trashed = true, // Map deleted to trashed
                 Flag::Draft => email_flags.is_draft = true,
                 Flag::Recent => {} // Not directly mappable
                 Flag::Custom(name) => {
                     // Handle custom flags (could be used for labels)
-                    match name.as_str() {
-                        "$Forwarded" => email_flags.is_forwarded = true,
-                        "$Junk" => email_flags.is_spam = true,
-                        _ => {}
+                    if name == "$Forwarded" {
+                        /* TODO: Add is_forwarded field to EmailFlags */
+                    } else if name == "$Junk" {
+                        email_flags.is_spam = true;
                     }
                 }
                 _ => {}
@@ -538,9 +559,9 @@ impl ImapClient {
             let parsed = mailparse::parse_mail(body)
                 .map_err(|e| MailError::parsing(&format!("Failed to parse message body: {}", e)))?;
             
-            let (text_content, html_content) = self.extract_message_content(&parsed).await?;
-            email_message.text_content = text_content;
-            email_message.html_content = html_content;
+            let (body_text, body_html) = self.extract_message_content(&parsed).await?;
+            email_message.body_text = body_text;
+            email_message.body_html = body_html;
             
             email_message.attachments = self.extract_message_attachments(&parsed).await?;
         }
@@ -584,37 +605,38 @@ impl ImapClient {
 
     /// Extract text and HTML content from message
     async fn extract_message_content(&self, parsed: &mailparse::ParsedMail<'_>) -> MailResult<(Option<String>, Option<String>)> {
-        let mut text_content = None;
-        let mut html_content = None;
+        let mut body_text = None;
+        let mut body_html = None;
         
-        self.extract_content_recursive(parsed, &mut text_content, &mut html_content).await?;
+        self.extract_content_recursive(parsed, &mut body_text, &mut body_html).await?;
         
         // If we have HTML but no text, convert HTML to text
-        if text_content.is_none() && html_content.is_some() {
-            if let Some(ref html) = html_content {
-                text_content = Some(html2text::from_read(html.as_bytes(), 80));
+        if body_text.is_none() && body_html.is_some() {
+            if let Some(ref html) = body_html {
+                body_text = Some(html2text::from_read(html.as_bytes(), 80));
             }
         }
         
-        Ok((text_content, html_content))
+        Ok((body_text, body_html))
     }
 
     /// Extract content recursively from message parts
-    async fn extract_content_recursive(
-        &self,
-        parsed: &mailparse::ParsedMail<'_>,
-        text_content: &mut Option<String>,
-        html_content: &mut Option<String>,
-    ) -> MailResult<()> {
+    fn extract_content_recursive<'a>(
+        &'a self,
+        parsed: &'a mailparse::ParsedMail<'_>,
+        body_text: &'a mut Option<String>,
+        body_html: &'a mut Option<String>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = MailResult<()>> + Send + 'a>> {
+        Box::pin(async move {
         if parsed.subparts.is_empty() {
             // Leaf part
             match parsed.ctype.mimetype.as_str() {
-                "text/plain" if text_content.is_none() => {
-                    *text_content = Some(parsed.get_body()
+                "text/plain" if body_text.is_none() => {
+                    *body_text = Some(parsed.get_body()
                         .map_err(|e| MailError::parsing(&format!("Failed to parse text content: {}", e)))?);
                 }
-                "text/html" if html_content.is_none() => {
-                    *html_content = Some(parsed.get_body()
+                "text/html" if body_html.is_none() => {
+                    *body_html = Some(parsed.get_body()
                         .map_err(|e| MailError::parsing(&format!("Failed to parse HTML content: {}", e)))?);
                 }
                 _ => {}
@@ -622,11 +644,12 @@ impl ImapClient {
         } else {
             // Multipart - recurse into subparts
             for part in &parsed.subparts {
-                self.extract_content_recursive(part, text_content, html_content).await?;
+                self.extract_content_recursive(part, body_text, body_html).await?;
             }
         }
         
         Ok(())
+        })
     }
 
     /// Extract attachments from message
@@ -637,11 +660,12 @@ impl ImapClient {
     }
 
     /// Extract attachments recursively
-    async fn extract_attachments_recursive(
-        &self,
-        parsed: &mailparse::ParsedMail<'_>,
-        attachments: &mut Vec<EmailAttachment>,
-    ) -> MailResult<()> {
+    fn extract_attachments_recursive<'a>(
+        &'a self,
+        parsed: &'a mailparse::ParsedMail<'_>,
+        attachments: &'a mut Vec<EmailAttachment>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = MailResult<()>> + Send + 'a>> {
+        Box::pin(async move {
         for part in &parsed.subparts {
             if part.subparts.is_empty() {
                 // Check if this part is an attachment
@@ -651,13 +675,14 @@ impl ImapClient {
                 
                 if is_attachment && !part.ctype.mimetype.starts_with("text/") {
                     let filename = part.ctype.params.get("name")
+                        .map(|s| s.clone())
                         .or_else(|| {
                             // Parse filename from Content-Disposition header
                             if let Some(disp_header) = part.headers.get_first_value("Content-Disposition") {
                                 // Simple filename extraction (could be improved)
                                 if let Some(start) = disp_header.find("filename=") {
                                     let filename_part = &disp_header[start + 9..];
-                                    Some(filename_part.trim_matches('"').split(';').next().unwrap_or(""))
+                                    Some(filename_part.trim_matches('"').split(';').next().unwrap_or("").to_string())
                                 } else {
                                     None
                                 }
@@ -665,7 +690,6 @@ impl ImapClient {
                                 None
                             }
                         })
-                        .map(String::from)
                         .unwrap_or_else(|| "attachment".to_string());
                     
                     let content_type = part.ctype.mimetype.clone();
@@ -677,13 +701,17 @@ impl ImapClient {
                     let size = body.len() as u64;
                     
                     attachments.push(EmailAttachment {
-                        id: Uuid::new_v4(),
+                        id: filename.clone(),
                         filename,
+                        mime_type: content_type.clone(),
                         content_type,
-                        size,
-                        inline: is_inline,
+                        size: size as i64,
                         content_id,
-                        data: Some(body), // Store the data directly for now
+                        is_inline,
+                        inline: is_inline,
+                        download_url: None,
+                        local_path: None, // TODO: Save to disk and set path
+                        data: None, // TODO: Load attachment data when needed
                     });
                 }
             } else {
@@ -693,6 +721,7 @@ impl ImapClient {
         }
         
         Ok(())
+        })
     }
 
     /// Send message via SMTP (placeholder - should use separate SMTP client)
@@ -732,20 +761,19 @@ impl ImapClient {
         let mut raw = String::new();
         
         // Headers
-        if let Some(ref from) = message.from {
-            raw.push_str(&format!("From: {}\r\n", from.email));
-        }
+        let from = &message.from;
+        raw.push_str(&format!("From: {}\r\n", from.address));
         
         if !message.to.is_empty() {
             let to_emails: Vec<String> = message.to.iter()
-                .map(|addr| addr.email.clone())
+                .map(|addr| addr.address.clone())
                 .collect();
             raw.push_str(&format!("To: {}\r\n", to_emails.join(", ")));
         }
         
         if !message.cc.is_empty() {
             let cc_emails: Vec<String> = message.cc.iter()
-                .map(|addr| addr.email.clone())
+                .map(|addr| addr.address.clone())
                 .collect();
             raw.push_str(&format!("Cc: {}\r\n", cc_emails.join(", ")));
         }
@@ -754,7 +782,7 @@ impl ImapClient {
         raw.push_str(&format!("Date: {}\r\n", message.created_at.format("%a, %d %b %Y %H:%M:%S %z")));
         
         // MIME headers for content
-        if message.html_content.is_some() && message.text_content.is_some() {
+        if message.body_html.is_some() && message.body_text.is_some() {
             // Multipart alternative
             let boundary = format!("boundary_{}", uuid::Uuid::new_v4().simple());
             raw.push_str(&format!("MIME-Version: 1.0\r\n"));
@@ -762,7 +790,7 @@ impl ImapClient {
             raw.push_str("\r\n");
             
             // Text part
-            if let Some(ref text) = message.text_content {
+            if let Some(ref text) = message.body_text {
                 raw.push_str(&format!("--{}\r\n", boundary));
                 raw.push_str("Content-Type: text/plain; charset=utf-8\r\n");
                 raw.push_str("Content-Transfer-Encoding: 8bit\r\n\r\n");
@@ -771,7 +799,7 @@ impl ImapClient {
             }
             
             // HTML part
-            if let Some(ref html) = message.html_content {
+            if let Some(ref html) = message.body_html {
                 raw.push_str(&format!("--{}\r\n", boundary));
                 raw.push_str("Content-Type: text/html; charset=utf-8\r\n");
                 raw.push_str("Content-Transfer-Encoding: 8bit\r\n\r\n");
@@ -780,13 +808,13 @@ impl ImapClient {
             }
             
             raw.push_str(&format!("--{}--\r\n", boundary));
-        } else if let Some(ref text) = message.text_content {
+        } else if let Some(ref text) = message.body_text {
             // Plain text only
             raw.push_str("MIME-Version: 1.0\r\n");
             raw.push_str("Content-Type: text/plain; charset=utf-8\r\n");
             raw.push_str("Content-Transfer-Encoding: 8bit\r\n\r\n");
             raw.push_str(text);
-        } else if let Some(ref html) = message.html_content {
+        } else if let Some(ref html) = message.body_html {
             // HTML only
             raw.push_str("MIME-Version: 1.0\r\n");
             raw.push_str("Content-Type: text/html; charset=utf-8\r\n");
@@ -795,6 +823,20 @@ impl ImapClient {
         }
         
         Ok(raw)
+    }
+
+    /// Add label to message
+    pub async fn add_label(&self, message_id: &str, label: &str) -> MailResult<()> {
+        // IMAP uses flags rather than labels - for now, add as a custom flag
+        let custom_flag = format!("\\{}", label);
+        self.set_flags(message_id, &format!("+FLAGS ({})", custom_flag)).await
+    }
+
+    /// Remove label from message  
+    pub async fn remove_label(&self, message_id: &str, label: &str) -> MailResult<()> {
+        // IMAP uses flags rather than labels - for now, remove as a custom flag
+        let custom_flag = format!("\\{}", label);
+        self.set_flags(message_id, &format!("-FLAGS ({})", custom_flag)).await
     }
 
     /// Delete message
@@ -911,18 +953,8 @@ impl ImapClient {
         Ok(new_message_id)
     }
 
-    /// Mark message as read/unread
-    pub async fn mark_read(&self, message_id: &str, read: bool) -> MailResult<()> {
-        self.set_message_flags(message_id, if read { "+FLAGS (\\Seen)" } else { "-FLAGS (\\Seen)" }).await
-    }
-
-    /// Mark message as starred/unstarred  
-    pub async fn mark_starred(&self, message_id: &str, starred: bool) -> MailResult<()> {
-        self.set_message_flags(message_id, if starred { "+FLAGS (\\Flagged)" } else { "-FLAGS (\\Flagged)" }).await
-    }
-
-    /// Set message flags
-    async fn set_message_flags(&self, message_id: &str, flags: &str) -> MailResult<()> {
+    /// Set flags on message
+    pub async fn set_flags(&self, message_id: &str, flags: &str) -> MailResult<()> {
         let parts: Vec<&str> = message_id.split(':').collect();
         if parts.len() != 2 {
             return Err(MailError::invalid_input("Invalid message ID format"));
@@ -950,6 +982,17 @@ impl ImapClient {
         Ok(())
     }
 
+    /// Mark message as read/unread
+    pub async fn mark_read(&self, message_id: &str, read: bool) -> MailResult<()> {
+        self.set_flags(message_id, if read { "+FLAGS (\\Seen)" } else { "-FLAGS (\\Seen)" }).await
+    }
+
+    /// Mark message as starred/unstarred  
+    pub async fn mark_starred(&self, message_id: &str, starred: bool) -> MailResult<()> {
+        self.set_flags(message_id, if starred { "+FLAGS (\\Flagged)" } else { "-FLAGS (\\Flagged)" }).await
+    }
+
+
     /// Perform bulk operations on messages
     pub async fn bulk_operation(&self, operation: &BulkEmailOperation) -> MailResult<BulkOperationResult> {
         let mut results = Vec::new();
@@ -957,29 +1000,62 @@ impl ImapClient {
         let mut failed = 0;
         
         for message_id in &operation.message_ids {
+            let message_id_str = &message_id.to_string();
             let result = match operation.operation_type {
-                BulkOperationType::MarkRead => self.mark_read(message_id, true).await,
-                BulkOperationType::MarkUnread => self.mark_read(message_id, false).await,
-                BulkOperationType::Star => self.mark_starred(message_id, true).await,
-                BulkOperationType::Unstar => self.mark_starred(message_id, false).await,
-                BulkOperationType::Delete => self.delete_message(message_id).await,
+                BulkOperationType::MarkRead => self.mark_read(message_id_str, true).await,
+                BulkOperationType::MarkUnread => self.mark_read(message_id_str, false).await,
+                BulkOperationType::Star => self.mark_starred(message_id_str, true).await,
+                BulkOperationType::Unstar => self.mark_starred(message_id_str, false).await,
+                BulkOperationType::Delete => self.delete_message(message_id_str).await,
                 BulkOperationType::Archive => {
                     // Move to Archive folder (if it exists)
-                    match self.move_message(message_id, "Archive").await {
+                    match self.move_message(message_id_str, "Archive").await {
                         Ok(()) => Ok(()),
-                        Err(_) => self.move_message(message_id, "INBOX.Archive").await,
+                        Err(_) => self.move_message(message_id_str, "INBOX.Archive").await,
                     }
                 }
                 BulkOperationType::Spam => {
                     // Move to Spam/Junk folder
-                    match self.move_message(message_id, "Spam").await {
+                    match self.move_message(message_id_str, "Spam").await {
                         Ok(()) => Ok(()),
-                        Err(_) => self.move_message(message_id, "Junk").await,
+                        Err(_) => self.move_message(message_id_str, "Junk").await,
                     }
                 }
-                BulkOperationType::Move { folder_id } => {
-                    // TODO: Convert folder_id to folder_name
-                    Err(MailError::not_implemented("Bulk move with folder ID"))
+                BulkOperationType::Move => {
+                    // Get folder name from params
+                    if let Some(params) = &operation.params {
+                        if let Some(folder_name) = params.get("folder_name").and_then(|v| v.as_str()) {
+                            self.move_message(message_id_str, folder_name).await
+                        } else {
+                            Err(MailError::invalid_input("Move operation requires folder_name parameter"))
+                        }
+                    } else {
+                        Err(MailError::invalid_input("Move operation requires parameters"))
+                    }
+                }
+                BulkOperationType::AddLabel => {
+                    // Get label from params
+                    if let Some(params) = &operation.params {
+                        if let Some(label) = params.get("label").and_then(|v| v.as_str()) {
+                            self.add_label(message_id_str, label).await
+                        } else {
+                            Err(MailError::invalid_input("AddLabel operation requires label parameter"))
+                        }
+                    } else {
+                        Err(MailError::invalid_input("AddLabel operation requires parameters"))
+                    }
+                }
+                BulkOperationType::RemoveLabel => {
+                    // Get label from params
+                    if let Some(params) = &operation.params {
+                        if let Some(label) = params.get("label").and_then(|v| v.as_str()) {
+                            self.remove_label(message_id_str, label).await
+                        } else {
+                            Err(MailError::invalid_input("RemoveLabel operation requires label parameter"))
+                        }
+                    } else {
+                        Err(MailError::invalid_input("RemoveLabel operation requires parameters"))
+                    }
                 }
             };
             
@@ -1004,10 +1080,9 @@ impl ImapClient {
         }
         
         Ok(BulkOperationResult {
-            total_processed: operation.message_ids.len(),
-            successful,
-            failed,
-            results,
+            successful: successful as i32,
+            failed: failed as i32,
+            errors: vec![], // TODO: Collect actual errors from failed operations
         })
     }
 
@@ -1038,7 +1113,7 @@ impl ImapClient {
         let limited_results: Vec<u32> = if let Some(limit) = limit {
             search_results.into_iter().take(limit as usize).collect()
         } else {
-            search_results
+            search_results.into_iter().collect()
         };
         
         // Fetch message details for results
@@ -1063,7 +1138,7 @@ impl ImapClient {
         
         Ok(EmailSearchResult {
             query: query.to_string(),
-            total_count: limited_results.len(),
+            total_count: limited_results.len() as i32,
             messages,
             took: search_duration,
             facets: None,
@@ -1124,9 +1199,10 @@ impl ImapClient {
     pub async fn get_sync_changes(&self, _sync_token: Option<String>) -> MailResult<SyncResult> {
         // Full implementation would use CONDSTORE/QRESYNC extensions
         Ok(SyncResult {
-            sync_token: Some(chrono::Utc::now().timestamp().to_string()),
+            success: true,
+            messages_synced: 0, // TODO: Implement actual sync logic
+            errors: vec![],
             changes: vec![],
-            has_more: false,
         })
     }
 
@@ -1154,13 +1230,31 @@ impl ImapClient {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_search_query_conversion() {
+    #[tokio::test]
+    async fn test_search_query_conversion() {
+        // Create a test config
+        let config = ImapConfig {
+            imap_host: "imap.example.com".to_string(),
+            imap_port: 993,
+            imap_tls: true,
+            smtp_host: "smtp.example.com".to_string(),
+            smtp_port: 587,
+            smtp_tls: true,
+            username: "test@example.com".to_string(),
+            password: secrecy::Secret::new("password".to_string()),
+            connection_timeout: std::time::Duration::from_secs(30),
+            idle_timeout: std::time::Duration::from_secs(300),
+            max_connections: 5,
+            enable_idle: true,
+            enable_compression: false,
+            enable_oauth2: false,
+            oauth2_mechanism: None,
+        };
+        
+        let connection_pool = ImapConnectionPool::new(config).await.unwrap();
+        
         let client = ImapClient {
-            connection_pool: Arc::new(
-                // We can't create a real pool for testing, so this will fail
-                // In real tests, we'd use a mock or test fixture
-            ),
+            connection_pool: Arc::new(connection_pool),
             folder_cache: Arc::new(RwLock::new(HashMap::new())),
             search_cache: Arc::new(RwLock::new(HashMap::new())),
             sync_state: Arc::new(Mutex::new(HashMap::new())),

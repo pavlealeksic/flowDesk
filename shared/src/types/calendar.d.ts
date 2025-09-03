@@ -630,7 +630,7 @@ export declare const EventAttendeeSchema: z.ZodObject<{
     comment: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     email: string;
-    responseStatus: "needsAction" | "declined" | "tentative" | "accepted";
+    responseStatus: "accepted" | "declined" | "needsAction" | "tentative";
     optional: boolean;
     isResource: boolean;
     displayName?: string | undefined;
@@ -639,7 +639,7 @@ export declare const EventAttendeeSchema: z.ZodObject<{
     comment?: string | undefined;
 }, {
     email: string;
-    responseStatus: "needsAction" | "declined" | "tentative" | "accepted";
+    responseStatus: "accepted" | "declined" | "needsAction" | "tentative";
     optional: boolean;
     isResource: boolean;
     displayName?: string | undefined;
@@ -720,11 +720,11 @@ export declare const CalendarEventSchema: z.ZodObject<{
         features: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     }, "strip", z.ZodTypeAny, {
         displayName: string;
+        state?: string | undefined;
         address?: string | undefined;
         room?: string | undefined;
         building?: string | undefined;
         city?: string | undefined;
-        state?: string | undefined;
         country?: string | undefined;
         postalCode?: string | undefined;
         coordinates?: {
@@ -735,11 +735,11 @@ export declare const CalendarEventSchema: z.ZodObject<{
         features?: string[] | undefined;
     }, {
         displayName: string;
+        state?: string | undefined;
         address?: string | undefined;
         room?: string | undefined;
         building?: string | undefined;
         city?: string | undefined;
-        state?: string | undefined;
         country?: string | undefined;
         postalCode?: string | undefined;
         coordinates?: {
@@ -793,7 +793,7 @@ export declare const CalendarEventSchema: z.ZodObject<{
         comment: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
         email: string;
-        responseStatus: "needsAction" | "declined" | "tentative" | "accepted";
+        responseStatus: "accepted" | "declined" | "needsAction" | "tentative";
         optional: boolean;
         isResource: boolean;
         displayName?: string | undefined;
@@ -802,7 +802,7 @@ export declare const CalendarEventSchema: z.ZodObject<{
         comment?: string | undefined;
     }, {
         email: string;
-        responseStatus: "needsAction" | "declined" | "tentative" | "accepted";
+        responseStatus: "accepted" | "declined" | "needsAction" | "tentative";
         optional: boolean;
         isResource: boolean;
         displayName?: string | undefined;
@@ -886,7 +886,7 @@ export declare const CalendarEventSchema: z.ZodObject<{
         notes: z.ZodOptional<z.ZodString>;
         room: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        solution: "teams" | "custom" | "zoom" | "meet" | "webex" | "gotomeeting" | "hangout" | "skype";
+        solution: "custom" | "zoom" | "meet" | "teams" | "webex" | "gotomeeting" | "hangout" | "skype";
         room?: string | undefined;
         meetingId?: string | undefined;
         joinUrl?: string | undefined;
@@ -898,7 +898,7 @@ export declare const CalendarEventSchema: z.ZodObject<{
         passcode?: string | undefined;
         notes?: string | undefined;
     }, {
-        solution: "teams" | "custom" | "zoom" | "meet" | "webex" | "gotomeeting" | "hangout" | "skype";
+        solution: "custom" | "zoom" | "meet" | "teams" | "webex" | "gotomeeting" | "hangout" | "skype";
         room?: string | undefined;
         meetingId?: string | undefined;
         joinUrl?: string | undefined;
@@ -919,16 +919,16 @@ export declare const CalendarEventSchema: z.ZodObject<{
         iconUrl: z.ZodOptional<z.ZodString>;
         size: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        id: string;
         title: string;
+        id: string;
         size?: number | undefined;
         mimeType?: string | undefined;
         fileUrl?: string | undefined;
         fileId?: string | undefined;
         iconUrl?: string | undefined;
     }, {
-        id: string;
         title: string;
+        id: string;
         size?: number | undefined;
         mimeType?: string | undefined;
         fileUrl?: string | undefined;
@@ -953,21 +953,21 @@ export declare const CalendarEventSchema: z.ZodObject<{
     createdAt: z.ZodDate;
     updatedAt: z.ZodDate;
 }, "strip", z.ZodTypeAny, {
-    id: string;
     title: string;
-    status: "tentative" | "confirmed" | "cancelled";
+    id: string;
+    createdAt: Date;
+    updatedAt: Date;
+    status: "cancelled" | "tentative" | "confirmed";
     providerId: string;
     attachments: {
-        id: string;
         title: string;
+        id: string;
         size?: number | undefined;
         mimeType?: string | undefined;
         fileUrl?: string | undefined;
         fileId?: string | undefined;
         iconUrl?: string | undefined;
     }[];
-    createdAt: Date;
-    updatedAt: Date;
     calendarId: string;
     startTime: Date;
     endTime: Date;
@@ -975,7 +975,7 @@ export declare const CalendarEventSchema: z.ZodObject<{
     visibility: "default" | "public" | "private" | "confidential";
     attendees: {
         email: string;
-        responseStatus: "needsAction" | "declined" | "tentative" | "accepted";
+        responseStatus: "accepted" | "declined" | "needsAction" | "tentative";
         optional: boolean;
         isResource: boolean;
         displayName?: string | undefined;
@@ -987,19 +987,20 @@ export declare const CalendarEventSchema: z.ZodObject<{
         method: "sound" | "email" | "popup" | "sms";
         minutesBefore: number;
     }[];
-    transparency: "transparent" | "opaque";
+    transparency: "opaque" | "transparent";
     uid: string;
     sequence: number;
-    color?: string | undefined;
+    timezone?: string | undefined;
     description?: string | undefined;
+    color?: string | undefined;
     location?: string | undefined;
     locationData?: {
         displayName: string;
+        state?: string | undefined;
         address?: string | undefined;
         room?: string | undefined;
         building?: string | undefined;
         city?: string | undefined;
-        state?: string | undefined;
         country?: string | undefined;
         postalCode?: string | undefined;
         coordinates?: {
@@ -1009,7 +1010,6 @@ export declare const CalendarEventSchema: z.ZodObject<{
         capacity?: number | undefined;
         features?: string[] | undefined;
     } | undefined;
-    timezone?: string | undefined;
     creator?: {
         email: string;
         displayName?: string | undefined;
@@ -1038,7 +1038,7 @@ export declare const CalendarEventSchema: z.ZodObject<{
     recurringEventId?: string | undefined;
     originalStartTime?: Date | undefined;
     conferencing?: {
-        solution: "teams" | "custom" | "zoom" | "meet" | "webex" | "gotomeeting" | "hangout" | "skype";
+        solution: "custom" | "zoom" | "meet" | "teams" | "webex" | "gotomeeting" | "hangout" | "skype";
         room?: string | undefined;
         meetingId?: string | undefined;
         joinUrl?: string | undefined;
@@ -1056,21 +1056,21 @@ export declare const CalendarEventSchema: z.ZodObject<{
         url?: string | undefined;
     } | undefined;
 }, {
-    id: string;
     title: string;
-    status: "tentative" | "confirmed" | "cancelled";
+    id: string;
+    createdAt: Date;
+    updatedAt: Date;
+    status: "cancelled" | "tentative" | "confirmed";
     providerId: string;
     attachments: {
-        id: string;
         title: string;
+        id: string;
         size?: number | undefined;
         mimeType?: string | undefined;
         fileUrl?: string | undefined;
         fileId?: string | undefined;
         iconUrl?: string | undefined;
     }[];
-    createdAt: Date;
-    updatedAt: Date;
     calendarId: string;
     startTime: Date;
     endTime: Date;
@@ -1078,7 +1078,7 @@ export declare const CalendarEventSchema: z.ZodObject<{
     visibility: "default" | "public" | "private" | "confidential";
     attendees: {
         email: string;
-        responseStatus: "needsAction" | "declined" | "tentative" | "accepted";
+        responseStatus: "accepted" | "declined" | "needsAction" | "tentative";
         optional: boolean;
         isResource: boolean;
         displayName?: string | undefined;
@@ -1090,19 +1090,20 @@ export declare const CalendarEventSchema: z.ZodObject<{
         method: "sound" | "email" | "popup" | "sms";
         minutesBefore: number;
     }[];
-    transparency: "transparent" | "opaque";
+    transparency: "opaque" | "transparent";
     uid: string;
     sequence: number;
-    color?: string | undefined;
+    timezone?: string | undefined;
     description?: string | undefined;
+    color?: string | undefined;
     location?: string | undefined;
     locationData?: {
         displayName: string;
+        state?: string | undefined;
         address?: string | undefined;
         room?: string | undefined;
         building?: string | undefined;
         city?: string | undefined;
-        state?: string | undefined;
         country?: string | undefined;
         postalCode?: string | undefined;
         coordinates?: {
@@ -1112,7 +1113,6 @@ export declare const CalendarEventSchema: z.ZodObject<{
         capacity?: number | undefined;
         features?: string[] | undefined;
     } | undefined;
-    timezone?: string | undefined;
     creator?: {
         email: string;
         displayName?: string | undefined;
@@ -1141,7 +1141,7 @@ export declare const CalendarEventSchema: z.ZodObject<{
     recurringEventId?: string | undefined;
     originalStartTime?: Date | undefined;
     conferencing?: {
-        solution: "teams" | "custom" | "zoom" | "meet" | "webex" | "gotomeeting" | "hangout" | "skype";
+        solution: "custom" | "zoom" | "meet" | "teams" | "webex" | "gotomeeting" | "hangout" | "skype";
         room?: string | undefined;
         meetingId?: string | undefined;
         joinUrl?: string | undefined;
@@ -1173,16 +1173,16 @@ export declare const CalendarAccountSchema: z.ZodObject<{
         password: z.ZodOptional<z.ZodString>;
         additionalTokens: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>;
     }, "strip", z.ZodTypeAny, {
+        password?: string | undefined;
         accessToken?: string | undefined;
         refreshToken?: string | undefined;
         tokenExpiresAt?: Date | undefined;
-        password?: string | undefined;
         additionalTokens?: Record<string, string> | undefined;
     }, {
+        password?: string | undefined;
         accessToken?: string | undefined;
         refreshToken?: string | undefined;
         tokenExpiresAt?: Date | undefined;
-        password?: string | undefined;
         additionalTokens?: Record<string, string> | undefined;
     }>>;
     status: z.ZodEnum<["active", "auth_error", "quota_exceeded", "suspended", "disabled", "error"]>;
@@ -1194,44 +1194,44 @@ export declare const CalendarAccountSchema: z.ZodObject<{
     createdAt: z.ZodDate;
     updatedAt: z.ZodDate;
 }, "strip", z.ZodTypeAny, {
+    email: string;
     id: string;
-    name: string;
-    status: "error" | "active" | "auth_error" | "quota_exceeded" | "suspended" | "disabled";
     createdAt: Date;
     updatedAt: Date;
-    userId: string;
-    email: string;
-    provider: "caldav" | "outlook" | "exchange" | "fastmail" | "google" | "icloud";
-    syncIntervalMinutes: number;
+    name: string;
+    status: "error" | "active" | "auth_error" | "quota_exceeded" | "suspended" | "disabled";
+    provider: "outlook" | "fastmail" | "icloud" | "exchange" | "google" | "caldav";
     isEnabled: boolean;
+    userId: string;
+    syncIntervalMinutes: number;
     config?: any;
     credentials?: {
+        password?: string | undefined;
         accessToken?: string | undefined;
         refreshToken?: string | undefined;
         tokenExpiresAt?: Date | undefined;
-        password?: string | undefined;
         additionalTokens?: Record<string, string> | undefined;
     } | undefined;
     lastSyncAt?: Date | undefined;
     nextSyncAt?: Date | undefined;
     defaultCalendarId?: string | undefined;
 }, {
+    email: string;
     id: string;
-    name: string;
-    status: "error" | "active" | "auth_error" | "quota_exceeded" | "suspended" | "disabled";
     createdAt: Date;
     updatedAt: Date;
-    userId: string;
-    email: string;
-    provider: "caldav" | "outlook" | "exchange" | "fastmail" | "google" | "icloud";
-    syncIntervalMinutes: number;
+    name: string;
+    status: "error" | "active" | "auth_error" | "quota_exceeded" | "suspended" | "disabled";
+    provider: "outlook" | "fastmail" | "icloud" | "exchange" | "google" | "caldav";
     isEnabled: boolean;
+    userId: string;
+    syncIntervalMinutes: number;
     config?: any;
     credentials?: {
+        password?: string | undefined;
         accessToken?: string | undefined;
         refreshToken?: string | undefined;
         tokenExpiresAt?: Date | undefined;
-        password?: string | undefined;
         additionalTokens?: Record<string, string> | undefined;
     } | undefined;
     lastSyncAt?: Date | undefined;

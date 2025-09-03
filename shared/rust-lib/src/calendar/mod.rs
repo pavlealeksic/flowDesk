@@ -40,7 +40,7 @@ pub use types::{
     ReminderMethod, FreeBusyStatus,
     FreeBusyQuery, FreeBusyResponse, MeetingProposal, CalendarDatabase,
     EventTransparency, EventParticipant, EventLocation, ConferencingSolution,
-    SyncStatusType, SyncStats
+    SyncStatusType, SyncStats, SyncError, PrivacySettings, PrivacyFilters
 };
 
 // Provider-specific re-exports

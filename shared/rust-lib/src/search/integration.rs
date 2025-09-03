@@ -5,6 +5,8 @@ use crate::search::{
     SearchConfig, SearchQuery, SearchDocument, SearchResponse, SearchError, SearchResult as SearchResultType,
     QueryExpression, AdvancedFilters, IndexingConfig, PerformanceTargets, PerformanceMetrics,
     IndexingStats, SearchAnalytics, ErrorContext, SearchErrorContext,
+    performance::QueryPerformanceBreakdown,
+    types::SortDirection,
 };
 use std::sync::Arc;
 use tokio::sync::{RwLock, Mutex};
@@ -387,7 +389,7 @@ pub struct SearchTriggerAction {
 /// Search trigger execution context
 pub struct SearchTriggerContext {
     /// Search results that triggered the action
-    pub search_results: Vec<crate::search::SearchResult>,
+    pub search_results: Vec<crate::search::types::SearchResult>,
     
     /// Search query that was executed
     pub search_query: SearchQuery,
@@ -577,7 +579,7 @@ impl UnifiedSearchService {
         match &result {
             Ok(response) => {
                 // Record performance metrics
-                let breakdown = crate::search::QueryPerformanceBreakdown {
+                let breakdown = QueryPerformanceBreakdown {
                     parsing_ms: 5.0, // Would track actual timings
                     index_search_ms: execution_time as f64 * 0.7,
                     provider_search_ms: execution_time as f64 * 0.2,
@@ -609,7 +611,7 @@ impl UnifiedSearchService {
                 error!("Unified search failed: {}", error);
                 
                 // Record error metrics
-                let breakdown = crate::search::QueryPerformanceBreakdown {
+                let breakdown = QueryPerformanceBreakdown {
                     parsing_ms: 5.0,
                     index_search_ms: 0.0,
                     provider_search_ms: 0.0,
@@ -656,7 +658,8 @@ impl UnifiedSearchService {
         
         // Add facets if requested
         if query.options.facets.unwrap_or(false) {
-            response.facets = Some(self.compute_search_facets(&query).await?);
+            let facet_map = self.compute_search_facets(&query).await?;
+            response.facets = Some(facet_map.into_values().flatten().collect());
         }
         
         // Add suggestions if requested
@@ -711,11 +714,11 @@ impl UnifiedSearchService {
         
         // Add sorting
         if let Some(sort) = &query.sort {
-            expression.sort = Some(vec![crate::search::SortConfig {
+            expression.sort = Some(vec![crate::search::advanced_query::SortConfig {
                 field: sort.field.clone(),
-                order: match sort.direction.as_str() {
-                    "desc" => crate::search::SortOrder::Desc,
-                    _ => crate::search::SortOrder::Asc,
+                order: match sort.direction {
+                    SortDirection::Desc => crate::search::advanced_query::SortOrder::Desc,
+                    SortDirection::Asc => crate::search::advanced_query::SortOrder::Asc,
                 },
                 missing: None,
             }]);
@@ -723,7 +726,7 @@ impl UnifiedSearchService {
         
         // Add highlighting if enabled
         if query.options.highlighting.unwrap_or(false) {
-            expression.highlight = Some(crate::search::HighlightConfig {
+            expression.highlight = Some(crate::search::advanced_query::HighlightConfig {
                 fields: vec!["title".to_string(), "content".to_string()],
                 fragment_size: 150,
                 number_of_fragments: 3,
@@ -744,38 +747,62 @@ impl UnifiedSearchService {
         // Content type facet
         facets.insert("content_type".to_string(), vec![
             crate::search::SearchFacet {
-                value: "email".to_string(),
-                count: 45,
-                selected: false,
+                name: "Email".to_string(),
+                field: "content_type".to_string(),
+                values: vec![],
+                facet_type: crate::search::FacetType::Terms,
+                value: Some(serde_json::Value::String("email".to_string())),
+                count: Some(45),
+                selected: Some(false),
             },
             crate::search::SearchFacet {
-                value: "document".to_string(),
-                count: 23,
-                selected: false,
+                name: "Document".to_string(),
+                field: "content_type".to_string(),
+                values: vec![],
+                facet_type: crate::search::FacetType::Terms,
+                value: Some(serde_json::Value::String("document".to_string())),
+                count: Some(23),
+                selected: Some(false),
             },
             crate::search::SearchFacet {
-                value: "event".to_string(),
-                count: 12,
-                selected: false,
+                name: "Event".to_string(),
+                field: "content_type".to_string(),
+                values: vec![],
+                facet_type: crate::search::FacetType::Terms,
+                value: Some(serde_json::Value::String("event".to_string())),
+                count: Some(12),
+                selected: Some(false),
             },
         ]);
         
         // Provider facet
         facets.insert("provider".to_string(), vec![
             crate::search::SearchFacet {
-                value: "gmail".to_string(),
-                count: 34,
-                selected: false,
+                name: "Gmail".to_string(),
+                field: "provider".to_string(),
+                values: vec![],
+                facet_type: crate::search::FacetType::Terms,
+                value: Some(serde_json::Value::String("gmail".to_string())),
+                count: Some(34),
+                selected: Some(false),
             },
             crate::search::SearchFacet {
-                value: "slack".to_string(),
-                count: 28,
-                selected: false,
+                name: "Slack".to_string(),
+                field: "provider".to_string(),
+                values: vec![],
+                facet_type: crate::search::FacetType::Terms,
+                value: Some(serde_json::Value::String("slack".to_string())),
+                count: Some(28),
+                selected: Some(false),
             },
             crate::search::SearchFacet {
-                value: "notion".to_string(),
-                count: 18,
-                selected: false,
+                name: "Notion".to_string(),
+                field: "provider".to_string(),
+                values: vec![],
+                facet_type: crate::search::FacetType::Terms,
+                value: Some(serde_json::Value::String("notion".to_string())),
+                count: Some(18),
+                selected: Some(false),
             },
         ]);
         
@@ -783,28 +810,24 @@ impl UnifiedSearchService {
     }
     
     /// Generate debug information
-    async fn generate_debug_info(&self, query: &SearchQuery, response: &SearchResponse) -> HashMap<String, serde_json::Value> {
-        let mut debug_info = HashMap::new();
-        
-        debug_info.insert("query_parsed".to_string(), serde_json::json!({
-            "original_query": query.query,
-            "parsed_terms": query.query.split_whitespace().collect::<Vec<_>>(),
-            "fuzzy_enabled": query.options.fuzzy.unwrap_or(false),
-            "filters_applied": query.filters.is_some(),
-        }));
-        
-        debug_info.insert("execution_stats".to_string(), serde_json::json!({
-            "execution_time_ms": response.execution_time_ms,
-            "total_results": response.total_count,
-            "results_returned": response.results.len(),
-            "from_cache": false, // Would track actual cache hits
-        }));
-        
-        debug_info.insert("performance_metrics".to_string(), serde_json::json!(
-            self.performance_monitor.get_metrics(0, 0.0, 0.0).await
-        ));
-        
-        debug_info
+    async fn generate_debug_info(&self, query: &SearchQuery, response: &SearchResponse) -> crate::search::SearchDebugInfo {
+        crate::search::SearchDebugInfo {
+            parsing: Some(crate::search::ParsingInfo {
+                original_query: query.query.clone(),
+                parsed_query: serde_json::json!({
+                    "terms": query.query.split_whitespace().collect::<Vec<_>>(),
+                    "filters": query.filters.as_ref().map(|f| f.len()).unwrap_or(0)
+                }),
+                warnings: vec![],
+            }),
+            execution: Some(crate::search::ExecutionInfo {
+                total_time_ms: response.execution_time_ms,
+                index_time_ms: response.execution_time_ms / 3, // Simplified breakdown
+                search_time_ms: response.execution_time_ms / 3,
+                merge_time_ms: response.execution_time_ms / 3,
+            }),
+            providers: None, // Would need provider performance data
+        }
     }
     
     /// Track search in session
@@ -822,7 +845,7 @@ impl UnifiedSearchService {
             results_count: response.results.len(),
             execution_time_ms,
             was_cached: false, // Would track actual cache status
-            filters_applied: query.filters.clone(),
+            filters_applied: None, // TODO: Convert SearchFilter to AdvancedFilters
         };
         
         // Update or create session

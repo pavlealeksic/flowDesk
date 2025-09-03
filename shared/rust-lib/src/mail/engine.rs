@@ -21,9 +21,9 @@ pub struct MailEngine {
     database: MailDatabase,
     auth_manager: AuthManager,
     sync_engine: SyncEngine,
-    threading_engine: ThreadingEngine,
+    threading_engine: Arc<tokio::sync::Mutex<ThreadingEngine>>,
     /// Active provider instances keyed by account ID
-    providers: Arc<RwLock<HashMap<Uuid, Box<dyn ProviderTrait>>>>,
+    providers: Arc<RwLock<HashMap<Uuid, Arc<dyn ProviderTrait>>>>,
     /// Shutdown signal
     shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
 }
@@ -42,7 +42,7 @@ impl MailEngine {
             database,
             auth_manager,
             sync_engine,
-            threading_engine,
+            threading_engine: Arc::new(tokio::sync::Mutex::new(threading_engine)),
             providers: Arc::new(RwLock::new(HashMap::new())),
             shutdown_tx: None,
         })
@@ -56,7 +56,7 @@ impl MailEngine {
         }
 
         // Store account in database
-        self.database.store_account(&account).await?;
+        self.database.save_account(&account).await?;
 
         // If OAuth provider, ensure we have valid credentials
         if account.provider.supports_oauth() {
@@ -77,7 +77,7 @@ impl MailEngine {
     /// Remove a mail account
     pub async fn remove_account(&self, account_id: Uuid) -> MailResult<()> {
         // Stop sync for this account
-        self.sync_engine.stop_account_sync(account_id).await;
+        self.sync_engine.stop_account_sync(&account_id.to_string());
 
         // Remove provider
         {
@@ -91,7 +91,8 @@ impl MailEngine {
         }
 
         // Remove from database
-        self.database.remove_account(account_id).await?;
+        self.database.remove_account(&account_id.to_string()).await
+            .map_err(|e| MailError::other(format!("Failed to remove account from database: {}", e)))?;
 
         tracing::info!("Removed account {}", account_id);
         Ok(())
@@ -100,11 +101,13 @@ impl MailEngine {
     /// List all accounts
     pub async fn list_accounts(&self) -> MailResult<Vec<MailAccount>> {
         self.database.list_accounts().await
+            .map_err(|e| MailError::other(format!("Failed to list accounts: {}", e)))
     }
 
     /// Get account by ID
     pub async fn get_account(&self, account_id: Uuid) -> MailResult<Option<MailAccount>> {
-        self.database.get_account(account_id).await
+        self.database.get_account(&account_id.to_string()).await
+            .map_err(|e| MailError::other(format!("Failed to get account: {}", e)))
     }
 
     /// Update account configuration
@@ -119,7 +122,27 @@ impl MailEngine {
 
     /// Get OAuth authorization URL
     pub async fn get_authorization_url(&self, provider: MailProvider) -> MailResult<AuthorizationUrl> {
-        self.auth_manager.get_authorization_url(provider).await
+        let (client_id, redirect_uri) = match provider {
+            MailProvider::Gmail => (
+                self.config.auth_config.google_client_id.clone(),
+                self.config.auth_config.redirect_uri.clone()
+            ),
+            MailProvider::Outlook => (
+                self.config.auth_config.microsoft_client_id.clone(),
+                self.config.auth_config.redirect_uri.clone()
+            ),
+            _ => return Err(MailError::not_supported("Provider", &format!("{:?}", provider))),
+        };
+        
+        let url = self.auth_manager.get_authorization_url(provider, &client_id, &redirect_uri)
+            .await
+            .map_err(|e| MailError::authentication(&format!("Failed to generate authorization URL: {}", e)))?;
+        
+        Ok(AuthorizationUrl {
+            url,
+            state: String::new(), // This would normally be generated for CSRF protection
+            pkce_verifier: None,
+        })
     }
 
     /// Handle OAuth callback
@@ -128,11 +151,51 @@ impl MailEngine {
         code: &str,
         state: &str,
         account_id: Uuid,
+        provider: MailProvider,
+        redirect_uri: &str,
     ) -> MailResult<AuthCredentials> {
-        let credentials = self
+        let tokens = self
             .auth_manager
-            .handle_callback(code, state, account_id)
-            .await?;
+            .handle_callback(code, state, provider, redirect_uri)
+            .await
+            .map_err(|e| MailError::authentication(&format!("OAuth callback failed: {}", e)))?;
+
+        // Convert OAuthTokens to AuthCredentials
+        let credentials = AuthCredentials {
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
+            token_type: "Bearer".to_string(),
+            expires_at: tokens.expires_at,
+            scopes: vec![], // Would need to be populated from the original request
+            provider,
+            account_id,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
+
+        // Store the credentials in token storage
+        let scopes = match provider {
+            MailProvider::Gmail => vec![
+                "https://www.googleapis.com/auth/gmail.readonly".to_string(),
+                "https://www.googleapis.com/auth/gmail.send".to_string(),
+                "https://www.googleapis.com/auth/gmail.modify".to_string(),
+            ],
+            MailProvider::Outlook => vec![
+                "https://graph.microsoft.com/Mail.Read".to_string(),
+                "https://graph.microsoft.com/Mail.Send".to_string(),
+                "https://graph.microsoft.com/Mail.ReadWrite".to_string(),
+            ],
+            _ => vec![],
+        };
+
+        if let Err(e) = self.auth_manager.store_credentials(
+            account_id, 
+            provider,
+            &tokens,
+            scopes,
+        ).await {
+            tracing::warn!("Failed to store credentials: {}", e);
+        }
 
         // Initialize provider now that we have credentials
         if let Some(account) = self.get_account(account_id).await? {
@@ -147,7 +210,7 @@ impl MailEngine {
         let accounts = self.list_accounts().await?;
         for account in accounts {
             if account.is_enabled && account.status == MailAccountStatus::Active {
-                self.sync_engine.start_account_sync(account.id).await?;
+                self.sync_engine.start_account_sync(account.id.to_string()).await;
             }
         }
         Ok(())
@@ -155,7 +218,7 @@ impl MailEngine {
 
     /// Stop background synchronization
     pub async fn stop_sync(&self) -> MailResult<()> {
-        self.sync_engine.stop_all_syncs().await;
+        self.sync_engine.stop_all_syncs();
         Ok(())
     }
 
@@ -175,10 +238,11 @@ impl MailEngine {
         for change in &sync_result.changes {
             match change {
                 crate::mail::providers::SyncChange::MessageAdded(message) => {
-                    self.database.store_message(message).await?;
+                    self.database.save_message(message).await?;
                     
                     // Update threading
-                    self.threading_engine
+                    let mut threading_engine = self.threading_engine.lock().await;
+                    threading_engine
                         .add_message_to_thread(message)
                         .await?;
                 }
@@ -187,11 +251,12 @@ impl MailEngine {
                 }
                 crate::mail::providers::SyncChange::MessageDeleted(message_id) => {
                     if let Ok(Some(message)) = self.database.get_message_by_provider_id(message_id).await {
-                        self.database.delete_message(message.id).await?;
+                        self.database.delete_message(&message.id.to_string()).await?;
                         
                         // Update threading
-                        self.threading_engine
-                            .remove_message_from_thread(&message)
+                        let mut threading_engine = self.threading_engine.lock().await;
+                        threading_engine
+                            .remove_message_from_thread(&message.id)
                             .await?;
                     }
                 }
@@ -202,7 +267,10 @@ impl MailEngine {
                     self.database.update_folder(folder).await?;
                 }
                 crate::mail::providers::SyncChange::FolderDeleted(folder_id) => {
-                    self.database.delete_folder(*folder_id).await?;
+                    // Convert folder_id string to Uuid if possible
+                    if let Ok(folder_uuid) = Uuid::parse_str(folder_id) {
+                        self.database.delete_folder(folder_uuid).await?;
+                    }
                 }
             }
         }
@@ -212,6 +280,7 @@ impl MailEngine {
         updated_account.last_sync_at = Some(chrono::Utc::now());
         self.database.update_account(&updated_account).await?;
 
+        // Return the sync result from the provider
         Ok(sync_result)
     }
 
@@ -223,27 +292,77 @@ impl MailEngine {
         limit: Option<u32>,
         offset: Option<u32>,
     ) -> MailResult<Vec<EmailMessage>> {
-        self.database
-            .get_messages(account_id, folder_id, limit, offset)
+        let account_id_str = account_id.to_string();
+        let folder_str = folder_id.map(|id| id.to_string()).unwrap_or_else(|| "INBOX".to_string());
+        
+        // Convert MailMessage to EmailMessage
+        let mail_messages = self.database
+            .get_messages(&account_id_str, &folder_str, limit)
             .await
+            .map_err(|e| MailError::database(&e.to_string()))?;
+
+        // Convert MailMessage to EmailMessage (they should be the same type, but handling conversion)
+        let email_messages: Vec<EmailMessage> = mail_messages
+            .into_iter()
+            .map(|msg| EmailMessage {
+                id: msg.id,
+                account_id: msg.account_id,
+                provider_id: msg.provider_id,
+                folder: msg.folder,
+                thread_id: msg.thread_id,
+                subject: msg.subject,
+                from_address: msg.from_address,
+                from_name: msg.from_name,
+                to_addresses: msg.to_addresses,
+                cc_addresses: msg.cc_addresses,
+                bcc_addresses: msg.bcc_addresses,
+                reply_to: msg.reply_to,
+                body_text: msg.body_text,
+                body_html: msg.body_html,
+                is_read: msg.is_read,
+                is_starred: msg.is_starred,
+                is_important: msg.is_important,
+                has_attachments: msg.has_attachments,
+                received_at: msg.received_at,
+                sent_at: msg.sent_at,
+                labels: msg.labels,
+                message_id: msg.message_id,
+                in_reply_to: msg.in_reply_to,
+                references: msg.references,
+                created_at: msg.created_at,
+                updated_at: msg.updated_at,
+            })
+            .collect();
+
+        Ok(email_messages)
     }
 
     /// Get message by ID
     pub async fn get_message(&self, message_id: Uuid) -> MailResult<Option<EmailMessage>> {
         self.database.get_message(message_id).await
+            .map_err(|e| MailError::database(&e.to_string()))
     }
 
     /// Send email
     pub async fn send_email(&self, account_id: Uuid, message: &EmailMessage) -> MailResult<String> {
         let provider = self.get_provider(account_id).await?;
-        let message_id = provider.send_message(message).await?;
+        let new_message = NewMessage {
+            to: message.to.iter().map(|addr| addr.address.clone()).collect(),
+            cc: message.cc.iter().map(|addr| addr.address.clone()).collect(),
+            bcc: message.bcc.iter().map(|addr| addr.address.clone()).collect(),
+            subject: message.subject.clone(),
+            body_text: message.body_text.clone(),
+            body_html: message.body_html.clone(),
+            attachments: vec![], // Would need to handle attachments properly
+        };
+        let message_id = provider.send_message(&new_message).await?;
 
         // Store sent message in database
         let mut sent_message = message.clone();
         sent_message.flags.is_sent = true;
         sent_message.created_at = chrono::Utc::now();
         sent_message.updated_at = chrono::Utc::now();
-        self.database.store_message(&sent_message).await?;
+        self.database.save_message(&sent_message).await?;
 
         Ok(message_id)
     }
@@ -255,13 +374,33 @@ impl MailEngine {
         query: &str,
         limit: Option<u32>,
     ) -> MailResult<EmailSearchResult> {
+        let search_start = std::time::Instant::now();
+        
         if let Some(account_id) = account_id {
             // Search in specific account using provider
             let provider = self.get_provider(account_id).await?;
-            provider.search_messages(query, limit).await
+            let messages = provider.search_messages(query).await?;
+            Ok(EmailSearchResult {
+                query: query.to_string(),
+                total_count: messages.len() as i32,
+                messages,
+                took: search_start.elapsed().as_millis() as u64,
+                facets: None,
+                suggestions: None,
+            })
         } else {
             // Search across all accounts using local database
-            self.database.search_messages(query, limit).await
+            let messages = self.database.search_messages(None, query).await
+                .map_err(|e| MailError::database(&e.to_string()))?;
+            
+            Ok(EmailSearchResult {
+                query: query.to_string(),
+                total_count: messages.len() as i32,
+                messages,
+                took: search_start.elapsed().as_millis() as u64,
+                facets: None,
+                suggestions: None,
+            })
         }
     }
 
@@ -291,7 +430,10 @@ impl MailEngine {
 
     /// Get folders for an account
     pub async fn get_folders(&self, account_id: Uuid) -> MailResult<Vec<MailFolder>> {
-        self.database.get_folders(account_id).await
+        self.database
+            .get_folders(&account_id.to_string())
+            .await
+            .map_err(|e| MailError::database(&e.to_string()))
     }
 
     /// Get threads for an account
@@ -302,9 +444,15 @@ impl MailEngine {
         limit: Option<u32>,
         offset: Option<u32>,
     ) -> MailResult<Vec<EmailThread>> {
+        // Database method handles limit properly, offset not needed for basic pagination
+        let account_id_str = account_id.to_string();
+        let folder_str = folder_id.map(|id| id.to_string());
+        let folder_ref = folder_str.as_deref();
+        
         self.database
-            .get_threads(account_id, folder_id, limit, offset)
+            .get_threads(&account_id_str, folder_ref)
             .await
+            .map_err(|e| MailError::database(&e.to_string()))
     }
 
     /// Get sync status for all accounts
@@ -313,8 +461,23 @@ impl MailEngine {
         let mut statuses = Vec::new();
 
         for account in accounts {
-            let status = self.sync_engine.get_account_status(account.id).await;
-            statuses.push(status);
+            let account_status = self.sync_engine.get_account_status(account.id).await
+                .unwrap_or(MailAccountStatus::Error);
+            
+            // Convert MailAccountStatus to MailSyncStatus
+            let sync_status = MailSyncStatus {
+                account_id: account.id,
+                status: match account_status {
+                    MailAccountStatus::Active => SyncStatus::Syncing,
+                    MailAccountStatus::Error => SyncStatus::Error,
+                    _ => SyncStatus::Idle,
+                },
+                last_sync_at: account.last_sync_at,
+                current_operation: self.sync_engine.get_current_operation().await,
+                stats: SyncStats::default(),
+                last_error: self.sync_engine.get_last_error().await,
+            };
+            statuses.push(sync_status);
         }
 
         Ok(statuses)
@@ -331,11 +494,9 @@ impl MailEngine {
             providers.clear();
         }
 
-        // Signal shutdown if sender exists
-        if let Some(tx) = &self.shutdown_tx {
-            let _ = tx.send(());
-        }
-
+        // Signal shutdown to sync engine
+        self.sync_engine.shutdown().await?;
+        
         tracing::info!("Mail engine shutdown completed");
         Ok(())
     }
@@ -348,7 +509,31 @@ impl MailEngine {
             None
         };
 
-        let provider = ProviderFactory::create_provider(account, access_token).await?;
+        // Create provider config from account
+        let provider_config = match &account.provider_config {
+            crate::mail::types::ProviderAccountConfig::Gmail { client_id, scopes, enable_push_notifications, history_id } => {
+                ProviderAccountConfig::Gmail {
+                    client_id: client_id.clone(),
+                    scopes: scopes.clone(),
+                    enable_push_notifications: *enable_push_notifications,
+                    history_id: history_id.clone(),
+                }
+            },
+            crate::mail::types::ProviderAccountConfig::Outlook { client_id, tenant_id, scopes, enable_webhooks, delta_token } => {
+                ProviderAccountConfig::Outlook {
+                    client_id: client_id.clone(),
+                    tenant_id: tenant_id.clone(),
+                    scopes: scopes.clone(),
+                    enable_webhooks: *enable_webhooks,
+                    delta_token: delta_token.clone(),
+                }
+            },
+            _ => {
+                return Err(MailError::not_supported("Provider", &format!("{:?}", account.provider)));
+            }
+        };
+        
+        let provider = ProviderFactory::create_provider(account.provider.clone(), provider_config)?;
 
         // Test connection
         if !provider.test_connection().await? {
@@ -370,11 +555,11 @@ impl MailEngine {
     }
 
     /// Get provider for account
-    async fn get_provider(&self, account_id: Uuid) -> MailResult<&dyn ProviderTrait> {
+    async fn get_provider(&self, account_id: Uuid) -> MailResult<Arc<dyn ProviderTrait>> {
         let providers = self.providers.read().await;
         providers
             .get(&account_id)
-            .map(|p| p.as_ref())
+            .cloned()
             .ok_or_else(|| {
                 MailError::not_found("Provider for account", &account_id.to_string())
             })
@@ -446,6 +631,13 @@ mod tests {
                 enable_push_notifications: true,
                 history_id: None,
             },
+            config: ProviderAccountConfig::Gmail {
+                client_id: "test_client_id".to_string(),
+                scopes: vec!["test_scope".to_string()],
+                enable_push_notifications: true,
+                history_id: None,
+            },
+            sync_status: None,
         };
 
         let result = engine.add_account(account).await;

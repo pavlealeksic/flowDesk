@@ -198,6 +198,10 @@ pub enum CalendarError {
         operation: Option<String>,
         context: Option<serde_json::Value>,
     },
+
+    /// Parse errors for various formats
+    #[error("Parse error: {0}")]
+    ParseError(String),
 }
 
 /// Types of calendar conflicts

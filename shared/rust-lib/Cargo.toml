@@ -40,6 +40,7 @@ tar = "0.4"
 # Network discovery and communication
 mdns-sd = "0.11"
 futures = "0.3"
+futures-util = "0.3"
 async-trait = "0.1"
 
 # File system utilities
@@ -54,11 +55,11 @@ web-sys = { version = "0.3", optional = true }
 cbindgen = { version = "0.26", optional = true }
 
 # Search engine dependencies (Tantivy)
-tantivy = "0.19"
+tantivy = "0.25"
 regex = "1.10"
 
 # Async runtime and concurrency
-tokio-util = { version = "0.7", features = ["rt"] }
+tokio-util = { version = "0.7", features = ["rt", "compat"] }
 dashmap = "5.5"
 parking_lot = "0.12"
 once_cell = "1.19"
@@ -80,7 +81,7 @@ num_cpus = "1.16"
 
 # Mail engine dependencies
 reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls", "cookies", "multipart"] }
-async-imap = "0.9"
+async-imap = "0.11"
 async-native-tls = "0.5"
 native-tls = "0.2"
 rustls = "0.22"
@@ -157,6 +158,20 @@ secrecy = { version = "0.8", features = ["serde"] }
 memchr = "2.7"
 nom = "7.1"
 pin-project-lite = "0.2"
+
+# AI and ML dependencies - temporarily simplified to fix compilation
+async-openai = "0.24"
+# tiktoken-rs = "0.5"
+# tokenizers = { version = "0.19", default-features = false }
+# candle-core = "0.4"
+# candle-nn = "0.4" 
+# candle-transformers = "0.4"
+# hf-hub = "0.3"
+ndarray = "0.15"
+# linfa = { version = "0.7", features = ["serde"] }
+# linfa-bayes = "0.7"
+# linfa-preprocessing = "0.7"
+smartstring = "1.0"
 
 [dev-dependencies]
 tokio-test = "0.4"

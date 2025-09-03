@@ -53,3 +53,45 @@
   opacity: 0.8;
   font-size: 0.9rem;
 }
+
+/* Import Tailwind base */
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* Import accessibility styles */
+@import './styles/accessibility.css';
+
+/* Flow Desk specific accessibility enhancements */
+:root {
+  --text-scale: 1;
+}
+
+/* Text scaling support */
+* {
+  font-size: calc(1em * var(--text-scale));
+}
+
+/* Ensure proper focus management */
+*:focus {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* High contrast improvements */
+.high-contrast {
+  --radius: 2px;
+}
+
+.high-contrast .border {
+  border-width: 2px !important;
+}
+
+/* Live region for announcements */
+#accessibility-announcements {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}

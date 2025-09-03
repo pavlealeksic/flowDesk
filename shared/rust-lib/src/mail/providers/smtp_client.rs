@@ -1,8 +1,11 @@
 use async_trait::async_trait;
 use lettre::{
-    SmtpTransport, Transport, Message, Address, 
-    transport::smtp::authentication::Credentials,
-    message::{header::ContentType, MultiPart, SinglePart}
+    SmtpTransport, Transport, Message, Address,
+    transport::smtp::{
+        authentication::Credentials,
+        client::{Tls, TlsParameters}
+    },
+    message::{header::ContentType, MultiPart, SinglePart, Mailbox}
 };
 use crate::mail::{SmtpConfig, MailMessage, MailAttachment};
 use crate::mail::providers::traits::SmtpProvider;
@@ -18,7 +21,8 @@ impl SmtpClient {
         let mut transport_builder = SmtpTransport::relay(&config.server)?;
         
         if config.use_tls {
-            transport_builder = transport_builder.starttls_relay()?;
+            let tls_parameters = TlsParameters::new(config.server.clone())?;
+            transport_builder = transport_builder.tls(Tls::Required(tls_parameters));
         }
         
         if let Some(password) = &config.password {
@@ -40,20 +44,20 @@ impl SmtpClient {
 #[async_trait]
 impl SmtpProvider for SmtpClient {
     async fn send_message(&self, message: &MailMessage) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        let from_address: Address = message.from_address.parse()?;
+        let from_address: Mailbox = message.from.address.parse()?;
         
         let mut email_builder = Message::builder()
             .from(from_address)
             .subject(&message.subject);
 
         // Add recipients
-        for to_addr in &message.to_addresses {
-            let addr: Address = to_addr.parse()?;
+        for to_addr in &message.to {
+            let addr: Mailbox = to_addr.address.parse()?;
             email_builder = email_builder.to(addr);
         }
         
-        for cc_addr in &message.cc_addresses {
-            let addr: Address = cc_addr.parse()?;
+        for cc_addr in &message.cc {
+            let addr: Mailbox = cc_addr.address.parse()?;
             email_builder = email_builder.cc(addr);
         }
 
@@ -88,51 +92,35 @@ impl SmtpProvider for SmtpClient {
             }
         } else {
             // Message with attachments
-            let mut multipart = MultiPart::mixed();
-            
-            // Add body
-            if let Some(html_body) = &message.body_html {
+            let multipart = if let Some(html_body) = &message.body_html {
                 if let Some(text_body) = &message.body_text {
-                    multipart = multipart.multipart(
-                        MultiPart::alternative()
-                            .singlepart(
-                                SinglePart::builder()
-                                    .header(ContentType::TEXT_PLAIN)
-                                    .body(text_body.clone())
-                            )
-                            .singlepart(
-                                SinglePart::builder()
-                                    .header(ContentType::TEXT_HTML)
-                                    .body(html_body.clone())
-                            )
-                    );
+                    let alternative = MultiPart::alternative()
+                        .singlepart(SinglePart::plain(text_body.clone()))
+                        .singlepart(SinglePart::html(html_body.clone()));
+                    MultiPart::mixed().multipart(alternative)
                 } else {
-                    multipart = multipart.singlepart(
-                        SinglePart::builder()
-                            .header(ContentType::TEXT_HTML)
-                            .body(html_body.clone())
-                    );
+                    MultiPart::mixed().singlepart(SinglePart::html(html_body.clone()))
                 }
             } else if let Some(text_body) = &message.body_text {
-                multipart = multipart.singlepart(
-                    SinglePart::builder()
-                        .header(ContentType::TEXT_PLAIN)
-                        .body(text_body.clone())
-                );
-            }
+                MultiPart::mixed().singlepart(SinglePart::plain(text_body.clone()))
+            } else {
+                // Empty message case - add an empty text part
+                MultiPart::mixed().singlepart(SinglePart::plain("".to_string()))
+            };
             
             // Add attachments (placeholder - would need actual file content)
-            for attachment in &message.attachments {
+            let multipart = message.attachments.iter().fold(multipart, |mp, attachment| {
                 let content_type: ContentType = attachment.content_type.parse()
                     .unwrap_or(ContentType::parse("application/octet-stream").unwrap());
                 
-                multipart = multipart.singlepart(
-                    SinglePart::builder()
-                        .header(content_type)
-                        .header(lettre::message::header::ContentDisposition::attachment(&attachment.filename))
-                        .body(vec![]) // Would need actual attachment content here
-                );
-            }
+                // Create attachment using base64 encoded content
+                let attachment_part = SinglePart::builder()
+                    .header(content_type)
+                    .header(lettre::message::header::ContentDisposition::attachment(&attachment.filename))
+                    .body(vec![]); // Would need actual attachment content here
+                    
+                mp.singlepart(attachment_part)
+            });
             
             email_builder.multipart(multipart)?
         };

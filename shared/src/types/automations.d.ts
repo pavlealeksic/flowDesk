@@ -710,16 +710,16 @@ export declare const AutomationTriggerSchema: z.ZodObject<{
         conditions: z.ZodOptional<z.ZodArray<z.ZodAny, "many">>;
     }, "strip", z.ZodTypeAny, {
         field: string;
-        operator: "equals" | "contains" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
+        operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
         value?: any;
         conditions?: any[] | undefined;
-        logic?: "OR" | "AND" | undefined;
+        logic?: "AND" | "OR" | undefined;
     }, {
         field: string;
-        operator: "equals" | "contains" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
+        operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
         value?: any;
         conditions?: any[] | undefined;
-        logic?: "OR" | "AND" | undefined;
+        logic?: "AND" | "OR" | undefined;
     }>, "many">>;
     throttling: z.ZodOptional<z.ZodObject<{
         type: z.ZodEnum<["none", "rate_limit", "debounce", "once_per_period"]>;
@@ -769,14 +769,14 @@ export declare const AutomationTriggerSchema: z.ZodObject<{
     }>>;
 }, "strip", z.ZodTypeAny, {
     type: string;
-    config?: any;
     conditions?: {
         field: string;
-        operator: "equals" | "contains" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
+        operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
         value?: any;
         conditions?: any[] | undefined;
-        logic?: "OR" | "AND" | undefined;
+        logic?: "AND" | "OR" | undefined;
     }[] | undefined;
+    config?: any;
     throttling?: {
         type: "none" | "rate_limit" | "debounce" | "once_per_period";
         rateLimit?: {
@@ -791,14 +791,14 @@ export declare const AutomationTriggerSchema: z.ZodObject<{
     } | undefined;
 }, {
     type: string;
-    config?: any;
     conditions?: {
         field: string;
-        operator: "equals" | "contains" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
+        operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
         value?: any;
         conditions?: any[] | undefined;
-        logic?: "OR" | "AND" | undefined;
+        logic?: "AND" | "OR" | undefined;
     }[] | undefined;
+    config?: any;
     throttling?: {
         type: "none" | "rate_limit" | "debounce" | "once_per_period";
         rateLimit?: {
@@ -829,13 +829,13 @@ export declare const AutomationActionSchema: z.ZodObject<{
         operator: string;
         value?: any;
         conditions?: any[] | undefined;
-        logic?: "OR" | "AND" | undefined;
+        logic?: "AND" | "OR" | undefined;
     }, {
         field: string;
         operator: string;
         value?: any;
         conditions?: any[] | undefined;
-        logic?: "OR" | "AND" | undefined;
+        logic?: "AND" | "OR" | undefined;
     }>, "many">>;
     errorHandling: z.ZodObject<{
         strategy: z.ZodEnum<["ignore", "stop", "retry", "fallback"]>;
@@ -885,15 +885,15 @@ export declare const AutomationActionSchema: z.ZodObject<{
         notifyOnError: boolean;
         fallbackActions?: any[] | undefined;
     };
-    config?: any;
-    description?: string | undefined;
     conditions?: {
         field: string;
         operator: string;
         value?: any;
         conditions?: any[] | undefined;
-        logic?: "OR" | "AND" | undefined;
+        logic?: "AND" | "OR" | undefined;
     }[] | undefined;
+    config?: any;
+    description?: string | undefined;
     timeout?: number | undefined;
     retry?: {
         maxAttempts: number;
@@ -913,15 +913,15 @@ export declare const AutomationActionSchema: z.ZodObject<{
         notifyOnError: boolean;
         fallbackActions?: any[] | undefined;
     };
-    config?: any;
-    description?: string | undefined;
     conditions?: {
         field: string;
         operator: string;
         value?: any;
         conditions?: any[] | undefined;
-        logic?: "OR" | "AND" | undefined;
+        logic?: "AND" | "OR" | undefined;
     }[] | undefined;
+    config?: any;
+    description?: string | undefined;
     timeout?: number | undefined;
     retry?: {
         maxAttempts: number;
@@ -953,16 +953,16 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
             conditions: z.ZodOptional<z.ZodArray<z.ZodAny, "many">>;
         }, "strip", z.ZodTypeAny, {
             field: string;
-            operator: "equals" | "contains" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
+            operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
             value?: any;
             conditions?: any[] | undefined;
-            logic?: "OR" | "AND" | undefined;
+            logic?: "AND" | "OR" | undefined;
         }, {
             field: string;
-            operator: "equals" | "contains" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
+            operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
             value?: any;
             conditions?: any[] | undefined;
-            logic?: "OR" | "AND" | undefined;
+            logic?: "AND" | "OR" | undefined;
         }>, "many">>;
         throttling: z.ZodOptional<z.ZodObject<{
             type: z.ZodEnum<["none", "rate_limit", "debounce", "once_per_period"]>;
@@ -1012,14 +1012,14 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
         }>>;
     }, "strip", z.ZodTypeAny, {
         type: string;
-        config?: any;
         conditions?: {
             field: string;
-            operator: "equals" | "contains" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
+            operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
             value?: any;
             conditions?: any[] | undefined;
-            logic?: "OR" | "AND" | undefined;
+            logic?: "AND" | "OR" | undefined;
         }[] | undefined;
+        config?: any;
         throttling?: {
             type: "none" | "rate_limit" | "debounce" | "once_per_period";
             rateLimit?: {
@@ -1034,14 +1034,14 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
         } | undefined;
     }, {
         type: string;
-        config?: any;
         conditions?: {
             field: string;
-            operator: "equals" | "contains" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
+            operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
             value?: any;
             conditions?: any[] | undefined;
-            logic?: "OR" | "AND" | undefined;
+            logic?: "AND" | "OR" | undefined;
         }[] | undefined;
+        config?: any;
         throttling?: {
             type: "none" | "rate_limit" | "debounce" | "once_per_period";
             rateLimit?: {
@@ -1072,13 +1072,13 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
             operator: string;
             value?: any;
             conditions?: any[] | undefined;
-            logic?: "OR" | "AND" | undefined;
+            logic?: "AND" | "OR" | undefined;
         }, {
             field: string;
             operator: string;
             value?: any;
             conditions?: any[] | undefined;
-            logic?: "OR" | "AND" | undefined;
+            logic?: "AND" | "OR" | undefined;
         }>, "many">>;
         errorHandling: z.ZodObject<{
             strategy: z.ZodEnum<["ignore", "stop", "retry", "fallback"]>;
@@ -1128,15 +1128,15 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
             notifyOnError: boolean;
             fallbackActions?: any[] | undefined;
         };
-        config?: any;
-        description?: string | undefined;
         conditions?: {
             field: string;
             operator: string;
             value?: any;
             conditions?: any[] | undefined;
-            logic?: "OR" | "AND" | undefined;
+            logic?: "AND" | "OR" | undefined;
         }[] | undefined;
+        config?: any;
+        description?: string | undefined;
         timeout?: number | undefined;
         retry?: {
             maxAttempts: number;
@@ -1156,15 +1156,15 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
             notifyOnError: boolean;
             fallbackActions?: any[] | undefined;
         };
-        config?: any;
-        description?: string | undefined;
         conditions?: {
             field: string;
             operator: string;
             value?: any;
             conditions?: any[] | undefined;
-            logic?: "OR" | "AND" | undefined;
+            logic?: "AND" | "OR" | undefined;
         }[] | undefined;
+        config?: any;
+        description?: string | undefined;
         timeout?: number | undefined;
         retry?: {
             maxAttempts: number;
@@ -1183,7 +1183,7 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
         variables: z.ZodRecord<z.ZodString, z.ZodAny>;
         environment: z.ZodEnum<["development", "staging", "production"]>;
     }, "strip", z.ZodTypeAny, {
-        priority: "normal" | "low" | "high";
+        priority: "normal" | "high" | "low";
         variables: Record<string, any>;
         environment: "development" | "staging" | "production";
         timeout: number;
@@ -1191,7 +1191,7 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
         maxConcurrentExecutions: number;
         logLevel: "error" | "info" | "warn" | "debug";
     }, {
-        priority: "normal" | "low" | "high";
+        priority: "normal" | "high" | "low";
         variables: Record<string, any>;
         environment: "development" | "staging" | "production";
         timeout: number;
@@ -1212,12 +1212,12 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
             duration: z.ZodNumber;
             error: z.ZodOptional<z.ZodString>;
         }, "strip", z.ZodTypeAny, {
-            status: "cancelled" | "success" | "failed" | "timeout";
+            status: "failed" | "cancelled" | "success" | "timeout";
             duration: number;
             timestamp: Date;
             error?: string | undefined;
         }, {
-            status: "cancelled" | "success" | "failed" | "timeout";
+            status: "failed" | "cancelled" | "success" | "timeout";
             duration: number;
             timestamp: Date;
             error?: string | undefined;
@@ -1229,12 +1229,12 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
         failedExecutions: number;
         avgExecutionTime: number;
         recentExecutions: {
-            status: "cancelled" | "success" | "failed" | "timeout";
+            status: "failed" | "cancelled" | "success" | "timeout";
             duration: number;
             timestamp: Date;
             error?: string | undefined;
         }[];
-        lastExecutionStatus?: "cancelled" | "success" | "failed" | "timeout" | undefined;
+        lastExecutionStatus?: "failed" | "cancelled" | "success" | "timeout" | undefined;
     }, {
         successRate: number;
         totalExecutions: number;
@@ -1242,23 +1242,23 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
         failedExecutions: number;
         avgExecutionTime: number;
         recentExecutions: {
-            status: "cancelled" | "success" | "failed" | "timeout";
+            status: "failed" | "cancelled" | "success" | "timeout";
             duration: number;
             timestamp: Date;
             error?: string | undefined;
         }[];
-        lastExecutionStatus?: "cancelled" | "success" | "failed" | "timeout" | undefined;
+        lastExecutionStatus?: "failed" | "cancelled" | "success" | "timeout" | undefined;
     }>;
     metadata: z.ZodObject<{
         author: z.ZodOptional<z.ZodObject<{
             name: z.ZodString;
             email: z.ZodString;
         }, "strip", z.ZodTypeAny, {
-            name: string;
             email: string;
+            name: string;
         }, {
-            name: string;
             email: string;
+            name: string;
         }>>;
         documentation: z.ZodOptional<z.ZodString>;
         template: z.ZodOptional<z.ZodObject<{
@@ -1289,8 +1289,8 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
         }>>;
     }, "strip", z.ZodTypeAny, {
         author?: {
-            name: string;
             email: string;
+            name: string;
         } | undefined;
         documentation?: string | undefined;
         template?: {
@@ -1305,8 +1305,8 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
         } | undefined;
     }, {
         author?: {
-            name: string;
             email: string;
+            name: string;
         } | undefined;
         documentation?: string | undefined;
         template?: {
@@ -1324,27 +1324,43 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
     updatedAt: z.ZodDate;
     lastExecutedAt: z.ZodOptional<z.ZodDate>;
 }, "strip", z.ZodTypeAny, {
+    actions: {
+        id: string;
+        name: string;
+        type: string;
+        continueOnError: boolean;
+        errorHandling: {
+            strategy: "ignore" | "stop" | "retry" | "fallback";
+            logErrors: boolean;
+            notifyOnError: boolean;
+            fallbackActions?: any[] | undefined;
+        };
+        conditions?: {
+            field: string;
+            operator: string;
+            value?: any;
+            conditions?: any[] | undefined;
+            logic?: "AND" | "OR" | undefined;
+        }[] | undefined;
+        config?: any;
+        description?: string | undefined;
+        timeout?: number | undefined;
+        retry?: {
+            maxAttempts: number;
+            delaySeconds: number;
+            backoffMultiplier: number;
+            maxDelaySeconds: number;
+            retryConditions?: string[] | undefined;
+        } | undefined;
+    }[];
     id: string;
     createdAt: Date;
     updatedAt: Date;
     name: string;
-    stats: {
-        successRate: number;
-        totalExecutions: number;
-        successfulExecutions: number;
-        failedExecutions: number;
-        avgExecutionTime: number;
-        recentExecutions: {
-            status: "cancelled" | "success" | "failed" | "timeout";
-            duration: number;
-            timestamp: Date;
-            error?: string | undefined;
-        }[];
-        lastExecutionStatus?: "cancelled" | "success" | "failed" | "timeout" | undefined;
-    };
-    version: string;
+    tags: string[];
+    enabled: boolean;
     settings: {
-        priority: "normal" | "low" | "high";
+        priority: "normal" | "high" | "low";
         variables: Record<string, any>;
         environment: "development" | "staging" | "production";
         timeout: number;
@@ -1352,11 +1368,12 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
         maxConcurrentExecutions: number;
         logLevel: "error" | "info" | "warn" | "debug";
     };
-    tags: string[];
+    category: "notifications" | "email" | "calendar" | "custom" | "communication" | "productivity" | "utilities" | "tasks" | "files" | "integrations" | "workflows";
+    version: string;
     metadata: {
         author?: {
-            name: string;
             email: string;
+            name: string;
         } | undefined;
         documentation?: string | undefined;
         template?: {
@@ -1370,49 +1387,32 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
             sharedWith: string[];
         } | undefined;
     };
-    actions: {
-        id: string;
-        name: string;
-        type: string;
-        continueOnError: boolean;
-        errorHandling: {
-            strategy: "ignore" | "stop" | "retry" | "fallback";
-            logErrors: boolean;
-            notifyOnError: boolean;
-            fallbackActions?: any[] | undefined;
-        };
-        config?: any;
-        description?: string | undefined;
-        conditions?: {
-            field: string;
-            operator: string;
-            value?: any;
-            conditions?: any[] | undefined;
-            logic?: "OR" | "AND" | undefined;
-        }[] | undefined;
-        timeout?: number | undefined;
-        retry?: {
-            maxAttempts: number;
-            delaySeconds: number;
-            backoffMultiplier: number;
-            maxDelaySeconds: number;
-            retryConditions?: string[] | undefined;
-        } | undefined;
-    }[];
-    category: "email" | "custom" | "calendar" | "notifications" | "communication" | "productivity" | "utilities" | "tasks" | "files" | "integrations" | "workflows";
-    enabled: boolean;
     ownerId: string;
+    stats: {
+        successRate: number;
+        totalExecutions: number;
+        successfulExecutions: number;
+        failedExecutions: number;
+        avgExecutionTime: number;
+        recentExecutions: {
+            status: "failed" | "cancelled" | "success" | "timeout";
+            duration: number;
+            timestamp: Date;
+            error?: string | undefined;
+        }[];
+        lastExecutionStatus?: "failed" | "cancelled" | "success" | "timeout" | undefined;
+    };
     isPublic: boolean;
     trigger: {
         type: string;
-        config?: any;
         conditions?: {
             field: string;
-            operator: "equals" | "contains" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
+            operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
             value?: any;
             conditions?: any[] | undefined;
-            logic?: "OR" | "AND" | undefined;
+            logic?: "AND" | "OR" | undefined;
         }[] | undefined;
+        config?: any;
         throttling?: {
             type: "none" | "rate_limit" | "debounce" | "once_per_period";
             rateLimit?: {
@@ -1426,31 +1426,47 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
             } | undefined;
         } | undefined;
     };
-    description?: string | undefined;
     icon?: string | undefined;
+    description?: string | undefined;
     lastExecutedAt?: Date | undefined;
 }, {
+    actions: {
+        id: string;
+        name: string;
+        type: string;
+        continueOnError: boolean;
+        errorHandling: {
+            strategy: "ignore" | "stop" | "retry" | "fallback";
+            logErrors: boolean;
+            notifyOnError: boolean;
+            fallbackActions?: any[] | undefined;
+        };
+        conditions?: {
+            field: string;
+            operator: string;
+            value?: any;
+            conditions?: any[] | undefined;
+            logic?: "AND" | "OR" | undefined;
+        }[] | undefined;
+        config?: any;
+        description?: string | undefined;
+        timeout?: number | undefined;
+        retry?: {
+            maxAttempts: number;
+            delaySeconds: number;
+            backoffMultiplier: number;
+            maxDelaySeconds: number;
+            retryConditions?: string[] | undefined;
+        } | undefined;
+    }[];
     id: string;
     createdAt: Date;
     updatedAt: Date;
     name: string;
-    stats: {
-        successRate: number;
-        totalExecutions: number;
-        successfulExecutions: number;
-        failedExecutions: number;
-        avgExecutionTime: number;
-        recentExecutions: {
-            status: "cancelled" | "success" | "failed" | "timeout";
-            duration: number;
-            timestamp: Date;
-            error?: string | undefined;
-        }[];
-        lastExecutionStatus?: "cancelled" | "success" | "failed" | "timeout" | undefined;
-    };
-    version: string;
+    tags: string[];
+    enabled: boolean;
     settings: {
-        priority: "normal" | "low" | "high";
+        priority: "normal" | "high" | "low";
         variables: Record<string, any>;
         environment: "development" | "staging" | "production";
         timeout: number;
@@ -1458,11 +1474,12 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
         maxConcurrentExecutions: number;
         logLevel: "error" | "info" | "warn" | "debug";
     };
-    tags: string[];
+    category: "notifications" | "email" | "calendar" | "custom" | "communication" | "productivity" | "utilities" | "tasks" | "files" | "integrations" | "workflows";
+    version: string;
     metadata: {
         author?: {
-            name: string;
             email: string;
+            name: string;
         } | undefined;
         documentation?: string | undefined;
         template?: {
@@ -1476,49 +1493,32 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
             sharedWith: string[];
         } | undefined;
     };
-    actions: {
-        id: string;
-        name: string;
-        type: string;
-        continueOnError: boolean;
-        errorHandling: {
-            strategy: "ignore" | "stop" | "retry" | "fallback";
-            logErrors: boolean;
-            notifyOnError: boolean;
-            fallbackActions?: any[] | undefined;
-        };
-        config?: any;
-        description?: string | undefined;
-        conditions?: {
-            field: string;
-            operator: string;
-            value?: any;
-            conditions?: any[] | undefined;
-            logic?: "OR" | "AND" | undefined;
-        }[] | undefined;
-        timeout?: number | undefined;
-        retry?: {
-            maxAttempts: number;
-            delaySeconds: number;
-            backoffMultiplier: number;
-            maxDelaySeconds: number;
-            retryConditions?: string[] | undefined;
-        } | undefined;
-    }[];
-    category: "email" | "custom" | "calendar" | "notifications" | "communication" | "productivity" | "utilities" | "tasks" | "files" | "integrations" | "workflows";
-    enabled: boolean;
     ownerId: string;
+    stats: {
+        successRate: number;
+        totalExecutions: number;
+        successfulExecutions: number;
+        failedExecutions: number;
+        avgExecutionTime: number;
+        recentExecutions: {
+            status: "failed" | "cancelled" | "success" | "timeout";
+            duration: number;
+            timestamp: Date;
+            error?: string | undefined;
+        }[];
+        lastExecutionStatus?: "failed" | "cancelled" | "success" | "timeout" | undefined;
+    };
     isPublic: boolean;
     trigger: {
         type: string;
-        config?: any;
         conditions?: {
             field: string;
-            operator: "equals" | "contains" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
+            operator: "contains" | "equals" | "starts_with" | "ends_with" | "regex" | "greater_than" | "less_than" | "not_equals" | "not_contains" | "in" | "not_in" | "exists" | "greater_than_or_equal" | "less_than_or_equal" | "not_exists" | "is_empty" | "is_not_empty";
             value?: any;
             conditions?: any[] | undefined;
-            logic?: "OR" | "AND" | undefined;
+            logic?: "AND" | "OR" | undefined;
         }[] | undefined;
+        config?: any;
         throttling?: {
             type: "none" | "rate_limit" | "debounce" | "once_per_period";
             rateLimit?: {
@@ -1532,8 +1532,8 @@ export declare const AutomationRecipeSchema: z.ZodObject<{
             } | undefined;
         } | undefined;
     };
-    description?: string | undefined;
     icon?: string | undefined;
+    description?: string | undefined;
     lastExecutedAt?: Date | undefined;
 }>;
 export declare const AutomationExecutionSchema: z.ZodObject<{
@@ -1561,13 +1561,13 @@ export declare const AutomationExecutionSchema: z.ZodObject<{
             email: z.ZodString;
             name: z.ZodString;
         }, "strip", z.ZodTypeAny, {
+            email: string;
             id: string;
             name: string;
-            email: string;
         }, {
+            email: string;
             id: string;
             name: string;
-            email: string;
         }>;
         workspace: z.ZodOptional<z.ZodObject<{
             id: z.ZodString;
@@ -1582,26 +1582,26 @@ export declare const AutomationExecutionSchema: z.ZodObject<{
         variables: z.ZodRecord<z.ZodString, z.ZodAny>;
         environment: z.ZodEnum<["development", "staging", "production"]>;
     }, "strip", z.ZodTypeAny, {
-        user: {
-            id: string;
-            name: string;
-            email: string;
-        };
         variables: Record<string, any>;
         environment: "development" | "staging" | "production";
+        user: {
+            email: string;
+            id: string;
+            name: string;
+        };
         workspace?: {
             id: string;
             name: string;
         } | undefined;
         trigger?: any;
     }, {
-        user: {
-            id: string;
-            name: string;
-            email: string;
-        };
         variables: Record<string, any>;
         environment: "development" | "staging" | "production";
+        user: {
+            email: string;
+            id: string;
+            name: string;
+        };
         workspace?: {
             id: string;
             name: string;
@@ -1644,7 +1644,7 @@ export declare const AutomationExecutionSchema: z.ZodObject<{
         endedAt: z.ZodOptional<z.ZodDate>;
         duration: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        status: "cancelled" | "paused" | "failed" | "timeout" | "completed" | "queued" | "running";
+        status: "failed" | "cancelled" | "paused" | "timeout" | "completed" | "queued" | "running";
         type: string;
         actionId: string;
         retries: {
@@ -1663,7 +1663,7 @@ export declare const AutomationExecutionSchema: z.ZodObject<{
         output?: any;
         endedAt?: Date | undefined;
     }, {
-        status: "cancelled" | "paused" | "failed" | "timeout" | "completed" | "queued" | "running";
+        status: "failed" | "cancelled" | "paused" | "timeout" | "completed" | "queued" | "running";
         type: string;
         actionId: string;
         retries: {
@@ -1689,24 +1689,21 @@ export declare const AutomationExecutionSchema: z.ZodObject<{
         timestamp: z.ZodDate;
     }, "strip", z.ZodTypeAny, {
         code: string;
-        timestamp: Date;
         message: string;
+        timestamp: Date;
         action?: string | undefined;
     }, {
         code: string;
-        timestamp: Date;
         message: string;
+        timestamp: Date;
         action?: string | undefined;
     }>>;
     startedAt: z.ZodDate;
     endedAt: z.ZodOptional<z.ZodDate>;
     duration: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
-    id: string;
-    userId: string;
-    status: "cancelled" | "paused" | "failed" | "timeout" | "completed" | "queued" | "running";
     actions: {
-        status: "cancelled" | "paused" | "failed" | "timeout" | "completed" | "queued" | "running";
+        status: "failed" | "cancelled" | "paused" | "timeout" | "completed" | "queued" | "running";
         type: string;
         actionId: string;
         retries: {
@@ -1725,14 +1722,17 @@ export declare const AutomationExecutionSchema: z.ZodObject<{
         output?: any;
         endedAt?: Date | undefined;
     }[];
+    id: string;
+    status: "failed" | "cancelled" | "paused" | "timeout" | "completed" | "queued" | "running";
+    userId: string;
     context: {
-        user: {
-            id: string;
-            name: string;
-            email: string;
-        };
         variables: Record<string, any>;
         environment: "development" | "staging" | "production";
+        user: {
+            email: string;
+            id: string;
+            name: string;
+        };
         workspace?: {
             id: string;
             name: string;
@@ -1748,18 +1748,15 @@ export declare const AutomationExecutionSchema: z.ZodObject<{
     startedAt: Date;
     error?: {
         code: string;
-        timestamp: Date;
         message: string;
+        timestamp: Date;
         action?: string | undefined;
     } | undefined;
     duration?: number | undefined;
     endedAt?: Date | undefined;
 }, {
-    id: string;
-    userId: string;
-    status: "cancelled" | "paused" | "failed" | "timeout" | "completed" | "queued" | "running";
     actions: {
-        status: "cancelled" | "paused" | "failed" | "timeout" | "completed" | "queued" | "running";
+        status: "failed" | "cancelled" | "paused" | "timeout" | "completed" | "queued" | "running";
         type: string;
         actionId: string;
         retries: {
@@ -1778,14 +1775,17 @@ export declare const AutomationExecutionSchema: z.ZodObject<{
         output?: any;
         endedAt?: Date | undefined;
     }[];
+    id: string;
+    status: "failed" | "cancelled" | "paused" | "timeout" | "completed" | "queued" | "running";
+    userId: string;
     context: {
-        user: {
-            id: string;
-            name: string;
-            email: string;
-        };
         variables: Record<string, any>;
         environment: "development" | "staging" | "production";
+        user: {
+            email: string;
+            id: string;
+            name: string;
+        };
         workspace?: {
             id: string;
             name: string;
@@ -1801,8 +1801,8 @@ export declare const AutomationExecutionSchema: z.ZodObject<{
     startedAt: Date;
     error?: {
         code: string;
-        timestamp: Date;
         message: string;
+        timestamp: Date;
         action?: string | undefined;
     } | undefined;
     duration?: number | undefined;

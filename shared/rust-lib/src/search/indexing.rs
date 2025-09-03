@@ -122,6 +122,9 @@ pub struct IndexingJob {
     /// Current operation description
     pub current_operation: String,
     
+    /// Completion time
+    pub completed_at: Option<DateTime<Utc>>,
+    
     /// Processed document count
     pub processed_documents: usize,
     
@@ -145,7 +148,7 @@ pub enum IndexingJobStatus {
 }
 
 /// Indexing configuration
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct IndexingConfig {
     /// Maximum concurrent indexing jobs
     pub max_concurrent_jobs: usize,
@@ -383,11 +386,12 @@ impl RealTimeIndexManager {
     #[instrument(skip(self, documents), fields(doc_count = documents.len()))]
     pub async fn queue_documents(&self, documents: Vec<SearchDocument>, priority: u8) -> SearchResultType<String> {
         if documents.is_empty() {
-            return Err(SearchError::invalid_input("No documents provided"));
+            return Err(SearchError::query_error("No documents provided"));
         }
         
         let task_id = uuid::Uuid::new_v4().to_string();
         let provider_id = documents[0].provider_id.clone();
+        let doc_count = documents.len();
         
         let task = IndexingTask {
             id: task_id.clone(),
@@ -403,7 +407,7 @@ impl RealTimeIndexManager {
         };
         
         self.queue_task(task).await?;
-        debug!("Batch of {} documents queued for indexing: {}", documents.len(), task_id);
+        debug!("Batch of {} documents queued for indexing: {}", doc_count, task_id);
         
         Ok(task_id)
     }
@@ -596,6 +600,7 @@ impl RealTimeIndexManager {
             status: IndexingJobStatus::Running,
             progress: 0.0,
             current_operation: "Starting...".to_string(),
+            completed_at: None,
             processed_documents: 0,
             total_documents: task.documents.len(),
             errors: Vec::new(),

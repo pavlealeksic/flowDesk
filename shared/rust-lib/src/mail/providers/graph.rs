@@ -67,7 +67,7 @@ impl Default for GraphConfig {
 }
 
 /// OAuth2 token information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct GraphToken {
     pub access_token: Secret<String>,
     pub refresh_token: Option<Secret<String>>,
@@ -358,17 +358,18 @@ impl GraphClient {
             id: Uuid::parse_str(&graph_folder.id)
                 .unwrap_or_else(|_| Uuid::new_v4()),
             account_id: Uuid::nil(), // Will be set by caller
-            name: graph_folder.display_name,
-            path: graph_folder.display_name.clone(),
+            name: graph_folder.display_name.clone(),
+            display_name: graph_folder.display_name.clone(),
             folder_type,
             parent_id: graph_folder.parent_folder_id
                 .and_then(|id| Uuid::parse_str(&id).ok()),
-            unread_count: graph_folder.unread_item_count.unwrap_or(0) as u32,
-            total_count: graph_folder.total_item_count.unwrap_or(0) as u32,
-            sync_enabled: true,
-            last_sync_at: None,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
+            path: format!("/{}", graph_folder.display_name),
+            attributes: vec![], // Graph API doesn't expose IMAP attributes
+            message_count: graph_folder.total_item_count.unwrap_or(0),
+            unread_count: graph_folder.unread_item_count.unwrap_or(0),
+            is_selectable: true,
+            can_select: true,
+            sync_status: FolderSyncStatus::default(),
         })
     }
 
@@ -413,12 +414,14 @@ impl GraphClient {
     async fn convert_graph_message(&self, graph_message: GraphMessage) -> MailResult<EmailMessage> {
         let from = graph_message.from.map(|from| EmailAddress {
             name: from.email_address.name,
+            address: from.email_address.address.clone(),
             email: from.email_address.address,
         });
 
         let to = graph_message.to_recipients.into_iter()
             .map(|recipient| EmailAddress {
                 name: recipient.email_address.name,
+                address: recipient.email_address.address.clone(),
                 email: recipient.email_address.address,
             })
             .collect();
@@ -426,6 +429,7 @@ impl GraphClient {
         let cc = graph_message.cc_recipients.into_iter()
             .map(|recipient| EmailAddress {
                 name: recipient.email_address.name,
+                address: recipient.email_address.address.clone(),
                 email: recipient.email_address.address,
             })
             .collect();
@@ -433,23 +437,26 @@ impl GraphClient {
         let bcc = graph_message.bcc_recipients.into_iter()
             .map(|recipient| EmailAddress {
                 name: recipient.email_address.name,
+                address: recipient.email_address.address.clone(),
                 email: recipient.email_address.address,
             })
             .collect();
 
-        // Extract content
-        let (text_content, html_content) = if let Some(body) = graph_message.body {
+        // Extract content and snippet
+        let (body_text, body_html, snippet) = if let Some(body) = &graph_message.body {
+            let snippet = body.content.chars().take(200).collect();
+            let content = body.content.clone();
             match body.content_type.to_lowercase().as_str() {
-                "html" => (None, Some(body.content)),
-                "text" => (Some(body.content), None),
-                _ => (Some(body.content), None),
+                "html" => (None, Some(content), snippet),
+                "text" => (Some(content), None, snippet),
+                _ => (Some(content), None, snippet),
             }
         } else {
-            (None, None)
+            (None, None, String::new())
         };
 
         // Convert attachments
-        let attachments = graph_message.attachments.unwrap_or_default()
+        let attachments: Vec<_> = graph_message.attachments.unwrap_or_default()
             .into_iter()
             .filter_map(|att| self.convert_graph_attachment(att).ok())
             .collect();
@@ -458,14 +465,13 @@ impl GraphClient {
         let flags = EmailFlags {
             is_read: graph_message.is_read.unwrap_or(false),
             is_starred: graph_message.flag.is_some(),
+            is_trashed: false, // Deleted items wouldn't be in the response
+            is_spam: false, // Would need to check folder type
             is_important: matches!(graph_message.importance.as_deref(), Some("high")),
+            is_archived: false, // Would need to check folder type
             is_draft: graph_message.is_draft.unwrap_or(false),
             is_sent: matches!(graph_message.inference_classification.as_deref(), Some("focused")),
-            is_replied: false, // Would need to check for specific flag
-            is_forwarded: false, // Would need to check for specific flag
-            is_deleted: false, // Deleted items wouldn't be in the response
-            is_archived: false, // Would need to check folder type
-            is_spam: false, // Would need to check folder type
+            has_attachments: !attachments.is_empty(),
         };
 
         let created_at = graph_message.created_date_time
@@ -480,42 +486,66 @@ impl GraphClient {
 
         Ok(EmailMessage {
             id: Uuid::parse_str(&graph_message.id).unwrap_or_else(|_| Uuid::new_v4()),
-            provider_id: graph_message.id,
             account_id: Uuid::nil(), // Will be set by caller
-            folder_id: Uuid::nil(), // Will be set by caller
+            provider_id: graph_message.id,
             thread_id: graph_message.conversation_id
-                .and_then(|id| Uuid::parse_str(&id).ok()),
+                .and_then(|id| Uuid::parse_str(&id).ok())
+                .unwrap_or_else(|| Uuid::new_v4()),
             subject: graph_message.subject.unwrap_or_default(),
-            from,
+            body_html,
+            body_text,
+            snippet,
+            from: from.unwrap_or(EmailAddress {
+                name: None,
+                address: "unknown@unknown.com".to_string(),
+                email: "unknown@unknown.com".to_string(),
+            }),
             to,
             cc,
             bcc,
-            text_content,
-            html_content,
-            attachments,
+            reply_to: vec![], // Graph API doesn't always provide this
+            date: created_at,
             flags,
             labels: vec![], // Graph uses categories instead of labels
-            created_at,
-            updated_at,
+            folder: "Unknown".to_string(), // Will be set by caller
+            folder_id: None,
+            importance: if matches!(graph_message.importance.as_deref(), Some("high")) {
+                MessageImportance::High
+            } else if matches!(graph_message.importance.as_deref(), Some("low")) {
+                MessageImportance::Low
+            } else {
+                MessageImportance::Normal
+            },
+            priority: MessagePriority::Normal,
             size: graph_message.body
                 .as_ref()
-                .map(|body| body.content.len() as u64)
+                .map(|body| body.content.len() as i64)
                 .unwrap_or(0),
+            attachments,
+            headers: HashMap::new(), // Would need separate call to get headers
+            message_id: graph_message.internet_message_id.clone().unwrap_or_default(),
             message_id_header: graph_message.internet_message_id,
             in_reply_to: None, // Would need to parse headers
             references: vec![], // Would need to parse headers
+            encryption: None, // Would need to analyze message content
+            created_at,
+            updated_at,
         })
     }
 
     /// Convert Graph attachment to EmailAttachment
     fn convert_graph_attachment(&self, graph_attachment: GraphAttachment) -> MailResult<EmailAttachment> {
         Ok(EmailAttachment {
-            id: Uuid::parse_str(&graph_attachment.id).unwrap_or_else(|_| Uuid::new_v4()),
+            id: graph_attachment.id,
             filename: graph_attachment.name,
+            mime_type: graph_attachment.content_type.clone(),
             content_type: graph_attachment.content_type,
-            size: graph_attachment.size.unwrap_or(0) as u64,
+            size: graph_attachment.size.unwrap_or(0) as i64,
+            is_inline: graph_attachment.is_inline.unwrap_or(false),
             inline: graph_attachment.is_inline.unwrap_or(false),
             content_id: graph_attachment.content_id,
+            download_url: None,
+            local_path: None,
             data: None, // Data will be loaded on demand
         })
     }
@@ -554,7 +584,7 @@ impl GraphClient {
         let to_recipients: Vec<_> = email.to.iter()
             .map(|addr| json!({
                 "emailAddress": {
-                    "address": addr.email,
+                    "address": addr.address,
                     "name": addr.name
                 }
             }))
@@ -565,7 +595,7 @@ impl GraphClient {
             let cc_recipients: Vec<_> = email.cc.iter()
                 .map(|addr| json!({
                     "emailAddress": {
-                        "address": addr.email,
+                        "address": addr.address,
                         "name": addr.name
                     }
                 }))
@@ -577,7 +607,7 @@ impl GraphClient {
             let bcc_recipients: Vec<_> = email.bcc.iter()
                 .map(|addr| json!({
                     "emailAddress": {
-                        "address": addr.email,
+                        "address": addr.address,
                         "name": addr.name
                     }
                 }))
@@ -586,12 +616,12 @@ impl GraphClient {
         }
 
         // Body content
-        let body = if let Some(ref html) = email.html_content {
+        let body = if let Some(ref html) = email.body_html {
             json!({
                 "contentType": "html",
                 "content": html
             })
-        } else if let Some(ref text) = email.text_content {
+        } else if let Some(ref text) = email.body_text {
             json!({
                 "contentType": "text",
                 "content": text
@@ -604,19 +634,18 @@ impl GraphClient {
         };
         message.insert("body".to_string(), body);
 
-        // Attachments
+        // Attachments - Note: Graph API requires actual file data
+        // This is a placeholder implementation as EmailAttachment stores references, not data
         if !email.attachments.is_empty() {
             let attachments: Vec<_> = email.attachments.iter()
-                .filter_map(|att| {
-                    att.data.as_ref().map(|data| {
-                        json!({
-                            "@odata.type": "#microsoft.graph.fileAttachment",
-                            "name": att.filename,
-                            "contentType": att.content_type,
-                            "contentBytes": base64::encode(data),
-                            "contentId": att.content_id,
-                            "isInline": att.inline
-                        })
+                .map(|att| {
+                    json!({
+                        "@odata.type": "#microsoft.graph.fileAttachment",
+                        "name": att.filename,
+                        "contentType": att.mime_type,
+                        "contentBytes": "", // TODO: Load actual file data from local_path or download_url
+                        "contentId": att.content_id,
+                        "isInline": att.is_inline
                     })
                 })
                 .collect();
@@ -661,7 +690,7 @@ impl GraphClient {
 
         Ok(EmailSearchResult {
             query: query.to_string(),
-            total_count: messages.len(),
+            total_count: messages.len() as i32,
             messages,
             took: search_duration,
             facets: None,

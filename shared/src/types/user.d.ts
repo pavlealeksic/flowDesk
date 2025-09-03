@@ -272,7 +272,7 @@ export declare const UserSchema: z.ZodObject<{
         autoSaveIntervalMinutes: z.ZodNumber;
         defaultWorkspaceId: z.ZodOptional<z.ZodString>;
     }, "strip", z.ZodTypeAny, {
-        theme: "auto" | "light" | "dark";
+        theme: "light" | "dark" | "auto";
         emailNotifications: boolean;
         pushNotifications: boolean;
         desktopNotifications: boolean;
@@ -280,7 +280,7 @@ export declare const UserSchema: z.ZodObject<{
         autoSaveIntervalMinutes: number;
         defaultWorkspaceId?: string | undefined;
     }, {
-        theme: "auto" | "light" | "dark";
+        theme: "light" | "dark" | "auto";
         emailNotifications: boolean;
         pushNotifications: boolean;
         desktopNotifications: boolean;
@@ -292,17 +292,17 @@ export declare const UserSchema: z.ZodObject<{
     updatedAt: z.ZodDate;
     lastSeenAt: z.ZodOptional<z.ZodDate>;
 }, "strip", z.ZodTypeAny, {
+    email: string;
     id: string;
     createdAt: Date;
     updatedAt: Date;
     name: string;
-    email: string;
     timezone: string;
-    isActive: boolean;
     locale: string;
+    isActive: boolean;
     hasCompletedOnboarding: boolean;
     preferences: {
-        theme: "auto" | "light" | "dark";
+        theme: "light" | "dark" | "auto";
         emailNotifications: boolean;
         pushNotifications: boolean;
         desktopNotifications: boolean;
@@ -310,21 +310,21 @@ export declare const UserSchema: z.ZodObject<{
         autoSaveIntervalMinutes: number;
         defaultWorkspaceId?: string | undefined;
     };
-    lastSeenAt?: Date | undefined;
     avatar?: string | undefined;
     username?: string | undefined;
+    lastSeenAt?: Date | undefined;
 }, {
+    email: string;
     id: string;
     createdAt: Date;
     updatedAt: Date;
     name: string;
-    email: string;
     timezone: string;
-    isActive: boolean;
     locale: string;
+    isActive: boolean;
     hasCompletedOnboarding: boolean;
     preferences: {
-        theme: "auto" | "light" | "dark";
+        theme: "light" | "dark" | "auto";
         emailNotifications: boolean;
         pushNotifications: boolean;
         desktopNotifications: boolean;
@@ -332,9 +332,9 @@ export declare const UserSchema: z.ZodObject<{
         autoSaveIntervalMinutes: number;
         defaultWorkspaceId?: string | undefined;
     };
-    lastSeenAt?: Date | undefined;
     avatar?: string | undefined;
     username?: string | undefined;
+    lastSeenAt?: Date | undefined;
 }>;
 export declare const OrganizationSchema: z.ZodObject<{
     id: z.ZodString;
@@ -400,6 +400,7 @@ export declare const OrganizationSchema: z.ZodObject<{
     createdAt: Date;
     updatedAt: Date;
     name: string;
+    slug: string;
     settings: {
         allowPublicSignups: boolean;
         requireDomainVerification: boolean;
@@ -408,7 +409,6 @@ export declare const OrganizationSchema: z.ZodObject<{
         dataRetentionDays: number;
         maxMembers?: number | undefined;
     };
-    slug: string;
     billing: {
         plan: "free" | "pro" | "team" | "enterprise";
         subscriptionStatus: "active" | "canceled" | "past_due" | "unpaid" | "trialing";
@@ -419,14 +419,15 @@ export declare const OrganizationSchema: z.ZodObject<{
         billingCycleEnd?: Date | undefined;
         trialEndsAt?: Date | undefined;
     };
-    description?: string | undefined;
     logo?: string | undefined;
+    description?: string | undefined;
     domain?: string | undefined;
 }, {
     id: string;
     createdAt: Date;
     updatedAt: Date;
     name: string;
+    slug: string;
     settings: {
         allowPublicSignups: boolean;
         requireDomainVerification: boolean;
@@ -435,7 +436,6 @@ export declare const OrganizationSchema: z.ZodObject<{
         dataRetentionDays: number;
         maxMembers?: number | undefined;
     };
-    slug: string;
     billing: {
         plan: "free" | "pro" | "team" | "enterprise";
         subscriptionStatus: "active" | "canceled" | "past_due" | "unpaid" | "trialing";
@@ -446,8 +446,8 @@ export declare const OrganizationSchema: z.ZodObject<{
         billingCycleEnd?: Date | undefined;
         trialEndsAt?: Date | undefined;
     };
-    description?: string | undefined;
     logo?: string | undefined;
+    description?: string | undefined;
     domain?: string | undefined;
 }>;
 export declare const TeamSchema: z.ZodObject<{
@@ -485,9 +485,9 @@ export declare const TeamSchema: z.ZodObject<{
     };
     organizationId: string;
     isArchived: boolean;
+    avatar?: string | undefined;
     description?: string | undefined;
     color?: string | undefined;
-    avatar?: string | undefined;
 }, {
     id: string;
     createdAt: Date;
@@ -500,9 +500,9 @@ export declare const TeamSchema: z.ZodObject<{
     };
     organizationId: string;
     isArchived: boolean;
+    avatar?: string | undefined;
     description?: string | undefined;
     color?: string | undefined;
-    avatar?: string | undefined;
 }>;
 export declare const InvitationSchema: z.ZodObject<{
     id: z.ZodString;
@@ -518,12 +518,12 @@ export declare const InvitationSchema: z.ZodObject<{
     createdAt: z.ZodDate;
     respondedAt: z.ZodOptional<z.ZodDate>;
 }, "strip", z.ZodTypeAny, {
+    email: string;
     id: string;
     createdAt: Date;
-    email: string;
-    status: "declined" | "accepted" | "pending" | "expired";
-    role: string;
+    status: "pending" | "accepted" | "declined" | "expired";
     organizationId: string;
+    role: string;
     invitedBy: string;
     expiresAt: Date;
     message?: string | undefined;
@@ -531,12 +531,12 @@ export declare const InvitationSchema: z.ZodObject<{
     customPermissions?: string[] | undefined;
     respondedAt?: Date | undefined;
 }, {
+    email: string;
     id: string;
     createdAt: Date;
-    email: string;
-    status: "declined" | "accepted" | "pending" | "expired";
-    role: string;
+    status: "pending" | "accepted" | "declined" | "expired";
     organizationId: string;
+    role: string;
     invitedBy: string;
     expiresAt: Date;
     message?: string | undefined;

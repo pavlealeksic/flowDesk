@@ -112,16 +112,31 @@ export class OAuthCallbackServer {
         error_description: url.searchParams.get('error_description') || undefined,
       };
 
-      // Send success/error page to user
+      // Enhanced validation
       if (callbackData.error) {
+        log.error('OAuth error received:', {
+          error: callbackData.error,
+          description: callbackData.error_description
+        });
         this.sendErrorPage(res, callbackData.error, callbackData.error_description);
-      } else if (callbackData.code) {
+      } else if (callbackData.code && callbackData.state) {
+        // Validate that we have both required parameters
+        log.info('OAuth authorization code received:', {
+          codeLength: callbackData.code.length,
+          state: callbackData.state,
+          hasState: !!callbackData.state
+        });
         this.sendSuccessPage(res);
       } else {
-        this.sendErrorPage(res, 'invalid_request', 'No authorization code received');
+        const missingParams = [];
+        if (!callbackData.code) missingParams.push('code');
+        if (!callbackData.state) missingParams.push('state');
+        
+        log.warn('OAuth callback missing required parameters:', missingParams);
+        this.sendErrorPage(res, 'invalid_request', `Missing required parameters: ${missingParams.join(', ')}`);
       }
 
-      // Notify the callback handler
+      // Notify the callback handler with enhanced data
       if (this.callbackHandler) {
         // Use setTimeout to ensure response is sent first
         setTimeout(() => {
@@ -129,13 +144,14 @@ export class OAuthCallbackServer {
         }, 100);
       }
 
-      log.info('OAuth callback handled:', { 
+      log.info('OAuth callback processed:', { 
         hasCode: !!callbackData.code, 
+        hasState: !!callbackData.state,
         error: callbackData.error 
       });
     } catch (error) {
       log.error('Error handling OAuth callback:', error);
-      this.sendErrorPage(res, 'server_error', 'Internal server error');
+      this.sendErrorPage(res, 'server_error', 'Internal server error processing callback');
     }
   }
 

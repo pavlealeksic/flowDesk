@@ -7,6 +7,7 @@ export * from './Dropdown'
 export * from './ResizablePanel'
 export * from './Badge'
 export * from './Label'
+export * from './Modal'
 
 import React from 'react'
 
@@ -14,125 +15,44 @@ import React from 'react'
 export * from './utils'
 export * from './types'
 
-// Re-export common icons from lucide-react for convenience
-export {
-  // Navigation
-  Menu,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  ChevronDown,
-  ArrowLeft,
-  ArrowRight,
-  Home,
-  
-  // Actions
-  Search,
-  Plus,
-  Minus,
-  X,
-  Check,
-  Edit,
-  Trash2,
-  Copy,
-  Share,
-  Download,
-  Upload,
-  
-  // Communication
-  Mail,
-  Send,
-  Reply,
-  ReplyAll,
-  Forward,
-  Phone,
-  MessageSquare,
-  Globe,
-  Bell,
-  
-  // Calendar & Time
-  Calendar,
-  Clock,
-  CalendarDays,
-  
-  // Files & Media
-  File,
-  Folder,
-  Image,
-  Paperclip,
-  
-  // Settings & Config
-  Settings,
-  Sliders,
-  Cog,
-  Palette,
-  
-  // Status & Info
-  Info,
-  AlertCircle,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
-  
-  // User & Profile
-  User,
-  Users,
-  UserPlus,
-  Shield,
-  
-  // Layout & View
-  Layout,
-  Grid,
-  List,
-  Eye,
-  EyeOff,
-  Maximize,
-  Minimize,
-  
-  // Other commonly used
-  Star,
-  Heart,
-  Bookmark,
-  Tag,
-  Filter,
-  SortAsc,
-  SortDesc,
-  MoreVertical,
-  MoreHorizontal,
-  Loader2,
-  RefreshCw,
-  
-  // Text formatting
-  Bold,
-  Italic,
-  Underline,
-  Link,
-  ListOrdered,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  
-  // System & status
-  Archive,
-  MapPin,
-  Minimize2,
-  Maximize2,
-  Moon,
-  Sun,
-  Laptop,
-  Pin,
-  Move,
-  Keyboard,
-  Monitor,
-  
-  // Additional components for calendar
-  Badge as LucideBadge,
-  Hash,
-  Type,
-  Zap,
-  MousePointer,
-  Inbox
-} from 'lucide-react'
+// For now, export all icons to get the build working
+// TODO: Optimize to export only used icons once we have a complete list
+export * from 'lucide-react'
+
+// Lazy-loaded icon groups for better code splitting
+export const getNavigationIcons = async () => {
+  const icons = await import('lucide-react')
+  return {
+    ArrowLeft: icons.ArrowLeft,
+    ArrowRight: icons.ArrowRight,
+    Home: icons.Home,
+  }
+}
+
+export const getActionIcons = async () => {
+  const icons = await import('lucide-react')
+  return {
+    Edit: icons.Edit,
+    Trash2: icons.Trash2,
+    Copy: icons.Copy,
+    Share: icons.Share,
+    Download: icons.Download,
+    Upload: icons.Upload,
+  }
+}
+
+export const getCommunicationIcons = async () => {
+  const icons = await import('lucide-react')
+  return {
+    Send: icons.Send,
+    Reply: icons.Reply,
+    ReplyAll: icons.ReplyAll,
+    Forward: icons.Forward,
+    Phone: icons.Phone,
+    MessageSquare: icons.MessageSquare,
+    Globe: icons.Globe,
+  }
+}
 
 // Simple component type exports (components will be created separately if needed)
 export type LabelProps = { children: React.ReactNode; className?: string; htmlFor?: string }

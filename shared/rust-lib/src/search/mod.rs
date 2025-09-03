@@ -38,7 +38,7 @@ pub use types::{
     SearchResult as SearchResultStruct, DocumentMetadata, SearchHighlight,
     FacetValue, FacetType, SearchDebugInfo, ParsingInfo, ExecutionInfo,
     SearchOptions, LocationInfo, FilterOperator, JobStatus,
-    IndexingInfo, IndexType, IndexingJobType
+    IndexingInfo, IndexType, IndexingJobType, JobError, SortConfig, HighlightConfig
 };
 pub use providers::{SearchProvider, ProviderFactory, ProviderManager};
 pub use analytics::{SearchAnalytics, AnalyticsManager};
