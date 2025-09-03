@@ -43,6 +43,7 @@ export interface WorkspaceService {
 export interface Workspace {
   id: string;
   name: string;
+  abbreviation: string; // 2-letter abbreviation for display
   description?: string;
   members: WorkspaceMember[];
   color?: string;
@@ -52,6 +53,10 @@ export interface Workspace {
   services: WorkspaceService[];
   createdAt: Date;
   updatedAt: Date;
+  // Additional fields for compatibility
+  created?: Date;
+  lastAccessed?: Date;
+  isActive?: boolean;
 }
 
 export interface WorkspaceMember {
@@ -110,6 +115,18 @@ export class WorkspaceManager extends EventEmitter {
     this.setCurrentWorkspace(defaultWorkspace.id);
   }
 
+  private generateAbbreviation(name: string): string {
+    const words = name.trim().split(/\s+/);
+    
+    if (words.length === 1) {
+      // Single word - use first two letters
+      return words[0].substring(0, 2).toUpperCase();
+    } else {
+      // Multiple words - use first letter of first two words
+      return (words[0][0] + words[1][0]).toUpperCase();
+    }
+  }
+
   async createWorkspace(
     name: string, 
     color?: string, 
@@ -120,6 +137,7 @@ export class WorkspaceManager extends EventEmitter {
     const workspace: Workspace = {
       id: `ws_${Date.now()}`,
       name,
+      abbreviation: this.generateAbbreviation(name),
       description,
       color: color || '#4285f4',
       icon: icon || 'workspace-default',
@@ -135,6 +153,10 @@ export class WorkspaceManager extends EventEmitter {
       services: [],
       createdAt: new Date(),
       updatedAt: new Date(),
+      // Additional fields for compatibility
+      created: new Date(),
+      lastAccessed: new Date(),
+      isActive: false,
     };
 
     this.workspaces.set(workspace.id, workspace);
@@ -240,6 +262,14 @@ export class WorkspaceManager extends EventEmitter {
   }
 
   getCurrentWorkspace(): Workspace | undefined {
+    // If no current workspace is set, auto-select the first one
+    if (!this.currentWorkspace && this.workspaces.size > 0) {
+      const firstWorkspace = this.workspaces.values().next().value;
+      if (firstWorkspace) {
+        this.currentWorkspace = firstWorkspace.id;
+        log.info(`Auto-selected first workspace as current: ${firstWorkspace.name} (${firstWorkspace.id})`);
+      }
+    }
     return this.currentWorkspace ? this.workspaces.get(this.currentWorkspace) : undefined;
   }
 

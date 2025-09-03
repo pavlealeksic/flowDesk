@@ -3,7 +3,7 @@ import { Provider } from 'react-redux'
 import { store } from './store'
 import { useAppDispatch, useAppSelector } from './store'
 import { loadThemeSettings, applyTheme } from './store/slices/themeSlice'
-import { loadWorkspaces } from './store/slices/workspaceSlice'
+import { loadWorkspaces, switchWorkspace } from './store/slices/workspaceSlice'
 import {
   PluginPanels,
   NotificationsHub,
@@ -45,18 +45,29 @@ function AppContent() {
   const theme = useAppSelector(state => state.theme)
   
   const [activeView, setActiveView] = useState<AppView>('mail')
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>('')
+  // Use currentWorkspaceId from Redux instead of local state
+  const activeWorkspaceId = currentWorkspaceId || ''
   
   // Memoize workspaces data to prevent unnecessary re-renders
-  const workspaces = useAppSelector(state => 
-    Object.values(state.workspace?.workspaces || {}), 
-    (left, right) => JSON.stringify(left) === JSON.stringify(right)
-  ) as Workspace[]
+  const workspaces = useAppSelector(state => {
+    const workspaceValues = Object.values(state.workspace?.workspaces || {})
+    console.log('Workspaces from Redux:', {
+      workspaceCount: workspaceValues.length,
+      workspaces: workspaceValues.map(w => ({ id: w.id, name: w.name }))
+    })
+    return workspaceValues
+  }, (left, right) => JSON.stringify(left) === JSON.stringify(right)) as Workspace[]
   
-  const currentWorkspace = useMemo(() => 
-    workspaces.find(w => w.id === activeWorkspaceId), 
-    [workspaces, activeWorkspaceId]
-  )
+  const currentWorkspace = useMemo(() => {
+    const workspace = workspaces.find(w => w.id === activeWorkspaceId)
+    console.log('Current workspace lookup:', {
+      activeWorkspaceId,
+      workspacesCount: workspaces.length,
+      workspace: workspace,
+      workspaceName: workspace?.name
+    })
+    return workspace
+  }, [workspaces, activeWorkspaceId])
   
   const [activeServiceId, setActiveServiceId] = useState<string | undefined>()
   const [showSearchOverlay, setShowSearchOverlay] = useState(false)
@@ -103,12 +114,15 @@ function AppContent() {
     };
     
     initializeApp();
-  }, [])
+  }, [dispatch])
 
   // Apply theme when it changes
   useEffect(() => {
     dispatch(applyTheme())
   }, [theme, dispatch])
+
+  // Auto-select first workspace when workspaces are loaded (now handled by Redux slice)
+  // This useEffect is no longer needed since Redux slice handles this automatically
 
   const handleAddService = useCallback(async (serviceData: { name: string; type: string; url: string }) => {
     try {
@@ -245,7 +259,10 @@ function AppContent() {
       <nav id="navigation" role="navigation" aria-label="Main navigation">
         <FlowDeskLeftRail
           onViewSelect={setActiveView}
-          onWorkspaceSelect={setActiveWorkspaceId}
+          onWorkspaceSelect={(workspaceId) => {
+            // Use Redux dispatch to switch workspace
+            dispatch(switchWorkspace(workspaceId));
+          }}
           activeView={activeView}
           activeWorkspaceId={activeWorkspaceId}
         />

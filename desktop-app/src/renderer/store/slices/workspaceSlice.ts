@@ -4,23 +4,34 @@ import type { WorkspacePartitionConfig } from '@flow-desk/shared'
 interface WorkspaceData {
   id: string
   name: string
-  type: 'personal' | 'team' | 'organization'
-  description?: string
+  abbreviation: string
+  color: string
   icon?: string
+  browserIsolation?: 'shared' | 'isolated'
+  services: Array<{
+    id: string
+    name: string
+    type: string
+    url: string
+    iconUrl?: string
+    isEnabled: boolean
+    config: Record<string, any>
+  }>
+  members?: string[]
+  created: Date
+  lastAccessed: Date
+  isActive: boolean
+  // Legacy fields for compatibility
+  type?: 'personal' | 'team' | 'organization'
+  description?: string
   organizationId?: string
   teamId?: string
-  ownerId: string
-  members?: Array<{
-    userId: string
-    role: 'owner' | 'admin' | 'member' | 'viewer'
-    joinedAt: string
-    permissions: string[]
-  }>
-  createdAt: string
+  ownerId?: string
+  createdAt?: string
   updatedAt?: string
-  tags: string[]
-  apps: string[]
-  settings: Record<string, any>
+  tags?: string[]
+  apps?: string[]
+  settings?: Record<string, any>
 }
 
 interface WorkspaceWindow {
@@ -207,14 +218,44 @@ const workspaceSlice = createSlice({
       })
       .addCase(loadWorkspaces.fulfilled, (state, action) => {
         state.isLoading = false
-        // Convert workspace array to Record
-        const workspacesMap: Record<string, any> = {};
-        action.payload.workspaces.forEach((workspace: any) => {
-          workspacesMap[workspace.id] = workspace;
-        });
+        // Convert workspace array to Record and ensure proper data structure
+        const workspacesMap: Record<string, WorkspaceData> = {};
+        if (action.payload.workspaces && Array.isArray(action.payload.workspaces)) {
+          action.payload.workspaces.forEach((workspace: any) => {
+            // Ensure workspace has all required fields with fallbacks
+            const workspaceData: WorkspaceData = {
+              id: workspace.id || `ws_${Date.now()}`,
+              name: workspace.name || 'Unnamed Workspace',
+              abbreviation: workspace.abbreviation || workspace.name?.substring(0, 2).toUpperCase() || 'UW',
+              color: workspace.color || '#4285f4',
+              icon: workspace.icon,
+              browserIsolation: workspace.browserIsolation || 'shared',
+              services: workspace.services || [],
+              members: workspace.members || [],
+              created: workspace.created ? new Date(workspace.created) : new Date(),
+              lastAccessed: workspace.lastAccessed ? new Date(workspace.lastAccessed) : new Date(),
+              isActive: workspace.isActive || false,
+              // Legacy compatibility
+              type: workspace.type,
+              description: workspace.description,
+              organizationId: workspace.organizationId,
+              teamId: workspace.teamId,
+              ownerId: workspace.ownerId,
+              createdAt: workspace.createdAt,
+              updatedAt: workspace.updatedAt,
+              tags: workspace.tags,
+              apps: workspace.apps,
+              settings: workspace.settings
+            };
+            workspacesMap[workspace.id] = workspaceData;
+          });
+        }
         state.workspaces = workspacesMap;
-        state.currentWorkspaceId = action.payload.currentWorkspaceId
-        state.partitions = action.payload.partitions
+        // Set current workspace, with fallback to first workspace if none is set
+        const currentWorkspaceId = action.payload.currentWorkspaceId;
+        const workspaceIds = Object.keys(workspacesMap);
+        state.currentWorkspaceId = currentWorkspaceId || (workspaceIds.length > 0 ? workspaceIds[0] : null);
+        state.partitions = action.payload.partitions || {}
       })
       .addCase(loadWorkspaces.rejected, (state, action) => {
         state.isLoading = false
@@ -232,8 +273,35 @@ const workspaceSlice = createSlice({
       // Create workspace
       .addCase(createWorkspace.fulfilled, (state, action) => {
         const { workspace, partition } = action.payload
-        state.workspaces[workspace.id] = workspace
-        state.partitions[partition.id] = partition
+        // Ensure the workspace has all required fields
+        const workspaceData: WorkspaceData = {
+          id: workspace.id || `ws_${Date.now()}`,
+          name: workspace.name || 'New Workspace',
+          abbreviation: workspace.abbreviation || workspace.name?.substring(0, 2).toUpperCase() || 'NW',
+          color: workspace.color || '#4285f4',
+          icon: workspace.icon,
+          browserIsolation: workspace.browserIsolation || 'shared',
+          services: workspace.services || [],
+          members: workspace.members || [],
+          created: workspace.created ? new Date(workspace.created) : new Date(),
+          lastAccessed: workspace.lastAccessed ? new Date(workspace.lastAccessed) : new Date(),
+          isActive: workspace.isActive || false,
+          // Legacy compatibility
+          type: workspace.type,
+          description: workspace.description,
+          organizationId: workspace.organizationId,
+          teamId: workspace.teamId,
+          ownerId: workspace.ownerId,
+          createdAt: workspace.createdAt,
+          updatedAt: workspace.updatedAt,
+          tags: workspace.tags,
+          apps: workspace.apps,
+          settings: workspace.settings
+        };
+        state.workspaces[workspace.id] = workspaceData
+        if (partition) {
+          state.partitions[partition.id] = partition
+        }
       })
       .addCase(createWorkspace.rejected, (state, action) => {
         state.error = action.error.message || 'Failed to create workspace'
