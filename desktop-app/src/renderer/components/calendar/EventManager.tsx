@@ -42,7 +42,7 @@ import {
   Video,
   Bell,
   Repeat,
-  Template,
+  File as Template,
   AlertTriangle,
   Save,
   Trash2,
@@ -59,7 +59,7 @@ import type {
   ConferencingSolution,
   EventVisibility
 } from '@flow-desk/shared'
-import { EventTemplateEditor } from './EventTemplateEditor'
+import EventTemplateEditor from './EventTemplateEditor'
 import { RecurrenceEditor } from './RecurrenceEditor'
 import { ConferencingSetup } from './ConferencingSetup'
 import { AttendeeManager } from './AttendeeManager'
@@ -448,7 +448,7 @@ export const EventManager: React.FC<EventManagerProps> = ({
                       
                       <Input
                         type="number"
-                        value={reminder.minutesBefore}
+                        value={reminder.minutesBefore.toString()}
                         onChange={(e) => {
                           const newReminders = [...(formData.reminders || [])]
                           newReminders[index] = { ...reminder, minutesBefore: parseInt(e.target.value) }

@@ -185,22 +185,59 @@ export class ProviderManager {
     }
   }
 
-  async testConnection(providerId: string, credentials: any): Promise<{ success: boolean; error?: string }> {
+  async testConnection(providerId: string, credentials: any): Promise<{ success: boolean; error?: string; details?: any }> {
+    const testStartTime = Date.now()
+    
     try {
+      const provider = this.getProvider(providerId)
+      if (!provider) {
+        return { 
+          success: false, 
+          error: `Provider not found: ${providerId}` 
+        }
+      }
+
       const connection = await this.createConnection(providerId, credentials)
       
       // Test the connection based on provider type
       if (connection.type === 'oauth2') {
-        // Test OAuth token validity
-        return { success: true }
+        // Test OAuth token validity by attempting to validate the token
+        const testResult = await this.testOAuthConnection(provider, connection)
+        return {
+          success: testResult.valid,
+          error: testResult.valid ? undefined : testResult.error,
+          details: {
+            providerId,
+            email: credentials.email,
+            testDurationMs: Date.now() - testStartTime,
+            tokenValid: testResult.valid,
+            scopes: testResult.scopes || []
+          }
+        }
       } else {
         // Test IMAP/SMTP connection
-        return { success: true }
+        const testResult = await this.testPasswordConnection(provider, connection)
+        return {
+          success: testResult.connected,
+          error: testResult.connected ? undefined : testResult.error,
+          details: {
+            providerId,
+            email: credentials.email,
+            testDurationMs: Date.now() - testStartTime,
+            imapConnected: testResult.imapConnected,
+            smtpConnected: testResult.smtpConnected
+          }
+        }
       }
     } catch (error) {
       return { 
         success: false, 
-        error: error instanceof Error ? error.message : 'Connection failed' 
+        error: error instanceof Error ? error.message : 'Connection failed',
+        details: {
+          providerId,
+          testDurationMs: Date.now() - testStartTime,
+          errorType: error instanceof Error ? error.constructor.name : 'UnknownError'
+        }
       }
     }
   }
@@ -237,5 +274,223 @@ export class ProviderManager {
     
     this.activeConnections.clear()
     log.info('Closed all provider connections')
+  }
+
+  /**
+   * Test OAuth connection by validating token
+   */
+  private async testOAuthConnection(provider: ProviderConfig, connection: any): Promise<{ valid: boolean; error?: string; scopes?: string[] }> {
+    try {
+      if (provider.id === 'gmail') {
+        // Test Gmail OAuth token by making a simple API call
+        const response = await this.testGmailToken(connection.accessToken)
+        return {
+          valid: response.valid,
+          error: response.error,
+          scopes: response.scopes
+        }
+      } else if (provider.id === 'outlook') {
+        // Test Microsoft Graph token
+        const response = await this.testMicrosoftToken(connection.accessToken)
+        return {
+          valid: response.valid,
+          error: response.error,
+          scopes: response.scopes
+        }
+      } else {
+        // Generic OAuth test - just check if token exists
+        return {
+          valid: !!connection.accessToken,
+          error: connection.accessToken ? undefined : 'No access token provided',
+          scopes: []
+        }
+      }
+    } catch (error) {
+      log.error('OAuth connection test failed:', error)
+      return {
+        valid: false,
+        error: error instanceof Error ? error.message : 'OAuth token validation failed',
+        scopes: []
+      }
+    }
+  }
+
+  /**
+   * Test password-based connection (IMAP/SMTP)
+   */
+  private async testPasswordConnection(provider: ProviderConfig, connection: any): Promise<{ connected: boolean; error?: string; imapConnected?: boolean; smtpConnected?: boolean }> {
+    try {
+      let imapConnected = false
+      let smtpConnected = false
+      const errors: string[] = []
+
+      // Test IMAP connection if available
+      if (provider.servers.imap) {
+        try {
+          imapConnected = await this.testImapConnection(provider.servers.imap, connection)
+        } catch (error) {
+          errors.push(`IMAP: ${error instanceof Error ? error.message : 'Connection failed'}`)
+        }
+      }
+
+      // Test SMTP connection if available
+      if (provider.servers.smtp) {
+        try {
+          smtpConnected = await this.testSmtpConnection(provider.servers.smtp, connection)
+        } catch (error) {
+          errors.push(`SMTP: ${error instanceof Error ? error.message : 'Connection failed'}`)
+        }
+      }
+
+      const connected = imapConnected || smtpConnected
+      return {
+        connected,
+        error: connected ? undefined : errors.join('; '),
+        imapConnected,
+        smtpConnected
+      }
+    } catch (error) {
+      log.error('Password connection test failed:', error)
+      return {
+        connected: false,
+        error: error instanceof Error ? error.message : 'Connection test failed',
+        imapConnected: false,
+        smtpConnected: false
+      }
+    }
+  }
+
+  /**
+   * Test Gmail OAuth token validity
+   */
+  private async testGmailToken(accessToken: string): Promise<{ valid: boolean; error?: string; scopes?: string[] }> {
+    try {
+      // Make a simple API call to verify token
+      const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        return {
+          valid: true,
+          scopes: ['gmail'] // Simplified scope indication
+        }
+      } else {
+        const errorText = await response.text()
+        return {
+          valid: false,
+          error: `Gmail API returned ${response.status}: ${errorText}`,
+          scopes: []
+        }
+      }
+    } catch (error) {
+      return {
+        valid: false,
+        error: error instanceof Error ? error.message : 'Gmail token validation failed',
+        scopes: []
+      }
+    }
+  }
+
+  /**
+   * Test Microsoft Graph OAuth token validity
+   */
+  private async testMicrosoftToken(accessToken: string): Promise<{ valid: boolean; error?: string; scopes?: string[] }> {
+    try {
+      // Make a simple API call to verify token
+      const response = await fetch('https://graph.microsoft.com/v1.0/me', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        return {
+          valid: true,
+          scopes: ['graph'] // Simplified scope indication
+        }
+      } else {
+        const errorText = await response.text()
+        return {
+          valid: false,
+          error: `Microsoft Graph returned ${response.status}: ${errorText}`,
+          scopes: []
+        }
+      }
+    } catch (error) {
+      return {
+        valid: false,
+        error: error instanceof Error ? error.message : 'Microsoft Graph token validation failed',
+        scopes: []
+      }
+    }
+  }
+
+  /**
+   * Test IMAP connection
+   */
+  private async testImapConnection(imapServer: { host: string; port: number; secure: boolean }, connection: any): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      // For now, we'll do a basic TCP connection test
+      // In a full implementation, you'd use a proper IMAP library
+      const net = require('net')
+      const socket = new net.Socket()
+      
+      const timeout = setTimeout(() => {
+        socket.destroy()
+        reject(new Error('IMAP connection timeout'))
+      }, 5000)
+
+      socket.connect(imapServer.port, imapServer.host, () => {
+        clearTimeout(timeout)
+        socket.destroy()
+        log.info(`IMAP connection test successful to ${imapServer.host}:${imapServer.port}`)
+        resolve(true)
+      })
+
+      socket.on('error', (error) => {
+        clearTimeout(timeout)
+        socket.destroy()
+        log.error(`IMAP connection test failed to ${imapServer.host}:${imapServer.port}:`, error)
+        reject(error)
+      })
+    })
+  }
+
+  /**
+   * Test SMTP connection
+   */
+  private async testSmtpConnection(smtpServer: { host: string; port: number; secure: boolean }, connection: any): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      // For now, we'll do a basic TCP connection test
+      // In a full implementation, you'd use a proper SMTP library
+      const net = require('net')
+      const socket = new net.Socket()
+      
+      const timeout = setTimeout(() => {
+        socket.destroy()
+        reject(new Error('SMTP connection timeout'))
+      }, 5000)
+
+      socket.connect(smtpServer.port, smtpServer.host, () => {
+        clearTimeout(timeout)
+        socket.destroy()
+        log.info(`SMTP connection test successful to ${smtpServer.host}:${smtpServer.port}`)
+        resolve(true)
+      })
+
+      socket.on('error', (error) => {
+        clearTimeout(timeout)
+        socket.destroy()
+        log.error(`SMTP connection test failed to ${smtpServer.host}:${smtpServer.port}:`, error)
+        reject(error)
+      })
+    })
   }
 }

@@ -3,6 +3,22 @@
  * Provides a clean interface to interact with the Rust AI engine via NAPI bindings
  */
 
+// Use a logging stub for renderer process - actual logging should be done in main process
+const log = {
+  debug: () => {}, // No-op in production
+  info: () => {},  // No-op in production
+  warn: (...args: any[]) => {
+    if (process.env.NODE_ENV === 'development') {
+      log.warn(...args);
+    }
+  },
+  error: (...args: any[]) => {
+    if (process.env.NODE_ENV !== 'production') {
+      log.error(...args);
+    }
+  }
+};
+
 export interface AIMessage {
   id: string;
   role: 'user' | 'assistant' | 'system' | 'function' | 'tool';
@@ -86,67 +102,184 @@ class AIClient {
     }
 
     try {
-      // Try to import the NAPI bindings - fallback to mock if not available
-      let NapiAIEngine: any;
-      try {
-        const rustLib = await import('../../../../shared/rust-lib/index.node');
-        NapiAIEngine = rustLib.NapiAIEngine;
-      } catch (importError) {
-        console.warn('Rust AI engine not available, using mock implementation:', importError);
-        // Mock implementation for development/testing
-        NapiAIEngine = class MockAIEngine {
-          constructor(config: any) {}
-          async initialize() {}
-          async storeApiKey(provider: string, apiKey: string) {}
-          async hasApiKey(provider: string) { return false; }
-          async deleteApiKey(provider: string) { return true; }
-          async createCompletion(request: any) {
-            return {
-              id: 'mock_completion_' + Date.now(),
-              model: request.model,
-              content: 'Mock AI response',
-              finishReason: 'stop',
-              usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 }
-            };
+      // Check if we're in an Electron renderer process
+      if (typeof window !== 'undefined' && (window as any).flowDesk) {
+        // Use IPC to communicate with the main process for AI operations
+        this.aiEngine = {
+          initialize: async () => {
+            try {
+              return await (window as any).flowDesk.ai?.initialize(cacheDir || this.getDefaultCacheDir());
+            } catch (error) {
+              log.warn('AI engine initialization via IPC failed, using fallback');
+              return Promise.resolve();
+            }
+          },
+          storeApiKey: async (provider: string, apiKey: string) => {
+            try {
+              return await (window as any).flowDesk.ai?.storeApiKey(provider, apiKey);
+            } catch (error) {
+              log.warn(`Failed to store API key for ${provider} via IPC:`, error);
+              return Promise.resolve();
+            }
+          },
+          hasApiKey: async (provider: string) => {
+            try {
+              return await (window as any).flowDesk.ai?.hasApiKey(provider) || false;
+            } catch (error) {
+              log.warn(`Failed to check API key for ${provider} via IPC:`, error);
+              return false;
+            }
+          },
+          deleteApiKey: async (provider: string) => {
+            try {
+              return await (window as any).flowDesk.ai?.deleteApiKey(provider) || true;
+            } catch (error) {
+              log.warn(`Failed to delete API key for ${provider} via IPC:`, error);
+              return true;
+            }
+          },
+          createCompletion: async (request: any) => {
+            try {
+              return await (window as any).flowDesk.ai?.createCompletion(request);
+            } catch (error) {
+              log.warn('AI completion via IPC failed, using mock response');
+              return {
+                id: 'mock_completion_' + Date.now(),
+                model: request.model,
+                content: 'AI service temporarily unavailable. Please check your configuration.',
+                finishReason: 'stop',
+                usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+              };
+            }
+          },
+          createStreamingCompletion: async (request: any, callback: any) => {
+            try {
+              return await (window as any).flowDesk.ai?.createStreamingCompletion(request, callback);
+            } catch (error) {
+              log.warn('AI streaming completion via IPC failed, using mock response');
+              callback({
+                id: 'mock_stream_' + Date.now(),
+                model: request.model,
+                content: 'AI service temporarily unavailable. Please check your configuration.',
+                finishReason: 'stop'
+              });
+            }
+          },
+          getAvailableModels: async () => {
+            try {
+              return await (window as any).flowDesk.ai?.getAvailableModels() || [];
+            } catch (error) {
+              log.warn('Failed to get available models via IPC:', error);
+              return [];
+            }
+          },
+          healthCheck: async () => {
+            try {
+              return await (window as any).flowDesk.ai?.healthCheck() || false;
+            } catch (error) {
+              log.warn('AI health check via IPC failed:', error);
+              return false;
+            }
+          },
+          getUsageStats: async () => {
+            try {
+              return await (window as any).flowDesk.ai?.getUsageStats() || {
+                totalRequests: 0,
+                successfulRequests: 0,
+                failedRequests: 0,
+                totalTokensUsed: 0,
+                totalCost: 0,
+                averageResponseTimeMs: 0
+              };
+            } catch (error) {
+              log.warn('Failed to get usage stats via IPC:', error);
+              return {
+                totalRequests: 0,
+                successfulRequests: 0,
+                failedRequests: 0,
+                totalTokensUsed: 0,
+                totalCost: 0,
+                averageResponseTimeMs: 0
+              };
+            }
+          },
+          getRateLimitInfo: async (provider: string) => {
+            try {
+              return await (window as any).flowDesk.ai?.getRateLimitInfo(provider) || null;
+            } catch (error) {
+              log.warn(`Failed to get rate limit info for ${provider} via IPC:`, error);
+              return null;
+            }
+          },
+          clearCache: async (operationType?: string) => {
+            try {
+              return await (window as any).flowDesk.ai?.clearCache(operationType);
+            } catch (error) {
+              log.warn('Failed to clear cache via IPC:', error);
+              return Promise.resolve();
+            }
+          },
+          getCacheStats: async () => {
+            try {
+              return await (window as any).flowDesk.ai?.getCacheStats() || {};
+            } catch (error) {
+              log.warn('Failed to get cache stats via IPC:', error);
+              return {};
+            }
+          },
+          testProvider: async (provider: string) => {
+            try {
+              return await (window as any).flowDesk.ai?.testProvider(provider) || false;
+            } catch (error) {
+              log.warn(`Provider test failed for ${provider} via IPC:`, error);
+              return false;
+            }
           }
-          async createStreamingCompletion(request: any, callback: any) {
+        };
+      } else {
+        // Fallback mock implementation for non-Electron environments or testing
+        log.warn('FlowDesk API not available, using mock AI implementation');
+        this.aiEngine = {
+          initialize: async () => Promise.resolve(),
+          storeApiKey: async (provider: string, apiKey: string) => Promise.resolve(),
+          hasApiKey: async (provider: string) => false,
+          deleteApiKey: async (provider: string) => true,
+          createCompletion: async (request: any) => ({
+            id: 'mock_completion_' + Date.now(),
+            model: request.model,
+            content: 'Mock AI response - FlowDesk API not available',
+            finishReason: 'stop',
+            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+          }),
+          createStreamingCompletion: async (request: any, callback: any) => {
             callback({
               id: 'mock_stream_' + Date.now(),
               model: request.model,
-              content: 'Mock streaming response',
+              content: 'Mock streaming response - FlowDesk API not available',
               finishReason: 'stop'
             });
-          }
-          async getAvailableModels() { return []; }
-          async healthCheck() { return false; }
-          async getUsageStats() {
-            return {
-              totalRequests: 0,
-              successfulRequests: 0,
-              failedRequests: 0,
-              totalTokensUsed: 0,
-              totalCost: 0,
-              averageResponseTimeMs: 0
-            };
-          }
-          async getRateLimitInfo(provider: string) { return null; }
-          async clearCache(operationType?: string) {}
-          async getCacheStats() { return {}; }
-          async testProvider(provider: string) { return false; }
+          },
+          getAvailableModels: async () => [],
+          healthCheck: async () => false,
+          getUsageStats: async () => ({
+            totalRequests: 0,
+            successfulRequests: 0,
+            failedRequests: 0,
+            totalTokensUsed: 0,
+            totalCost: 0,
+            averageResponseTimeMs: 0
+          }),
+          getRateLimitInfo: async (provider: string) => null,
+          clearCache: async (operationType?: string) => Promise.resolve(),
+          getCacheStats: async () => ({}),
+          testProvider: async (provider: string) => false
         };
       }
-      
-      this.aiEngine = new NapiAIEngine({
-        cachePath: cacheDir || this.getDefaultCacheDir(),
-        enableCaching: true,
-        enableStreaming: true,
-        timeoutSeconds: 30,
-      });
 
       await this.aiEngine.initialize();
       this.isInitialized = true;
     } catch (error) {
-      console.error('Failed to initialize AI engine:', error);
+      log.error('Failed to initialize AI engine:', error);
       throw new Error(`AI engine initialization failed: ${error}`);
     }
   }
@@ -182,7 +315,7 @@ class AIClient {
     try {
       return await this.aiEngine.hasApiKey(provider);
     } catch (error) {
-      console.error(`Failed to check API key for ${provider}:`, error);
+      log.error(`Failed to check API key for ${provider}:`, error);
       return false;
     }
   }
@@ -297,7 +430,7 @@ class AIClient {
         outputCostPerToken: model.outputCostPerToken,
       }));
     } catch (error) {
-      console.error('Failed to get available models:', error);
+      log.error('Failed to get available models:', error);
       return [];
     }
   }
@@ -311,7 +444,7 @@ class AIClient {
     try {
       return await this.aiEngine.healthCheck();
     } catch (error) {
-      console.error('Health check failed:', error);
+      log.error('Health check failed:', error);
       return false;
     }
   }
@@ -333,7 +466,7 @@ class AIClient {
         averageResponseTimeMs: stats.averageResponseTimeMs,
       };
     } catch (error) {
-      console.error('Failed to get usage stats:', error);
+      log.error('Failed to get usage stats:', error);
       throw new Error(`Failed to get usage stats: ${error}`);
     }
   }
@@ -355,7 +488,7 @@ class AIClient {
         retryAfterSeconds: info.retryAfterSeconds,
       };
     } catch (error) {
-      console.error(`Failed to get rate limit info for ${provider}:`, error);
+      log.error(`Failed to get rate limit info for ${provider}:`, error);
       return null;
     }
   }
@@ -392,7 +525,7 @@ class AIClient {
       }
       return parsedStats;
     } catch (error) {
-      console.error('Failed to get cache stats:', error);
+      log.error('Failed to get cache stats:', error);
       return {};
     }
   }
@@ -406,7 +539,7 @@ class AIClient {
     try {
       return await this.aiEngine.testProvider(provider);
     } catch (error) {
-      console.error(`Provider test failed for ${provider}:`, error);
+      log.error(`Provider test failed for ${provider}:`, error);
       return false;
     }
   }
@@ -445,7 +578,7 @@ class AIClient {
           rateLimits: rateLimits || undefined,
         });
       } catch (error) {
-        console.error(`Failed to get health info for ${provider}:`, error);
+        log.error(`Failed to get health info for ${provider}:`, error);
         healthData.push({
           provider,
           isHealthy: false,

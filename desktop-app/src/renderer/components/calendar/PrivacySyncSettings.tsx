@@ -156,7 +156,7 @@ export const PrivacySyncSettings: React.FC<PrivacySyncSettingsProps> = ({
   const executePrivacySync = useCallback(async () => {
     try {
       if (window.flowDesk?.calendar) {
-        const result = await window.flowDesk.calendar.executePrivacySync()
+        const result = await window.flowDesk.calendar.executePrivacySync('default-account')
         if (result.success) {
           // Show success message
           console.log('Privacy sync executed successfully:', result.data)
@@ -297,7 +297,7 @@ export const PrivacySyncSettings: React.FC<PrivacySyncSettingsProps> = ({
                   <div className="flex items-center space-x-2">
                     <Switch
                       checked={newRule.privacySettings?.stripDescription || false}
-                      onChange={(checked) => setNewRule({
+                      onCheckedChange={(checked: boolean) => setNewRule({
                         ...newRule,
                         privacySettings: {
                           ...newRule.privacySettings!,
@@ -311,7 +311,7 @@ export const PrivacySyncSettings: React.FC<PrivacySyncSettingsProps> = ({
                   <div className="flex items-center space-x-2">
                     <Switch
                       checked={newRule.privacySettings?.stripLocation || false}
-                      onChange={(checked) => setNewRule({
+                      onCheckedChange={(checked: boolean) => setNewRule({
                         ...newRule,
                         privacySettings: {
                           ...newRule.privacySettings!,
@@ -325,7 +325,7 @@ export const PrivacySyncSettings: React.FC<PrivacySyncSettingsProps> = ({
                   <div className="flex items-center space-x-2">
                     <Switch
                       checked={newRule.privacySettings?.stripAttendees || false}
-                      onChange={(checked) => setNewRule({
+                      onCheckedChange={(checked: boolean) => setNewRule({
                         ...newRule,
                         privacySettings: {
                           ...newRule.privacySettings!,
@@ -339,7 +339,7 @@ export const PrivacySyncSettings: React.FC<PrivacySyncSettingsProps> = ({
                   <div className="flex items-center space-x-2">
                     <Switch
                       checked={newRule.advancedMode || false}
-                      onChange={(checked) => setNewRule({
+                      onCheckedChange={(checked: boolean) => setNewRule({
                         ...newRule,
                         advancedMode: checked
                       })}
@@ -419,7 +419,7 @@ export const PrivacySyncSettings: React.FC<PrivacySyncSettingsProps> = ({
                   <div className="flex items-center space-x-2">
                     <Switch
                       checked={rule.isEnabled}
-                      onChange={async (enabled) => {
+                      onCheckedChange={async (enabled: boolean) => {
                         // Update rule enabled status
                         console.log('Toggle rule:', rule.id, enabled)
                       }}

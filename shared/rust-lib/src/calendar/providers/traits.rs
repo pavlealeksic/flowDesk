@@ -32,7 +32,7 @@ pub trait CalendarProviderTrait: Send + Sync {
     fn account_id(&self) -> &str;
 
     /// Test connection and authentication
-    async fn test_connection(&self) -> CalendarResult<()>;
+    async fn test_connection(&mut self) -> CalendarResult<()>;
 
     /// Refresh authentication tokens if needed
     async fn refresh_authentication(&mut self) -> CalendarResult<()>;
@@ -40,25 +40,25 @@ pub trait CalendarProviderTrait: Send + Sync {
     // === Calendar Operations ===
 
     /// List all calendars for this account
-    async fn list_calendars(&self) -> CalendarResult<Vec<Calendar>>;
+    async fn list_calendars(&mut self) -> CalendarResult<Vec<Calendar>>;
 
     /// Get a specific calendar by provider ID
-    async fn get_calendar(&self, calendar_id: &str) -> CalendarResult<Calendar>;
+    async fn get_calendar(&mut self, calendar_id: &str) -> CalendarResult<Calendar>;
 
     /// Create a new calendar
-    async fn create_calendar(&self, calendar: &Calendar) -> CalendarResult<Calendar>;
+    async fn create_calendar(&mut self, calendar: &Calendar) -> CalendarResult<Calendar>;
 
     /// Update an existing calendar
-    async fn update_calendar(&self, calendar_id: &str, calendar: &Calendar) -> CalendarResult<Calendar>;
+    async fn update_calendar(&mut self, calendar_id: &str, calendar: &Calendar) -> CalendarResult<Calendar>;
 
     /// Delete a calendar
-    async fn delete_calendar(&self, calendar_id: &str) -> CalendarResult<()>;
+    async fn delete_calendar(&mut self, calendar_id: &str) -> CalendarResult<()>;
 
     // === Event Operations ===
 
     /// List events in a calendar within a time range
     async fn list_events(
-        &self,
+        &mut self,
         calendar_id: &str,
         time_min: Option<DateTime<Utc>>,
         time_max: Option<DateTime<Utc>>,
@@ -66,25 +66,25 @@ pub trait CalendarProviderTrait: Send + Sync {
     ) -> CalendarResult<Vec<CalendarEvent>>;
 
     /// Get a specific event by provider ID
-    async fn get_event(&self, calendar_id: &str, event_id: &str) -> CalendarResult<CalendarEvent>;
+    async fn get_event(&mut self, calendar_id: &str, event_id: &str) -> CalendarResult<CalendarEvent>;
 
     /// Create a new event
-    async fn create_event(&self, event: &CreateCalendarEventInput) -> CalendarResult<CalendarEvent>;
+    async fn create_event(&mut self, event: &CreateCalendarEventInput) -> CalendarResult<CalendarEvent>;
 
     /// Update an existing event
     async fn update_event(
-        &self, 
+        &mut self, 
         calendar_id: &str,
         event_id: &str, 
         updates: &UpdateCalendarEventInput
     ) -> CalendarResult<CalendarEvent>;
 
     /// Delete an event
-    async fn delete_event(&self, calendar_id: &str, event_id: &str) -> CalendarResult<()>;
+    async fn delete_event(&mut self, calendar_id: &str, event_id: &str) -> CalendarResult<()>;
 
     /// Move an event to a different calendar
     async fn move_event(
-        &self,
+        &mut self,
         source_calendar_id: &str,
         target_calendar_id: &str,
         event_id: &str,
@@ -94,7 +94,7 @@ pub trait CalendarProviderTrait: Send + Sync {
 
     /// Get instances of a recurring event in a time range
     async fn get_recurring_event_instances(
-        &self,
+        &mut self,
         calendar_id: &str,
         recurring_event_id: &str,
         time_min: DateTime<Utc>,
@@ -103,7 +103,7 @@ pub trait CalendarProviderTrait: Send + Sync {
 
     /// Update a single instance of a recurring event
     async fn update_recurring_event_instance(
-        &self,
+        &mut self,
         calendar_id: &str,
         recurring_event_id: &str,
         instance_id: &str,
@@ -112,7 +112,7 @@ pub trait CalendarProviderTrait: Send + Sync {
 
     /// Delete a single instance of a recurring event
     async fn delete_recurring_event_instance(
-        &self,
+        &mut self,
         calendar_id: &str,
         recurring_event_id: &str,
         instance_id: &str,
@@ -122,7 +122,7 @@ pub trait CalendarProviderTrait: Send + Sync {
 
     /// Add attendees to an event
     async fn add_attendees(
-        &self,
+        &mut self,
         calendar_id: &str,
         event_id: &str,
         attendees: &[EventAttendee],
@@ -130,7 +130,7 @@ pub trait CalendarProviderTrait: Send + Sync {
 
     /// Remove attendees from an event
     async fn remove_attendees(
-        &self,
+        &mut self,
         calendar_id: &str,
         event_id: &str,
         attendee_emails: &[String],
@@ -138,7 +138,7 @@ pub trait CalendarProviderTrait: Send + Sync {
 
     /// Send meeting invitations to attendees
     async fn send_invitations(
-        &self,
+        &mut self,
         calendar_id: &str,
         event_id: &str,
         message: Option<&str>,
@@ -147,11 +147,11 @@ pub trait CalendarProviderTrait: Send + Sync {
     // === Free/Busy Operations ===
 
     /// Query free/busy information for email addresses
-    async fn query_free_busy(&self, query: &FreeBusyQuery) -> CalendarResult<FreeBusyResponse>;
+    async fn query_free_busy(&mut self, query: &FreeBusyQuery) -> CalendarResult<FreeBusyResponse>;
 
     /// Get availability for a specific calendar
     async fn get_calendar_free_busy(
-        &self,
+        &mut self,
         calendar_id: &str,
         time_min: DateTime<Utc>,
         time_max: DateTime<Utc>,
@@ -160,21 +160,21 @@ pub trait CalendarProviderTrait: Send + Sync {
     // === Synchronization ===
 
     /// Perform full synchronization of all calendars
-    async fn full_sync(&self) -> CalendarResult<SyncStatus>;
+    async fn full_sync(&mut self) -> CalendarResult<SyncStatus>;
 
     /// Perform incremental sync using sync tokens
-    async fn incremental_sync(&self, sync_token: Option<&str>) -> CalendarResult<SyncStatus>;
+    async fn incremental_sync(&mut self, sync_token: Option<&str>) -> CalendarResult<SyncStatus>;
 
     /// Get the current sync token for incremental syncing
-    async fn get_sync_token(&self, calendar_id: &str) -> CalendarResult<Option<String>>;
+    async fn get_sync_token(&mut self, calendar_id: &str) -> CalendarResult<Option<String>>;
 
     /// Check if sync token is still valid
-    async fn is_sync_token_valid(&self, sync_token: &str) -> CalendarResult<bool>;
+    async fn is_sync_token_valid(&mut self, sync_token: &str) -> CalendarResult<bool>;
 
     // === Batch Operations (if supported) ===
 
     /// Execute batch operations if provider supports them
-    async fn batch_operations(&self, request: &BatchOperationRequest) -> CalendarResult<Vec<BatchOperationResult>> {
+    async fn batch_operations(&mut self, request: &BatchOperationRequest) -> CalendarResult<Vec<BatchOperationResult>> {
         // Default implementation performs operations sequentially
         let mut results = Vec::new();
         

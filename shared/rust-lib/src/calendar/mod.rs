@@ -21,6 +21,9 @@ pub mod types;
 pub mod utils;
 pub mod webhook;
 
+#[cfg(test)]
+pub mod integration_test;
+
 // Re-export main types and engine
 pub use engine::CalendarEngine;
 pub use error::{CalendarError, CalendarResult};

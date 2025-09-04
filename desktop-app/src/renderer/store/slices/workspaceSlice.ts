@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
+import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@reduxjs/toolkit'
 import type { WorkspacePartitionConfig } from '@flow-desk/shared'
 
 interface WorkspaceData {
@@ -18,8 +18,8 @@ interface WorkspaceData {
     config: Record<string, any>
   }>
   members?: string[]
-  created: Date
-  lastAccessed: Date
+  created: string // ISO string for serialization
+  lastAccessed: string // ISO string for serialization
   isActive: boolean
   // Legacy fields for compatibility
   type?: 'personal' | 'team' | 'organization'
@@ -232,8 +232,8 @@ const workspaceSlice = createSlice({
               browserIsolation: workspace.browserIsolation || 'shared',
               services: workspace.services || [],
               members: workspace.members || [],
-              created: workspace.created ? new Date(workspace.created) : new Date(),
-              lastAccessed: workspace.lastAccessed ? new Date(workspace.lastAccessed) : new Date(),
+              created: workspace.created ? new Date(workspace.created).toISOString() : new Date().toISOString(),
+              lastAccessed: workspace.lastAccessed ? new Date(workspace.lastAccessed).toISOString() : new Date().toISOString(),
               isActive: workspace.isActive || false,
               // Legacy compatibility
               type: workspace.type,
@@ -283,8 +283,10 @@ const workspaceSlice = createSlice({
           browserIsolation: workspace.browserIsolation || 'shared',
           services: workspace.services || [],
           members: workspace.members || [],
-          created: workspace.created ? new Date(workspace.created) : new Date(),
-          lastAccessed: workspace.lastAccessed ? new Date(workspace.lastAccessed) : new Date(),
+          created: typeof workspace.created === 'string' ? workspace.created : 
+                   workspace.created ? new Date(workspace.created).toISOString() : new Date().toISOString(),
+          lastAccessed: typeof workspace.lastAccessed === 'string' ? workspace.lastAccessed : 
+                       workspace.lastAccessed ? new Date(workspace.lastAccessed).toISOString() : new Date().toISOString(),
           isActive: workspace.isActive || false,
           // Legacy compatibility
           type: workspace.type,
@@ -362,5 +364,75 @@ export const {
   setSyncStatus,
   updateWorkspaceLocal
 } = workspaceSlice.actions
+
+// Base selectors
+const selectWorkspaceState = (state: { workspace: WorkspaceState }) => state.workspace
+const selectWorkspaces = (state: { workspace: WorkspaceState }) => state.workspace.workspaces
+const selectCurrentWorkspaceId = (state: { workspace: WorkspaceState }) => state.workspace.currentWorkspaceId
+const selectPartitions = (state: { workspace: WorkspaceState }) => state.workspace.partitions
+const selectWindows = (state: { workspace: WorkspaceState }) => state.workspace.windows
+
+// Memoized selectors
+export const selectAllWorkspaces = createSelector(
+  [selectWorkspaces],
+  (workspaces) => Object.values(workspaces)
+)
+
+export const selectCurrentWorkspace = createSelector(
+  [selectWorkspaces, selectCurrentWorkspaceId],
+  (workspaces, currentWorkspaceId) =>
+    currentWorkspaceId ? workspaces[currentWorkspaceId] || null : null
+)
+
+export const selectWorkspaceById = (id: string) =>
+  createSelector(
+    [selectWorkspaces],
+    (workspaces) => workspaces[id] || null
+  )
+
+export const selectWorkspacePartitions = createSelector(
+  [selectPartitions],
+  (partitions) => Object.values(partitions)
+)
+
+export const selectPartitionById = (id: string) =>
+  createSelector(
+    [selectPartitions],
+    (partitions) => partitions[id] || null
+  )
+
+export const selectWorkspaceWindows = (workspaceId: string) =>
+  createSelector(
+    [selectWindows],
+    (windows) => windows[workspaceId] || []
+  )
+
+// Additional memoized selectors for better performance
+export const selectActiveWorkspaces = createSelector(
+  [selectWorkspaces],
+  (workspaces) => Object.values(workspaces).filter(workspace => workspace.isActive)
+)
+
+export const selectWorkspacesByType = createSelector(
+  [selectAllWorkspaces],
+  (workspaces) => workspaces.reduce((acc, workspace) => {
+    const type = workspace.type || 'personal'
+    if (!acc[type]) acc[type] = []
+    acc[type].push(workspace)
+    return acc
+  }, {} as Record<string, WorkspaceData[]>)
+)
+
+export const selectSortedWorkspaces = createSelector(
+  [selectAllWorkspaces],
+  (workspaces) => [...workspaces].sort((a, b) => 
+    new Date(b.lastAccessed).getTime() - new Date(a.lastAccessed).getTime()
+  )
+)
+
+// Simple selectors that don't need memoization
+export const selectWorkspaceLoading = (state: { workspace: WorkspaceState }) => state.workspace.isLoading
+export const selectWorkspaceError = (state: { workspace: WorkspaceState }) => state.workspace.error
+export const selectWorkspaceSyncStatus = (state: { workspace: WorkspaceState }) => state.workspace.syncStatus
 
 export default workspaceSlice.reducer

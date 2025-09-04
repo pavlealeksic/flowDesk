@@ -1,5 +1,8 @@
 import { useEffect, useRef } from 'react'
 
+// Performance monitoring - only active in development
+const isDev = process.env.NODE_ENV === 'development'
+
 interface PerformanceMetrics {
   componentLoadTime: number
   bundleSize: number
@@ -13,7 +16,7 @@ interface UsePerformanceMonitorOptions {
 }
 
 export const usePerformanceMonitor = (options: UsePerformanceMonitorOptions) => {
-  const { componentName, enabled = __DEV__, logToConsole = __DEV__ } = options
+  const { componentName, enabled = isDev, logToConsole = isDev } = options
   const startTimeRef = useRef<number>(0)
   const metricsRef = useRef<PerformanceMetrics>({
     componentLoadTime: 0,
@@ -87,7 +90,7 @@ export const usePerformanceMonitor = (options: UsePerformanceMonitorOptions) => 
 // Hook to monitor bundle chunk loading
 export const useBundleMonitor = () => {
   useEffect(() => {
-    if (!__DEV__) return
+    if (!isDev) return
 
     const observer = new PerformanceObserver((list) => {
       const entries = list.getEntries()

@@ -21,7 +21,8 @@ import {
   MoreHorizontal,
   Loader2,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Users
 } from '../ui'
 import { type BaseComponentProps } from '../ui/types'
 import type { EmailMessage, MailFolder } from '@flow-desk/shared'
@@ -56,6 +57,11 @@ interface FolderListProps {
   onFolderSelect: (folderId: string) => void
   onCompose: () => void
   isLoading: boolean
+  viewMode: 'folders' | 'unified' | 'smart'
+  onViewModeChange: (mode: 'folders' | 'unified' | 'smart') => void
+  showConversationView: boolean
+  onToggleConversationView: () => void
+  onShowRules: () => void
 }
 
 const FolderList: React.FC<FolderListProps> = ({
@@ -63,7 +69,12 @@ const FolderList: React.FC<FolderListProps> = ({
   selectedFolder,
   onFolderSelect,
   onCompose,
-  isLoading
+  isLoading,
+  viewMode,
+  onViewModeChange,
+  showConversationView,
+  onToggleConversationView,
+  onShowRules
 }) => {
 
   // Default folders with icons
@@ -90,8 +101,8 @@ const FolderList: React.FC<FolderListProps> = ({
                 <Button
                   key={mode}
                   size="sm"
-                  variant={viewMode === mode ? "default" : "ghost"}
-                  onClick={() => setViewMode(mode as any)}
+                  variant={(viewMode || 'folders') === mode ? "default" : "ghost"}
+                  onClick={() => onViewModeChange(mode as 'folders' | 'unified' | 'smart')}
                   className="text-xs"
                 >
                   {label}
@@ -101,21 +112,19 @@ const FolderList: React.FC<FolderListProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <Button 
-              size="sm" 
+              size="icon" 
               variant="ghost"
-              onClick={() => setShowConversationView(!showConversationView)}
+              onClick={onToggleConversationView}
               title={showConversationView ? "Show List View" : "Show Conversation View"}
-            >
-              <Users className="h-4 w-4" />
-            </Button>
+              leftIcon={<Users className="h-4 w-4" />}
+            />
             <Button 
-              size="sm" 
+              size="icon" 
               variant="ghost"
-              onClick={() => setShowRulesModal(true)}
+              onClick={onShowRules}
               title="Email Rules"
-            >
-              <Filter className="h-4 w-4" />
-            </Button>
+              leftIcon={<Filter className="h-4 w-4" />}
+            />
             <Button size="sm" leftIcon={<Plus className="h-4 w-4" />} onClick={onCompose}>
               Compose
             </Button>
@@ -185,6 +194,7 @@ interface MessageListProps {
   currentFolder: string
   isLoading: boolean
   onRefresh: () => void
+  onAddAccount: () => void
 }
 
 const MessageList: React.FC<MessageListProps> = ({
@@ -193,7 +203,8 @@ const MessageList: React.FC<MessageListProps> = ({
   onMessageSelect,
   currentFolder,
   isLoading,
-  onRefresh
+  onRefresh,
+  onAddAccount
 }) => {
   const formatDate = (date: Date) => {
     const now = new Date()
@@ -224,9 +235,9 @@ const MessageList: React.FC<MessageListProps> = ({
             <Button 
               size="sm" 
               variant="outline"
-              onClick={() => setShowAddAccountModal(true)}
+              onClick={onAddAccount}
+              leftIcon={<Plus className="h-4 w-4" />}
             >
-              <Plus className="h-4 w-4 mr-2" />
               Add Account
             </Button>
             <Button 
@@ -629,6 +640,22 @@ export const MailLayout: React.FC<MailLayoutProps> = ({
     setShowComposeModal(true)
   }, [])
 
+  const handleViewModeChange = useCallback((mode: 'folders' | 'unified' | 'smart') => {
+    setViewMode(mode)
+  }, [])
+
+  const handleToggleConversationView = useCallback(() => {
+    setShowConversationView(!showConversationView)
+  }, [showConversationView])
+
+  const handleShowRules = useCallback(() => {
+    setShowRulesModal(true)
+  }, [])
+
+  const handleAddAccount = useCallback(() => {
+    setShowAddAccountModal(true)
+  }, [])
+
   const handleReply = useCallback(() => {
     if (selectedMessage) {
       setComposeContext({ replyTo: selectedMessage, replyType: 'reply' })
@@ -676,8 +703,10 @@ export const MailLayout: React.FC<MailLayoutProps> = ({
           <p className="text-sm text-muted-foreground mb-4">
             Add a mail account to get started with Flow Desk Mail
           </p>
-          <Button onClick={() => setShowAddAccountModal(true)}>
-            <Plus className="h-4 w-4 mr-2" />
+          <Button 
+            onClick={() => setShowAddAccountModal(true)}
+            leftIcon={<Plus className="h-4 w-4" />}
+          >
             Add Account
           </Button>
         </div>
@@ -704,6 +733,11 @@ export const MailLayout: React.FC<MailLayoutProps> = ({
             onFolderSelect={handleFolderSelect}
             onCompose={handleCompose}
             isLoading={isLoading}
+            viewMode={viewMode || 'folders'}
+            onViewModeChange={handleViewModeChange}
+            showConversationView={showConversationView}
+            onToggleConversationView={handleToggleConversationView}
+            onShowRules={handleShowRules}
           />
         </ResizablePanel>
 
@@ -717,7 +751,7 @@ export const MailLayout: React.FC<MailLayoutProps> = ({
           className="bg-background border-r border-border"
         >
           <div ref={messageListRef} className="h-full">
-            {viewMode === 'unified' ? (
+            {(viewMode || 'folders') === 'unified' ? (
               <UnifiedInboxView
                 onMessageSelect={handleMessageSelect}
                 selectedMessageId={selectedMessageId}
@@ -732,6 +766,7 @@ export const MailLayout: React.FC<MailLayoutProps> = ({
                 currentFolder="inbox"
                 isLoading={isLoading}
                 onRefresh={handleRefresh}
+                onAddAccount={handleAddAccount}
               />
             )}
           </div>

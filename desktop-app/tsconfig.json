@@ -44,6 +44,9 @@
     "src/main/plugin-runtime/**/*",
     "src/main/providers/**/*",
     "src/main/**/test*",
-    "../shared/**/*"
+    "../shared/**/*",
+    "src/renderer/components/calendar/AttendeeManager.tsx",
+    "src/renderer/components/calendar/CalendarNotificationCenter.tsx",
+    "src/renderer/components/calendar/ConferencingSetup.tsx"
   ]
 }

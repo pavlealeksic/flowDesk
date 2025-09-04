@@ -19,6 +19,7 @@ export interface UseAIState {
   currentModel: string;
   usageStats?: UsageStats;
   error?: string;
+  aiClient: typeof aiClient;
 }
 
 export interface UseAIActions {
@@ -49,6 +50,7 @@ export const useAI = (): UseAIState & UseAIActions => {
     providers: [],
     currentProvider: 'openai',
     currentModel: 'gpt-4',
+    aiClient: aiClient,
   });
 
   const initialize = useCallback(async () => {

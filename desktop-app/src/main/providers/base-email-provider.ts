@@ -102,19 +102,140 @@ export abstract class BaseEmailProvider extends EventEmitter {
 
   // Optional methods with default implementations
   async markMessageRead(messageId: string, read: boolean): Promise<void> {
-    throw new Error('markMessageRead not implemented by provider')
+    try {
+      // First try to use IMAP connection if available
+      if (this.imapPool) {
+        const connection = await this.imapPool.getConnection(this.account.id);
+        if (connection) {
+          await connection.setFlags(messageId, read ? ['\\Seen'] : [], !read ? ['\\Seen'] : []);
+          this.handleMessageUpdate(messageId, { read });
+          return;
+        }
+      }
+      
+      // Fallback: Update cached message if cache is available
+      if (this.cache) {
+        await this.cache.updateMessage(this.account.id, messageId, { read });
+        this.handleMessageUpdate(messageId, { read });
+        log.info(`Updated message read status in cache for message ${messageId}`);
+        return;
+      }
+      
+      // If no IMAP or cache available, log warning
+      log.warn(`Cannot mark message ${messageId} as ${read ? 'read' : 'unread'} - no connection or cache available`);
+      throw new Error('No IMAP connection or cache available to mark message');
+    } catch (error) {
+      log.error(`Failed to mark message ${messageId} as ${read ? 'read' : 'unread'}:`, error);
+      throw error;
+    }
   }
 
   async markMessageStarred(messageId: string, starred: boolean): Promise<void> {
-    throw new Error('markMessageStarred not implemented by provider')
+    try {
+      // First try to use IMAP connection if available
+      if (this.imapPool) {
+        const connection = await this.imapPool.getConnection(this.account.id);
+        if (connection) {
+          await connection.setFlags(messageId, starred ? ['\\Flagged'] : [], !starred ? ['\\Flagged'] : []);
+          this.handleMessageUpdate(messageId, { starred });
+          return;
+        }
+      }
+      
+      // Fallback: Update cached message if cache is available
+      if (this.cache) {
+        await this.cache.updateMessage(this.account.id, messageId, { starred });
+        this.handleMessageUpdate(messageId, { starred });
+        log.info(`Updated message starred status in cache for message ${messageId}`);
+        return;
+      }
+      
+      // If no IMAP or cache available, log warning
+      log.warn(`Cannot mark message ${messageId} as ${starred ? 'starred' : 'unstarred'} - no connection or cache available`);
+      throw new Error('No IMAP connection or cache available to mark message');
+    } catch (error) {
+      log.error(`Failed to mark message ${messageId} as ${starred ? 'starred' : 'unstarred'}:`, error);
+      throw error;
+    }
   }
 
   async moveMessage(messageId: string, targetFolder: string): Promise<void> {
-    throw new Error('moveMessage not implemented by provider')
+    try {
+      // First try to use IMAP connection if available
+      if (this.imapPool) {
+        const connection = await this.imapPool.getConnection(this.account.id);
+        if (connection) {
+          await connection.moveMessage(messageId, targetFolder);
+          this.handleMessageUpdate(messageId, { folderId: targetFolder });
+          log.info(`Moved message ${messageId} to folder ${targetFolder}`);
+          return;
+        }
+      }
+      
+      // Fallback: Update cached message if cache is available
+      if (this.cache) {
+        await this.cache.updateMessage(this.account.id, messageId, { folderId: targetFolder });
+        this.handleMessageUpdate(messageId, { folderId: targetFolder });
+        log.info(`Updated message folder in cache for message ${messageId}`);
+        return;
+      }
+      
+      // If no IMAP or cache available, log warning
+      log.warn(`Cannot move message ${messageId} to folder ${targetFolder} - no connection or cache available`);
+      throw new Error('No IMAP connection or cache available to move message');
+    } catch (error) {
+      log.error(`Failed to move message ${messageId} to folder ${targetFolder}:`, error);
+      throw error;
+    }
   }
 
   async deleteMessage(messageId: string): Promise<void> {
-    throw new Error('deleteMessage not implemented by provider')
+    try {
+      // First try to use IMAP connection if available
+      if (this.imapPool) {
+        const connection = await this.imapPool.getConnection(this.account.id);
+        if (connection) {
+          // Try to move to trash first, then hard delete if no trash folder
+          try {
+            const folders = await this.getFolders();
+            const trashFolder = folders.find(f => f.type === 'trash');
+            
+            if (trashFolder) {
+              await connection.moveMessage(messageId, trashFolder.id);
+              log.info(`Moved message ${messageId} to trash folder`);
+            } else {
+              // Hard delete if no trash folder
+              await connection.deleteMessage(messageId);
+              log.info(`Hard deleted message ${messageId}`);
+            }
+            
+            this.handleMessageDeleted(messageId);
+            return;
+          } catch (folderError) {
+            // If folder operations fail, try hard delete
+            await connection.deleteMessage(messageId);
+            this.handleMessageDeleted(messageId);
+            log.info(`Hard deleted message ${messageId} after folder operation failed`);
+            return;
+          }
+        }
+      }
+      
+      // Fallback: Remove from cache if available
+      if (this.cache) {
+        await this.cache.deleteMessage(this.account.id, messageId);
+        this.handleMessageDeleted(messageId);
+        log.info(`Deleted message from cache: ${messageId}`);
+        return;
+      }
+      
+      // If no IMAP or cache available, log warning
+      log.warn(`Cannot delete message ${messageId} - no connection or cache available`);
+      throw new Error('No IMAP connection or cache available to delete message');
+    } catch (error) {
+      log.error(`Failed to delete message ${messageId}:`, error);
+      throw error;
+    }
   }
 
   async startIdle(): Promise<void> {

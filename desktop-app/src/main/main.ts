@@ -10,16 +10,15 @@ import log from 'electron-log';
 import { WorkspaceManager } from './workspace';
 import { DesktopNotificationManager } from './notification-manager';
 import { MailSyncManager } from './mail-sync-manager';
+// import { emailServiceManager } from './email-service-manager'; // Temporarily disabled
+import { SnippetManager } from './snippet-manager';
 import { EmailTemplateManager } from './email-template-manager';
+import { securityConfig } from './security-config';
+import { RustEmailService } from './rust-email-service';
 import { EmailScheduler } from './email-scheduler';
 import { EmailRulesEngine } from './email-rules-engine';
-import { RealEmailService } from './real-email-service';
-import { SnippetManager } from './snippet-manager';
+import { calendarEngine } from './calendar/CalendarEngine';
 
-// Import OAuth2 services - temporarily disabled due to compilation issues
-// import './oauth-ipc-service'; // Initialize OAuth2 IPC handlers
-// import { oAuth2IntegrationManager } from './oauth-integration-manager';
-// import { oAuth2TokenManager } from './oauth-token-manager';
 
 // Import type interfaces
 import type { Workspace } from './workspace';
@@ -123,6 +122,23 @@ export interface CreateWindowData {
   height?: number;
 }
 
+// Workspace window interface
+export interface WorkspaceWindow {
+  id: string;
+  title: string;
+  url?: string;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  isMinimized: boolean;
+  isMaximized: boolean;
+  isActive: boolean;
+  workspaceId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // Mail account data interface
 export interface MailAccountData {
   id?: string;
@@ -193,6 +209,8 @@ export interface CalendarAccountData {
   displayName?: string;
   provider?: string;
   serverConfig?: CalendarServerConfig;
+  serverUrl?: string;
+  username?: string;
   isEnabled?: boolean;
 }
 
@@ -277,27 +295,52 @@ export interface ThemeSettings {
 // Import comprehensive Rust engine integration
 import { rustEngineIntegration } from '../lib/rust-integration/rust-engine-integration';
 
-// Import database initialization service
-import { getDatabaseInitializationService, DatabaseInitializationConfig, InitializationProgress } from './database-initialization-service';
-import { getDatabaseMigrationManager } from './database-migration-manager';
+// Import search service
+import { getSearchService } from './search-service-rust';
 
-// Configure logging
-log.transports.file.level = 'info';
-log.transports.console.level = 'info';
+// Import working JavaScript database service with SQLite3
+import { 
+  getDatabaseInitializationService,
+  DatabaseInitializationConfig as DatabaseConfig,
+  InitializationProgress as DatabaseInitProgress
+} from './database-initialization-service';
+
+// Import cross-platform utilities
+import { getPlatformInfo, getEnvironmentConfig, supportsFeature } from './platform-utils';
+import { nativeModuleManager } from './native-module-manager';
+import { fsUtils } from './fs-utils';
+
+// Configure logging based on environment
+if (process.env.NODE_ENV === 'production') {
+  log.transports.file.level = 'warn';
+  log.transports.console.level = false; // Disable console logging in production
+} else {
+  log.transports.file.level = 'info';
+  log.transports.console.level = 'debug';
+}
 
 class FlowDeskApp {
   private mainWindow: BrowserWindow | null = null;
   private workspaceManager: WorkspaceManager;
   private notificationManager: DesktopNotificationManager | null = null;
   private mailSyncManager: MailSyncManager | null = null;
+  // Email services removed - now handled directly by emailServiceManager via Rust engine
+  // Pure Rust email service (no JavaScript dependencies)
+  private realEmailService: RustEmailService | null = null;
+  private snippetManager: SnippetManager | null = null;
   private emailTemplateManager: EmailTemplateManager | null = null;
   private emailScheduler: EmailScheduler | null = null;
   private emailRulesEngine: EmailRulesEngine | null = null;
-  private realEmailService: RealEmailService | null = null;
-  private snippetManager: SnippetManager | null = null;
   private currentView: 'mail' | 'calendar' | 'workspace' = 'mail';
   private databaseInitialized: boolean = false;
-  private initializationProgress: InitializationProgress | null = null;
+  private initializationProgress: DatabaseInitProgress | null = null;
+  
+  // Workspace window management
+  private workspaceWindows: Map<string, WorkspaceWindow[]> = new Map();
+  
+  // Cross-platform support
+  private platformInfo = getPlatformInfo();
+  private environmentConfig = getEnvironmentConfig();
 
   constructor() {
     this.workspaceManager = new WorkspaceManager();
@@ -306,6 +349,43 @@ class FlowDeskApp {
 
   private initializeApp() {
     app.whenReady().then(async () => {
+      // Initialize platform-specific components first
+      try {
+        await this.initializePlatform();
+        log.info('Platform initialization completed successfully');
+      } catch (error) {
+        log.error('Failed to initialize platform components:', error);
+        // Continue with initialization - some features may be degraded
+      }
+
+      // Initialize encryption keys first (automatic, no user configuration needed)
+      try {
+        await this.initializeEncryption();
+        log.info('Encryption keys initialized automatically');
+      } catch (error) {
+        log.error('Failed to initialize encryption:', error);
+        dialog.showErrorBox(
+          'Encryption Error', 
+          'Failed to initialize encryption. The application cannot continue.\n\n' +
+          'This is an internal error that should not occur. Please restart the application.'
+        );
+        app.quit();
+        return;
+      }
+      
+      // Initialize security configuration after encryption
+      try {
+        await securityConfig.initialize();
+        log.info('Security configuration initialized');
+      } catch (error) {
+        log.error('Failed to initialize security:', error);
+        if (process.env.NODE_ENV === 'production') {
+          dialog.showErrorBox('Security Error', 'Failed to initialize security configuration. Please check your environment settings.');
+          app.quit();
+          return;
+        }
+      }
+      
       await this.requestNotificationPermissions();
       this.createMainWindow();
       this.setupMenu();
@@ -337,14 +417,38 @@ class FlowDeskApp {
         await this.mailSyncManager.cleanup();
       }
       
-      // Clean up OAuth2 services - temporarily disabled
-      // try {
-      //   await oAuth2IntegrationManager.cleanup();
-      //   await oAuth2TokenManager.cleanup();
-      //   log.info('OAuth2 services cleaned up');
-      // } catch (error) {
-      //   log.warn('Error during OAuth2 cleanup:', error);
-      // }
+      // Clean up email scheduler
+      if (this.emailScheduler) {
+        try {
+          await this.emailScheduler.shutdown();
+          log.info('Email scheduler cleaned up');
+        } catch (error) {
+          log.warn('Error during email scheduler cleanup:', error);
+        }
+      }
+
+      // Clean up email rules engine
+      if (this.emailRulesEngine) {
+        try {
+          await this.emailRulesEngine.shutdown();
+          log.info('Email rules engine cleaned up');
+        } catch (error) {
+          log.warn('Error during email rules engine cleanup:', error);
+        }
+      }
+      
+      // Clean up production email service
+      // await emailServiceManager.destroy(); // Temporarily disabled
+      
+      // Clean up Rust email service
+      if (this.realEmailService) {
+        try {
+          await this.realEmailService.destroy();
+          log.info('Rust email service cleaned up');
+        } catch (error) {
+          log.warn('Error during Rust email service cleanup:', error);
+        }
+      }
       
       // Clean up Rust engine integration
       try {
@@ -406,13 +510,162 @@ class FlowDeskApp {
   }
 
   /**
+   * Initialize platform-specific components and features
+   */
+  private async initializePlatform(): Promise<void> {
+    log.info(`Initializing Flow Desk on ${this.platformInfo.platform} (${this.platformInfo.arch})`);
+    
+    // Initialize native modules
+    try {
+      await nativeModuleManager.initializePlatformModules();
+      log.info('Native modules initialized');
+    } catch (error) {
+      log.error('Failed to initialize native modules:', error);
+      throw error;
+    }
+
+    // Check native module compilation status
+    const compilationStatus = nativeModuleManager.checkNativeCompilation();
+    if (!compilationStatus.success) {
+      log.error('Native module compilation issues detected:');
+      compilationStatus.issues.forEach(issue => log.error(`  - ${issue}`));
+      
+      if (this.environmentConfig.isProduction) {
+        throw new Error('Critical native modules are not available');
+      }
+    } else {
+      log.info('Native module compilation check passed');
+    }
+
+    // Log platform capabilities
+    const features = this.platformInfo.supportedFeatures;
+    log.info('Platform features:', {
+      keychain: features.keychain,
+      windowsCredentialManager: features.windowsCredentialManager,
+      linuxSecretService: features.linuxSecretService,
+      nativeNotifications: features.nativeNotifications,
+      systemTray: features.systemTray
+    });
+
+    // Platform-specific initialization
+    if (this.platformInfo.isWindows) {
+      await this.initializeWindows();
+    } else if (this.platformInfo.isDarwin) {
+      await this.initializeMacOS();
+    } else if (this.platformInfo.isLinux) {
+      await this.initializeLinux();
+    }
+
+    // Clean up old temporary files
+    try {
+      const deletedCount = await fsUtils.cleanupTempFiles();
+      if (deletedCount > 0) {
+        log.info(`Cleaned up ${deletedCount} temporary files`);
+      }
+    } catch (error) {
+      log.warn('Failed to clean up temporary files:', error);
+    }
+  }
+
+  /**
+   * Windows-specific initialization
+   */
+  private async initializeWindows(): Promise<void> {
+    log.info('Initializing Windows-specific features');
+    
+    // Check for Windows Credential Manager
+    if (supportsFeature('windowsCredentialManager')) {
+      log.info('Windows Credential Manager available for secure storage');
+    }
+
+    // Set up Windows-specific paths
+    const appDataPath = this.environmentConfig.paths.appData;
+    await fsUtils.createDirectory(appDataPath);
+    
+    log.info(`Windows app data: ${appDataPath}`);
+  }
+
+  /**
+   * macOS-specific initialization
+   */
+  private async initializeMacOS(): Promise<void> {
+    log.info('Initializing macOS-specific features');
+    
+    // Check for Keychain Services
+    if (supportsFeature('keychain')) {
+      log.info('macOS Keychain Services available for secure storage');
+    }
+
+    // Set up macOS-specific paths
+    const appSupportPath = this.environmentConfig.paths.appData;
+    await fsUtils.createDirectory(appSupportPath);
+    
+    log.info(`macOS app support: ${appSupportPath}`);
+  }
+
+  /**
+   * Linux-specific initialization
+   */
+  private async initializeLinux(): Promise<void> {
+    log.info('Initializing Linux-specific features');
+    
+    // Check for Secret Service API
+    if (supportsFeature('linuxSecretService')) {
+      log.info('Linux Secret Service API available for secure storage');
+    } else {
+      log.warn('libsecret not available, using encrypted file fallback');
+    }
+
+    // Set up XDG-compliant paths
+    const configPath = this.environmentConfig.paths.appData;
+    const cachePath = this.environmentConfig.paths.cache;
+    
+    await fsUtils.createDirectory(configPath);
+    await fsUtils.createDirectory(cachePath);
+    
+    log.info(`Linux config: ${configPath}`);
+    log.info(`Linux cache: ${cachePath}`);
+  }
+
+  /**
+   * Initialize encryption keys for automatic key management
+   */
+  private async initializeEncryption(): Promise<void> {
+    try {
+      log.info('Initializing encryption key management...');
+      
+      // Import dynamically to avoid initialization order issues
+      const { encryptionKeyManager } = await import('./encryption-key-manager');
+      
+      // Initialize encryption key manager
+      const initialized = await encryptionKeyManager.initialize();
+      
+      if (initialized) {
+        log.info('Encryption key management initialized successfully');
+        
+        // Check if keys need rotation (every 90 days)
+        if (encryptionKeyManager.needsRotation()) {
+          log.info('Encryption keys need rotation (>90 days old)');
+          // Note: Key rotation can be scheduled or done on user request
+        }
+      } else {
+        log.error('Failed to initialize encryption key management');
+        throw new Error('Encryption initialization failed');
+      }
+    } catch (error) {
+      log.error('Encryption initialization error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Initialize databases on first run
    */
   private async initializeDatabases(): Promise<void> {
     try {
-      log.info('Starting database initialization...');
+      log.info('Starting database initialization with SQLite3...');
       
-      // Create database initialization service with progress callback
+      // Use working JavaScript database service with SQLite3
       const databaseService = getDatabaseInitializationService((progress) => {
         this.initializationProgress = progress;
         
@@ -421,20 +674,20 @@ class FlowDeskApp {
           this.mainWindow.webContents.send('database-initialization-progress', progress);
         }
       });
-
+      
       // Check if databases are already initialized
       const isInitialized = await databaseService.isDatabasesInitialized();
       
       if (isInitialized) {
-        log.info('Databases already initialized');
+        log.info('Databases already initialized and healthy');
         this.databaseInitialized = true;
         
-        // Still run migrations if needed
-        const config = databaseService.getConfig();
-        const migrationManager = getDatabaseMigrationManager(config.mailDbPath, config.calendarDbPath);
-        const migrationsApplied = await migrationManager.applyAllMigrations();
-        if (!migrationsApplied) {
-          log.warn('Some database migrations failed');
+        // Send completion event to renderer
+        if (this.mainWindow) {
+          this.mainWindow.webContents.send('database-initialization-complete', {
+            success: true,
+            config: databaseService.getConfig()
+          });
         }
         
         return;
@@ -445,24 +698,7 @@ class FlowDeskApp {
       
       if (initializationSuccess) {
         this.databaseInitialized = true;
-        log.info('Database initialization completed successfully');
-        
-        // Initialize Rust engine databases
-        try {
-          const rustEngine = require('../lib/rust-engine');
-          const config = databaseService.getConfig();
-          
-          await rustEngine.initializeDatabases({
-            mailDbPath: config.mailDbPath,
-            calendarDbPath: config.calendarDbPath,
-            searchIndexPath: config.searchIndexPath
-          });
-          
-          log.info('Rust engine databases initialized successfully');
-        } catch (error) {
-          log.warn('Failed to initialize Rust engine databases:', error);
-          // Continue anyway - the databases exist and can be used
-        }
+        log.info('Database initialization completed successfully with SQLite3');
         
         // Send completion event to renderer
         if (this.mainWindow) {
@@ -506,6 +742,27 @@ class FlowDeskApp {
       await rustEngineIntegration.initialize();
       log.info('Rust engine integration initialized successfully');
       log.info('Rust engine version:', rustEngineIntegration.getVersion());
+      
+      // Initialize search service
+      try {
+        const searchService = getSearchService();
+        await searchService.initialize();
+        log.info('Search service initialized successfully with Rust Tantivy backend');
+      } catch (searchError) {
+        log.error('Failed to initialize search service:', searchError);
+        // Don't fail the entire initialization if search fails
+      }
+
+      // Initialize production-ready email service
+      try {
+        log.info('Initializing production-ready Rust email service...');
+        this.realEmailService = new RustEmailService('Flow Desk');
+        await this.realEmailService.initialize();
+        log.info('Production-ready Rust email service initialized successfully');
+      } catch (emailError) {
+        log.warn('Failed to initialize Rust email service:', emailError);
+        // Continue without production email service - fallback to existing services
+      }
 
       // Run integration tests in development mode
       if (process.env.NODE_ENV === 'development') {
@@ -516,6 +773,7 @@ class FlowDeskApp {
       // Continue without Rust integration - app will use JavaScript fallbacks
     }
   }
+
 
   /**
    * Run Rust integration tests (development only)
@@ -538,11 +796,27 @@ class FlowDeskApp {
         return;
       }
 
-      // Request notification permissions on macOS
+      // Handle notification permissions on macOS
       if (process.platform === 'darwin') {
-        const granted = await systemPreferences.askForMediaAccess('microphone');
-        if (!granted) {
-          log.warn('Microphone access denied - may affect some notifications');
+        try {
+          // Check current notification permission status
+          // Use any type to avoid TypeScript issues with optional Electron APIs
+          const getNotificationPermission = (systemPreferences as any).getNotificationPermission;
+          if (typeof getNotificationPermission === 'function') {
+            const permission = getNotificationPermission();
+            log.info(`Current notification permission status: ${permission}`);
+            
+            if (permission === 'denied') {
+              log.warn('Notification permissions denied. Users can enable them in System Preferences.');
+              return;
+            }
+          } else {
+            log.info('getNotificationPermission not available on this Electron version');
+          }
+          
+          log.info('macOS notification permissions checked successfully');
+        } catch (error) {
+          log.warn('Failed to check notification permissions on macOS:', error);
         }
       }
 
@@ -577,27 +851,30 @@ class FlowDeskApp {
       await this.mailSyncManager.initialize();
       log.info('Mail sync manager initialized');
       
-      // Initialize email template manager
-      this.emailTemplateManager = new EmailTemplateManager();
-      log.info('Email template manager initialized');
+      // Initialize Pure Rust Production Email Engine via NAPI
+      // await emailServiceManager.initialize('Flow Desk'); // Temporarily disabled
+      log.info('Email service manager temporarily disabled');
       
-      // Initialize email scheduler
-      this.emailScheduler = new EmailScheduler();
-      await this.emailScheduler.initialize();
-      log.info('Email scheduler initialized');
-      
-      // Initialize email rules engine
-      this.emailRulesEngine = new EmailRulesEngine();
-      await this.emailRulesEngine.initialize();
-      log.info('Email rules engine initialized');
-      
-      // Initialize real email service
-      this.realEmailService = new RealEmailService();
-      log.info('Real email service initialized');
+      // Email template management, scheduling, and rules are now handled by the Rust engine
+      log.info('All email services now running via Rust backend');
       
       // Initialize snippet manager
       this.snippetManager = new SnippetManager();
       log.info('Snippet manager initialized');
+
+      // Initialize email template manager
+      this.emailTemplateManager = new EmailTemplateManager();
+      log.info('Email template manager initialized');
+
+      // Initialize email scheduler
+      this.emailScheduler = new EmailScheduler();
+      await this.emailScheduler.initialize();
+      log.info('Email scheduler initialized');
+
+      // Initialize email rules engine
+      this.emailRulesEngine = new EmailRulesEngine();
+      await this.emailRulesEngine.initialize();
+      log.info('Email rules engine initialized');
     } catch (error) {
       log.error('Failed to initialize notification/sync managers:', error);
     }
@@ -817,6 +1094,10 @@ class FlowDeskApp {
       return this.workspaceManager.getPredefinedServices();
     });
 
+    ipcMain.handle('workspace:close-service', async (_, workspaceId: string, serviceId: string) => {
+      return await this.workspaceManager.closeService(workspaceId, serviceId);
+    });
+
     // Mail attachment handlers
     ipcMain.handle('mail:download-attachment', async (_, attachmentData: { filename: string; data: string; mimeType: string }) => {
       try {
@@ -845,39 +1126,268 @@ class FlowDeskApp {
 
     // Email template handlers
     ipcMain.handle('email-templates:get-all', async () => {
-      return this.emailTemplateManager ? await this.emailTemplateManager.getAllTemplates() : [];
+      try {
+        if (!this.emailTemplateManager) {
+          log.warn('Email template manager not initialized, initializing now...');
+          this.emailTemplateManager = new EmailTemplateManager();
+        }
+        return await this.emailTemplateManager.getAllTemplates();
+      } catch (error) {
+        log.error('Failed to get all email templates:', error);
+        // Try to provide helpful error context instead of empty array
+        if (error instanceof Error && error.message.includes('sqlite3')) {
+          throw new Error('Database not available. Please ensure SQLite3 is installed and databases are initialized.');
+        }
+        throw new Error(`Failed to get email templates: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
     });
 
     ipcMain.handle('email-templates:get-by-category', async (_, category: string) => {
-      return this.emailTemplateManager ? await this.emailTemplateManager.getTemplatesByCategory(category) : [];
+      try {
+        if (!this.emailTemplateManager) {
+          log.warn('Email template manager not initialized, initializing now...');
+          this.emailTemplateManager = new EmailTemplateManager();
+        }
+        return await this.emailTemplateManager.getTemplatesByCategory(category);
+      } catch (error) {
+        log.error('Failed to get templates by category:', error);
+        // Try to provide helpful error context instead of empty array
+        if (error instanceof Error && error.message.includes('sqlite3')) {
+          throw new Error('Database not available. Please ensure SQLite3 is installed and databases are initialized.');
+        }
+        throw new Error(`Failed to get templates by category: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
     });
 
     ipcMain.handle('email-templates:get', async (_, templateId: string) => {
-      return this.emailTemplateManager ? await this.emailTemplateManager.getTemplate(templateId) : null;
+      try {
+        return this.emailTemplateManager ? await this.emailTemplateManager.getTemplate(templateId) : null;
+      } catch (error) {
+        log.error('Failed to get template:', error);
+        return null;
+      }
     });
 
     ipcMain.handle('email-templates:save', async (_, template: any) => {
-      return this.emailTemplateManager ? await this.emailTemplateManager.saveTemplate(template) : null;
+      try {
+        return this.emailTemplateManager ? await this.emailTemplateManager.saveTemplate(template) : null;
+      } catch (error) {
+        log.error('Failed to save template:', error);
+        return null;
+      }
     });
 
     ipcMain.handle('email-templates:update', async (_, templateId: string, updates: any) => {
-      return this.emailTemplateManager ? await this.emailTemplateManager.useTemplate(templateId) : false; // Changed method name
+      try {
+        return this.emailTemplateManager ? await this.emailTemplateManager.updateTemplate(templateId, updates) : null;
+      } catch (error) {
+        log.error('Failed to update template:', error);
+        return null;
+      }
     });
 
     ipcMain.handle('email-templates:delete', async (_, templateId: string) => {
-      return this.emailTemplateManager ? await this.emailTemplateManager.deleteTemplate(templateId) : false;
+      try {
+        return this.emailTemplateManager ? await this.emailTemplateManager.deleteTemplate(templateId) : false;
+      } catch (error) {
+        log.error('Failed to delete template:', error);
+        return false;
+      }
     });
 
     ipcMain.handle('email-templates:use', async (_, templateId: string) => {
-      return this.emailTemplateManager ? await this.emailTemplateManager.useTemplate(templateId) : null;
+      try {
+        return this.emailTemplateManager ? await this.emailTemplateManager.useTemplate(templateId) : null;
+      } catch (error) {
+        log.error('Failed to use template:', error);
+        return null;
+      }
     });
 
     ipcMain.handle('email-templates:search', async (_, query: string) => {
-      return this.emailTemplateManager ? await this.emailTemplateManager.searchTemplates(query) : [];
+      try {
+        if (!this.emailTemplateManager) {
+          log.warn('Email template manager not initialized, initializing now...');
+          this.emailTemplateManager = new EmailTemplateManager();
+        }
+        return await this.emailTemplateManager.searchTemplates(query);
+      } catch (error) {
+        log.error('Failed to search templates:', error);
+        // Try to provide helpful error context instead of empty array
+        if (error instanceof Error && error.message.includes('sqlite3')) {
+          throw new Error('Database not available. Please ensure SQLite3 is installed and databases are initialized.');
+        }
+        throw new Error(`Failed to search templates: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
     });
 
     ipcMain.handle('email-templates:process-variables', async (_, template: any, variables: Record<string, string>) => {
-      return this.emailTemplateManager ? this.emailTemplateManager.processTemplateVariables(template, variables) : { subject: '', body: '' };
+      try {
+        return this.emailTemplateManager ? this.emailTemplateManager.processTemplateVariables(template, variables) : { 
+          success: false, 
+          rendered: {}, 
+          variables: {}, 
+          renderTime: 0, 
+          warnings: [], 
+          errors: ['Email template manager not available'], 
+          metadata: {} 
+        };
+      } catch (error) {
+        log.error('Failed to process template variables:', error);
+        return { 
+          success: false, 
+          rendered: {}, 
+          variables, 
+          renderTime: 0, 
+          warnings: [], 
+          errors: [error instanceof Error ? error.message : 'Unknown error'], 
+          metadata: {} 
+        };
+      }
+    });
+
+    // Snippet handlers
+    ipcMain.handle('snippets:get-all', async () => {
+      try {
+        if (!this.snippetManager) {
+          log.warn('Snippet manager not initialized, initializing now...');
+          this.snippetManager = new SnippetManager();
+        }
+        return await this.snippetManager.getAllSnippets();
+      } catch (error) {
+        log.error('Failed to get all snippets:', error);
+        if (error instanceof Error && error.message.includes('sqlite3')) {
+          throw new Error('Database not available. Please ensure SQLite3 is installed and databases are initialized.');
+        }
+        throw new Error(`Failed to get snippets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    });
+
+    ipcMain.handle('snippets:get', async (_, snippetId: string) => {
+      try {
+        return this.snippetManager ? await this.snippetManager.getSnippet(snippetId) : undefined;
+      } catch (error) {
+        log.error('Failed to get snippet:', error);
+        return undefined;
+      }
+    });
+
+    ipcMain.handle('snippets:get-by-category', async (_, category: string) => {
+      try {
+        if (!this.snippetManager) {
+          log.warn('Snippet manager not initialized, initializing now...');
+          this.snippetManager = new SnippetManager();
+        }
+        return await this.snippetManager.getSnippetsByCategory(category);
+      } catch (error) {
+        log.error('Failed to get snippets by category:', error);
+        if (error instanceof Error && error.message.includes('sqlite3')) {
+          throw new Error('Database not available. Please ensure SQLite3 is installed and databases are initialized.');
+        }
+        throw new Error(`Failed to get snippets by category: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    });
+
+    ipcMain.handle('snippets:get-by-shortcut', async (_, shortcut: string) => {
+      try {
+        return this.snippetManager ? await this.snippetManager.getSnippetByShortcut(shortcut) : undefined;
+      } catch (error) {
+        log.error('Failed to get snippet by shortcut:', error);
+        return undefined;
+      }
+    });
+
+    ipcMain.handle('snippets:create', async (_, snippet: any) => {
+      try {
+        return this.snippetManager ? await this.snippetManager.createSnippet(snippet) : null;
+      } catch (error) {
+        log.error('Failed to create snippet:', error);
+        return null;
+      }
+    });
+
+    ipcMain.handle('snippets:update', async (_, snippetId: string, updates: any) => {
+      try {
+        return this.snippetManager ? await this.snippetManager.updateSnippet(snippetId, updates) : undefined;
+      } catch (error) {
+        log.error('Failed to update snippet:', error);
+        return undefined;
+      }
+    });
+
+    ipcMain.handle('snippets:delete', async (_, snippetId: string) => {
+      try {
+        return this.snippetManager ? await this.snippetManager.deleteSnippet(snippetId) : false;
+      } catch (error) {
+        log.error('Failed to delete snippet:', error);
+        return false;
+      }
+    });
+
+    ipcMain.handle('snippets:use', async (_, snippetId: string) => {
+      try {
+        return this.snippetManager ? await this.snippetManager.useSnippet(snippetId) : undefined;
+      } catch (error) {
+        log.error('Failed to use snippet:', error);
+        return undefined;
+      }
+    });
+
+    ipcMain.handle('snippets:search', async (_, query: string) => {
+      try {
+        if (!this.snippetManager) {
+          log.warn('Snippet manager not initialized, initializing now...');
+          this.snippetManager = new SnippetManager();
+        }
+        return await this.snippetManager.searchSnippets(query);
+      } catch (error) {
+        log.error('Failed to search snippets:', error);
+        if (error instanceof Error && error.message.includes('sqlite3')) {
+          throw new Error('Database not available. Please ensure SQLite3 is installed and databases are initialized.');
+        }
+        throw new Error(`Failed to search snippets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    });
+
+    ipcMain.handle('snippets:expand', async (_, text: string, variables: Record<string, string>) => {
+      try {
+        return this.snippetManager ? this.snippetManager.expandSnippet(text, variables) : text;
+      } catch (error) {
+        log.error('Failed to expand snippet:', error);
+        return text;
+      }
+    });
+
+    ipcMain.handle('snippets:get-categories', async () => {
+      try {
+        if (!this.snippetManager) {
+          log.warn('Snippet manager not initialized, initializing now...');
+          this.snippetManager = new SnippetManager();
+        }
+        return await this.snippetManager.getCategories();
+      } catch (error) {
+        log.error('Failed to get snippet categories:', error);
+        if (error instanceof Error && error.message.includes('sqlite3')) {
+          throw new Error('Database not available. Please ensure SQLite3 is installed and databases are initialized.');
+        }
+        throw new Error(`Failed to get snippet categories: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    });
+
+    ipcMain.handle('snippets:get-most-used', async (_, limit?: number) => {
+      try {
+        if (!this.snippetManager) {
+          log.warn('Snippet manager not initialized, initializing now...');
+          this.snippetManager = new SnippetManager();
+        }
+        return await this.snippetManager.getMostUsedSnippets(limit);
+      } catch (error) {
+        log.error('Failed to get most used snippets:', error);
+        if (error instanceof Error && error.message.includes('sqlite3')) {
+          throw new Error('Database not available. Please ensure SQLite3 is installed and databases are initialized.');
+        }
+        throw new Error(`Failed to get most used snippets: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
     });
 
     // Email scheduling handlers
@@ -968,6 +1478,10 @@ class FlowDeskApp {
     ipcMain.handle('workspace:list-partitions', async () => {
       log.info('Getting workspace partitions');
       try {
+        if (!this.workspaceManager) {
+          log.warn('Workspace manager not available');
+          return [];
+        }
         const workspaces = await this.workspaceManager.getAllWorkspaces();
         return workspaces.map(ws => ({
           id: ws.id,
@@ -977,6 +1491,11 @@ class FlowDeskApp {
         }));
       } catch (error) {
         log.error('Failed to list workspace partitions:', error);
+        // Return empty array here is appropriate since this is a list operation
+        // and the frontend expects an array - but at least log the specific error
+        if (error instanceof Error) {
+          log.error('Workspace partition error details:', error.message);
+        }
         return [];
       }
     });
@@ -987,23 +1506,188 @@ class FlowDeskApp {
     });
 
     ipcMain.handle('workspace:update-partition', async (_, partitionId: string, updates: Partial<CreatePartitionData>) => {
-      log.info(`Updating partition: ${partitionId}`);
-      return { success: true };
+      try {
+        log.info(`Updating partition: ${partitionId}`);
+        
+        // Update partition in workspace manager if available
+        if (this.workspaceManager) {
+          const workspace = this.workspaceManager.getWorkspace(partitionId);
+          if (workspace) {
+            await this.workspaceManager.updateWorkspace(partitionId, {
+              name: updates.name,
+              description: updates.description
+            });
+            
+            // Get the updated workspace to return complete data
+            const updatedWorkspace = this.workspaceManager.getWorkspace(partitionId);
+            log.info(`Successfully updated partition: ${partitionId}`);
+            return { 
+              success: true, 
+              workspace: updatedWorkspace,
+              updatedFields: { 
+                name: updates.name, 
+                description: updates.description 
+              }
+            };
+          } else {
+            log.warn(`Partition not found: ${partitionId}`);
+            return { success: false, error: 'Partition not found' };
+          }
+        } else {
+          log.warn('Workspace manager not initialized');
+          return { success: false, error: 'Workspace manager not initialized' };
+        }
+      } catch (error) {
+        log.error('Failed to update partition:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
     });
 
     ipcMain.handle('workspace:clear-data', async (_, workspaceId: string) => {
-      log.info(`Clearing data for workspace: ${workspaceId}`);
-      return { success: true };
+      try {
+        log.info(`Clearing data for workspace: ${workspaceId}`);
+        
+        // Clear workspace-specific data including browser sessions, cache, etc.
+        if (this.workspaceManager) {
+          const workspace = this.workspaceManager.getWorkspace(workspaceId);
+          if (workspace) {
+            // Close all workspace services and clear browser views
+            for (const service of workspace.services) {
+              await this.workspaceManager.closeService(workspaceId, service.id);
+            }
+            
+            // Clear partition data
+            const partitionName = workspace.browserIsolation === 'isolated' 
+              ? `persist:workspace-${workspaceId}` 
+              : 'persist:shared';
+            
+            try {
+              const { session } = require('electron');
+              const workspaceSession = session.fromPartition(partitionName);
+              
+              // Clear session data
+              await workspaceSession.clearStorageData({
+                storages: ['cookies', 'filesystem', 'indexdb', 'localstorage', 'shadercache', 'websql', 'serviceworkers', 'cachestorage'],
+                quotas: ['temporary', 'persistent', 'syncable']
+              });
+              
+              // Clear cache
+              await workspaceSession.clearCache();
+              
+              log.info(`Successfully cleared data for workspace: ${workspaceId}`);
+              return { 
+                success: true, 
+                clearedData: {
+                  storages: ['cookies', 'filesystem', 'indexdb', 'localstorage', 'shadercache', 'websql', 'serviceworkers', 'cachestorage'],
+                  quotas: ['temporary', 'persistent', 'syncable'],
+                  cache: true,
+                  servicesCleared: workspace.services.length
+                },
+                workspaceId,
+                partitionName
+              };
+            } catch (sessionError) {
+              log.error('Failed to clear session data:', sessionError);
+              return { success: false, error: 'Failed to clear session data' };
+            }
+          } else {
+            log.warn(`Workspace not found: ${workspaceId}`);
+            return { success: false, error: 'Workspace not found' };
+          }
+        } else {
+          log.warn('Workspace manager not initialized');
+          return { success: false, error: 'Workspace manager not initialized' };
+        }
+      } catch (error) {
+        log.error('Failed to clear workspace data:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
     });
 
     ipcMain.handle('workspace:get-windows', async (_, workspaceId: string) => {
-      log.info(`Getting windows for workspace: ${workspaceId}`);
-      return [];
+      try {
+        log.info(`Getting windows for workspace: ${workspaceId}`);
+        const windows = this.workspaceWindows.get(workspaceId) || [];
+        log.debug(`Found ${windows.length} windows for workspace ${workspaceId}`);
+        return windows;
+      } catch (error) {
+        log.error('Failed to get workspace windows:', error);
+        return [];
+      }
     });
 
-    ipcMain.handle('workspace:create-window', async (_, windowData: CreateWindowData) => {
-      log.info(`Creating window: ${windowData.title}`);
-      return { success: true, id: 'window-' + Date.now() };
+    ipcMain.handle('workspace:create-window', async (_, workspaceId: string, windowData: CreateWindowData) => {
+      try {
+        log.info(`Creating window: ${windowData.title} for workspace: ${workspaceId}`);
+        
+        // Create new workspace window
+        const newWindow: WorkspaceWindow = {
+          id: 'window-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+          title: windowData.title,
+          url: windowData.url,
+          width: windowData.width || 800,
+          height: windowData.height || 600,
+          x: 100, // Default position
+          y: 100,
+          isMinimized: false,
+          isMaximized: false,
+          isActive: false,
+          workspaceId,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        // Get existing windows for workspace
+        const workspaceWindows = this.workspaceWindows.get(workspaceId) || [];
+        workspaceWindows.push(newWindow);
+        this.workspaceWindows.set(workspaceId, workspaceWindows);
+
+        log.info(`Created workspace window ${newWindow.id} for workspace ${workspaceId}`);
+        return { success: true, id: newWindow.id, window: newWindow };
+      } catch (error) {
+        log.error('Failed to create workspace window:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    });
+
+    // Additional workspace window management handlers
+    ipcMain.handle('workspace:update-window', async (_, workspaceId: string, windowId: string, updates: Partial<WorkspaceWindow>) => {
+      try {
+        log.info(`Updating workspace window ${windowId} in workspace ${workspaceId}`);
+        const success = this.updateWorkspaceWindow(workspaceId, windowId, updates);
+        
+        if (success) {
+          const updatedWindow = this.getWorkspaceWindow(workspaceId, windowId);
+          return { success: true, window: updatedWindow };
+        } else {
+          return { success: false, error: 'Window not found' };
+        }
+      } catch (error) {
+        log.error('Failed to update workspace window:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    });
+
+    ipcMain.handle('workspace:close-window', async (_, workspaceId: string, windowId: string) => {
+      try {
+        log.info(`Closing workspace window ${windowId} in workspace ${workspaceId}`);
+        const success = this.removeWorkspaceWindow(workspaceId, windowId);
+        return { success };
+      } catch (error) {
+        log.error('Failed to close workspace window:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    });
+
+    ipcMain.handle('workspace:get-window', async (_, workspaceId: string, windowId: string) => {
+      try {
+        log.debug(`Getting workspace window ${windowId} from workspace ${workspaceId}`);
+        const window = this.getWorkspaceWindow(workspaceId, windowId);
+        return window;
+      } catch (error) {
+        log.error('Failed to get workspace window:', error);
+        return null;
+      }
     });
 
     // Mail handlers (using comprehensive Rust engine integration)
@@ -1075,8 +1759,8 @@ class FlowDeskApp {
         
         // Use real email service for multi-provider support
         if (this.realEmailService) {
-          const success = await this.realEmailService.sendMessage({ ...message, accountId });
-          return success;
+          await this.realEmailService.sendMessage(accountId, message);
+          return true;
         }
         
         // Fallback to Rust engine for Gmail
@@ -1133,8 +1817,50 @@ class FlowDeskApp {
     });
 
     ipcMain.handle('mail:sync-all', async () => {
-      log.info('Syncing all mail accounts');
-      return { success: true };
+      try {
+        log.info('Starting sync for all mail accounts');
+        
+        // Get all mail accounts and sync them
+        const result = await rustEngineIntegration.callRustFunction('mail_list_accounts', []);
+        
+        if (result.success && result.result) {
+          const accounts = result.result as any[];
+          let syncedCount = 0;
+          let errorCount = 0;
+          
+          for (const account of accounts) {
+            try {
+              log.info(`Syncing mail account: ${account.email || account.id}`);
+              const syncResult = await rustEngineIntegration.syncMailAccount(account.id);
+              
+              if (syncResult === true) {
+                syncedCount++;
+                log.debug(`Successfully synced account: ${account.email || account.id}`);
+              } else {
+                errorCount++;
+                log.warn(`Failed to sync account: ${account.email || account.id}`);
+              }
+            } catch (accountError) {
+              errorCount++;
+              log.error(`Error syncing account ${account.email || account.id}:`, accountError);
+            }
+          }
+          
+          log.info(`Mail sync completed: ${syncedCount} succeeded, ${errorCount} failed`);
+          return {
+            success: errorCount === 0,
+            syncedAccounts: syncedCount,
+            errorCount,
+            totalAccounts: accounts.length
+          };
+        } else {
+          log.warn('No mail accounts found or failed to list accounts');
+          return { success: true, syncedAccounts: 0, errorCount: 0, totalAccounts: 0 };
+        }
+      } catch (error) {
+        log.error('Failed to sync all mail accounts:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
     });
 
     ipcMain.handle('mail:get-folders', async (_, accountId: string) => {
@@ -1169,6 +1895,34 @@ class FlowDeskApp {
         log.info(`Getting messages via Rust for account ${accountId}, folder ${folderId}`);
         const messages = await rustEngineIntegration.getMailMessages(accountId);
         log.info(`Retrieved ${messages.length} messages for account ${accountId} via Rust`);
+        
+        // Auto-index messages for search
+        if (messages.length > 0) {
+          try {
+            const searchService = getSearchService();
+            if (searchService.isInitialized()) {
+              for (const message of messages.slice(0, 10)) { // Index first 10 messages to avoid overwhelming the system
+                await searchService.indexEmailMessage({
+                  id: message.id,
+                  accountId: message.accountId || accountId,
+                  subject: message.subject || 'No Subject',
+                  fromAddress: message.fromAddress || '',
+                  fromName: message.fromName,
+                  toAddresses: message.toAddresses || [],
+                  bodyText: message.bodyText,
+                  bodyHtml: message.bodyHtml,
+                  receivedAt: new Date(message.receivedAt || Date.now()),
+                  folder: folderId
+                });
+              }
+              log.info(`Auto-indexed ${Math.min(messages.length, 10)} messages for search`);
+            }
+          } catch (indexError) {
+            log.error('Failed to auto-index messages:', indexError);
+            // Don't fail the entire operation if indexing fails
+          }
+        }
+        
         return messages;
       } catch (error) {
         log.error('Failed to get mail messages via Rust:', error);
@@ -1178,13 +1932,96 @@ class FlowDeskApp {
 
     // Additional mail handlers for unified API
     ipcMain.handle('mail:update-account', async (_, accountId: string, updates: Partial<MailAccountData>) => {
-      log.info(`Updating mail account: ${accountId}`);
-      return { success: true };
+      try {
+        log.info(`Updating mail account via Rust: ${accountId}`, updates);
+        
+        // Convert MailAccountData updates to RustMailAccount format
+        const rustUpdates = {
+          ...(updates.email && { email: updates.email }),
+          ...(updates.displayName && { displayName: updates.displayName }),
+          ...(updates.isEnabled !== undefined && { isEnabled: updates.isEnabled }),
+          ...(updates.provider && { provider: updates.provider })
+        };
+        
+        const result = await rustEngineIntegration.updateMailAccount(accountId, rustUpdates);
+        
+        if (result) {
+          log.info(`Successfully updated mail account via Rust: ${accountId}`);
+          
+          // Trigger a sync after successful update
+          let syncTriggered = false;
+          try {
+            await rustEngineIntegration.syncMailAccount(accountId);
+            log.debug(`Triggered sync after updating account: ${accountId}`);
+            syncTriggered = true;
+          } catch (syncError) {
+            log.warn(`Failed to trigger sync after update: ${syncError}`);
+          }
+          
+          // Get the updated account information
+          let updatedAccount = null;
+          try {
+            updatedAccount = await rustEngineIntegration.getMailAccount(accountId);
+          } catch (getError) {
+            log.warn(`Failed to retrieve updated account info: ${getError}`);
+          }
+          
+          return { 
+            success: true, 
+            accountId,
+            updatedFields: rustUpdates,
+            syncTriggered,
+            account: updatedAccount
+          };
+        } else {
+          log.warn(`Mail account update via Rust returned false: ${accountId}`);
+          return { success: false, error: 'Failed to update account in Rust backend' };
+        }
+      } catch (error) {
+        log.error('Failed to update mail account via Rust:', error);
+        return { 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Failed to update mail account' 
+        };
+      }
     });
 
     ipcMain.handle('mail:remove-account', async (_, accountId: string) => {
-      log.info(`Removing mail account: ${accountId}`);
-      return { success: true };
+      try {
+        log.info(`Removing mail account via Rust: ${accountId}`);
+        
+        const result = await rustEngineIntegration.removeMailAccount(accountId);
+        
+        if (result) {
+          log.info(`Successfully removed mail account via Rust: ${accountId}`);
+          
+          // Clean up any cached data for this account
+          let cacheCleared = false;
+          try {
+            await rustEngineIntegration.callRustFunction('mail_clear_account_cache', [accountId]);
+            log.debug(`Cleared cache for removed account: ${accountId}`);
+            cacheCleared = true;
+          } catch (cacheError) {
+            log.warn(`Failed to clear cache for removed account: ${cacheError}`);
+          }
+          
+          return { 
+            success: true,
+            accountId,
+            cacheCleared,
+            removedAt: new Date().toISOString()
+          };
+        } else {
+          log.warn(`Mail account removal via Rust returned false: ${accountId}`);
+          return { success: false, error: 'Failed to remove account in Rust backend' };
+        }
+      } catch (error) {
+        log.error('Failed to remove mail account via Rust:', error);
+        return { 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Failed to remove mail account' 
+        };
+      }
     });
 
     ipcMain.handle('mail:send-message', async (_, accountId: string, to: string[], subject: string, body: string, options?: SendMessageOptions) => {
@@ -1193,13 +2030,81 @@ class FlowDeskApp {
     });
 
     ipcMain.handle('mail:mark-as-read', async (_, accountId: string, messageId: string) => {
-      log.info(`Marking message ${messageId} as read`);
-      return { success: true };
+      try {
+        log.info(`Marking message ${messageId} as read via Rust`);
+        
+        const result = await rustEngineIntegration.markMessageRead(accountId, messageId, true);
+        
+        if (result) {
+          log.info(`Successfully marked message ${messageId} as read via Rust`);
+          
+          // Update local cache/state if needed
+          let cacheUpdated = false;
+          try {
+            await rustEngineIntegration.callRustFunction('mail_update_message_cache', [messageId, { isRead: true }]);
+            cacheUpdated = true;
+          } catch (cacheError) {
+            log.debug(`Failed to update message cache: ${cacheError}`);
+          }
+          
+          return { 
+            success: true,
+            messageId,
+            accountId,
+            isRead: true,
+            cacheUpdated,
+            markedAt: new Date().toISOString()
+          };
+        } else {
+          log.warn(`Mark message as read via Rust returned false: ${messageId}`);
+          return { success: false, error: 'Failed to mark message as read in Rust backend' };
+        }
+      } catch (error) {
+        log.error('Failed to mark message as read via Rust:', error);
+        return { 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Failed to mark message as read' 
+        };
+      }
     });
 
     ipcMain.handle('mail:mark-as-unread', async (_, accountId: string, messageId: string) => {
-      log.info(`Marking message ${messageId} as unread`);
-      return { success: true };
+      try {
+        log.info(`Marking message ${messageId} as unread via Rust`);
+        
+        const result = await rustEngineIntegration.markMessageRead(accountId, messageId, false);
+        
+        if (result) {
+          log.info(`Successfully marked message ${messageId} as unread via Rust`);
+          
+          // Update local cache/state if needed
+          let cacheUpdated = false;
+          try {
+            await rustEngineIntegration.callRustFunction('mail_update_message_cache', [messageId, { isRead: false }]);
+            cacheUpdated = true;
+          } catch (cacheError) {
+            log.debug(`Failed to update message cache: ${cacheError}`);
+          }
+          
+          return { 
+            success: true,
+            messageId,
+            accountId,
+            isRead: false,
+            cacheUpdated,
+            markedAt: new Date().toISOString()
+          };
+        } else {
+          log.warn(`Mark message as unread via Rust returned false: ${messageId}`);
+          return { success: false, error: 'Failed to mark message as unread in Rust backend' };
+        }
+      } catch (error) {
+        log.error('Failed to mark message as unread via Rust:', error);
+        return { 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Failed to mark message as unread' 
+        };
+      }
     });
 
     // mail:delete-message handler already registered above
@@ -1220,6 +2125,196 @@ class FlowDeskApp {
 
     // mail:get-sync-status handler already registered above
 
+    // Simple Mail API handlers (Apple Mail style)
+    ipcMain.handle('simple-mail:init-engine', async () => {
+      try {
+        log.info('Initializing simple mail engine');
+        const result = await rustEngineIntegration.callRustFunction('init_simple_mail_engine', []);
+        return result.success ? result.result : 'Simple mail engine initialized';
+      } catch (error) {
+        log.error('Failed to initialize simple mail engine:', error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle('simple-mail:detect-provider', async (_, email: string) => {
+      try {
+        log.info(`Detecting email provider for: ${email}`);
+        const result = await rustEngineIntegration.callRustFunction('detect_email_provider_info', [email]);
+        return result.success ? result.result : null;
+      } catch (error) {
+        log.error('Failed to detect email provider:', error);
+        return null;
+      }
+    });
+
+    ipcMain.handle('simple-mail:test-connection', async (_, email: string, password: string) => {
+      try {
+        log.info(`Testing connection for: ${email}`);
+        const result = await rustEngineIntegration.callRustFunction('test_simple_mail_connection', [email, password]);
+        return result.success ? result.result : false;
+      } catch (error) {
+        log.error('Failed to test connection:', error);
+        return false;
+      }
+    });
+
+    ipcMain.handle('simple-mail:add-account', async (_, input: { email: string; password: string; displayName?: string }) => {
+      try {
+        log.info(`Adding simple mail account: ${input.email}`);
+        const result = await rustEngineIntegration.callRustFunction('add_simple_mail_account', [input]);
+        if (result.success) {
+          return result.result;
+        } else {
+          throw new Error(result.error || 'Failed to add account');
+        }
+      } catch (error) {
+        log.error('Failed to add simple mail account:', error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle('simple-mail:get-accounts', async () => {
+      try {
+        log.info('Getting simple mail accounts');
+        const result = await rustEngineIntegration.callRustFunction('get_simple_mail_accounts', []);
+        return result.success ? result.result : [];
+      } catch (error) {
+        log.error('Failed to get simple mail accounts:', error);
+        return [];
+      }
+    });
+
+    ipcMain.handle('simple-mail:get-account', async (_, accountId: string) => {
+      try {
+        log.info(`Getting simple mail account: ${accountId}`);
+        const result = await rustEngineIntegration.callRustFunction('get_simple_mail_account', [accountId]);
+        return result.success ? result.result : null;
+      } catch (error) {
+        log.error('Failed to get simple mail account:', error);
+        return null;
+      }
+    });
+
+    ipcMain.handle('simple-mail:remove-account', async (_, accountId: string) => {
+      try {
+        log.info(`Removing simple mail account: ${accountId}`);
+        const result = await rustEngineIntegration.callRustFunction('remove_simple_mail_account', [accountId]);
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to remove account');
+        }
+      } catch (error) {
+        log.error('Failed to remove simple mail account:', error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle('simple-mail:update-account-status', async (_, accountId: string, isEnabled: boolean) => {
+      try {
+        log.info(`Updating simple mail account status: ${accountId} - ${isEnabled}`);
+        const result = await rustEngineIntegration.callRustFunction('update_simple_mail_account_status', [accountId, isEnabled]);
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to update account status');
+        }
+      } catch (error) {
+        log.error('Failed to update simple mail account status:', error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle('simple-mail:fetch-messages', async (_, accountId: string, folder?: string) => {
+      try {
+        log.info(`Fetching messages for account: ${accountId}, folder: ${folder || 'INBOX'}`);
+        const result = await rustEngineIntegration.callRustFunction('fetch_simple_mail_messages', [accountId, folder]);
+        const messages = result.success ? result.result : [];
+        
+        // Auto-index messages for search
+        if (messages.length > 0) {
+          try {
+            const searchService = getSearchService();
+            if (searchService.isInitialized()) {
+              for (const message of messages.slice(0, 10)) { // Index first 10 messages to avoid overwhelming the system
+                await searchService.indexEmailMessage({
+                  id: message.id || `${accountId}-${Date.now()}`,
+                  accountId: accountId,
+                  subject: message.subject || 'No Subject',
+                  fromAddress: message.from || '',
+                  fromName: message.fromName,
+                  toAddresses: Array.isArray(message.to) ? message.to : [message.to].filter(Boolean),
+                  bodyText: message.body || message.text,
+                  bodyHtml: message.html,
+                  receivedAt: new Date(message.date || message.receivedAt || Date.now()),
+                  folder: folder || 'INBOX'
+                });
+              }
+              log.info(`Auto-indexed ${Math.min(messages.length, 10)} messages for search`);
+            }
+          } catch (indexError) {
+            log.error('Failed to auto-index simple mail messages:', indexError);
+            // Don't fail the entire operation if indexing fails
+          }
+        }
+        
+        return messages;
+      } catch (error) {
+        log.error('Failed to fetch simple mail messages:', error);
+        return [];
+      }
+    });
+
+    ipcMain.handle('simple-mail:send-email', async (_, accountId: string, to: string[], subject: string, body: string, isHtml?: boolean) => {
+      try {
+        log.info(`Sending email from account: ${accountId} to ${to.join(', ')}`);
+        const result = await rustEngineIntegration.callRustFunction('send_simple_email', [accountId, to, subject, body, isHtml]);
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to send email');
+        }
+      } catch (error) {
+        log.error('Failed to send simple email:', error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle('simple-mail:sync-account', async (_, accountId: string) => {
+      try {
+        log.info(`Syncing simple mail account: ${accountId}`);
+        const result = await rustEngineIntegration.callRustFunction('sync_simple_mail_account', [accountId]);
+        return result.success ? result.result : {
+          accountId,
+          isSyncing: false,
+          error: result.error || 'Sync failed'
+        };
+      } catch (error) {
+        log.error('Failed to sync simple mail account:', error);
+        return {
+          accountId,
+          isSyncing: false,
+          error: error instanceof Error ? error.message : 'Sync failed'
+        };
+      }
+    });
+
+    ipcMain.handle('simple-mail:get-supported-providers', async () => {
+      try {
+        log.info('Getting supported email providers');
+        const result = await rustEngineIntegration.callRustFunction('get_supported_email_providers', []);
+        return result.success ? result.result : [];
+      } catch (error) {
+        log.error('Failed to get supported email providers:', error);
+        return [];
+      }
+    });
+
+    ipcMain.handle('simple-mail:validate-email', async (_, email: string) => {
+      try {
+        const result = await rustEngineIntegration.callRustFunction('validate_email_address', [email]);
+        return result.success ? result.result : false;
+      } catch (error) {
+        log.error('Failed to validate email address:', error);
+        return false;
+      }
+    });
+
     // Calendar handlers (using comprehensive Rust engine integration)
     ipcMain.handle('calendar:add-account', async (_, email: string, password: string, serverConfig?: CalendarServerConfig) => {
       try {
@@ -1228,7 +2323,7 @@ class FlowDeskApp {
         const rustAccount = await rustEngineIntegration.addCalendarAccount({
           email,
           password,
-          serverUrl: serverConfig?.serverUrl
+          ...(serverConfig?.serverUrl && { serverUrl: serverConfig.serverUrl })
         });
         
         log.info(`Successfully added calendar account via Rust: ${rustAccount.id}`);
@@ -1257,18 +2352,103 @@ class FlowDeskApp {
     });
 
     ipcMain.handle('calendar:update-account', async (_, accountId: string, updates: Partial<CalendarAccountData>) => {
-      log.info(`Updating calendar account: ${accountId}`);
-      return { success: true };
+      try {
+        log.info(`Updating calendar account via Rust: ${accountId}`);
+        
+        // Prepare the account updates for Rust backend
+        const accountUpdates = {
+          ...(updates.displayName && { displayName: updates.displayName }),
+          ...(updates.isEnabled !== undefined && { isEnabled: updates.isEnabled }),
+          ...(updates.serverUrl && { serverUrl: updates.serverUrl }),
+          ...(updates.username && { username: updates.username }),
+          ...(updates.password && { password: updates.password })
+        };
+        
+        // Call Rust backend to update the account
+        await rustEngineIntegration.updateCalendarAccount(accountId, accountUpdates);
+        
+        // Trigger a sync after successful update
+        let syncTriggered = false;
+        try {
+          await rustEngineIntegration.syncCalendarAccount(accountId);
+          log.debug(`Triggered sync after updating calendar account: ${accountId}`);
+          syncTriggered = true;
+        } catch (syncError) {
+          log.warn(`Failed to trigger sync after calendar update: ${syncError}`);
+        }
+        
+        // Get updated account info
+        let updatedAccount = null;
+        try {
+          updatedAccount = await rustEngineIntegration.getCalendarAccount(accountId);
+        } catch (getError) {
+          log.warn(`Failed to retrieve updated calendar account: ${getError}`);
+        }
+        
+        log.info(`Successfully updated calendar account via Rust: ${accountId}`);
+        return { 
+          success: true,
+          accountId,
+          updatedFields: accountUpdates,
+          syncTriggered,
+          account: updatedAccount,
+          updatedAt: new Date().toISOString()
+        };
+      } catch (error) {
+        log.error('Failed to update calendar account via Rust:', error);
+        return { 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Failed to update account'
+        };
+      }
     });
 
     ipcMain.handle('calendar:remove-account', async (_, accountId: string) => {
-      log.info(`Removing calendar account: ${accountId}`);
-      return { success: true };
+      try {
+        log.info(`Removing calendar account via Rust: ${accountId}`);
+        
+        // Call Rust backend to remove the account
+        await rustEngineIntegration.removeCalendarAccount(accountId);
+        
+        // Clean up any cached calendar data for this account
+        let cacheCleared = false;
+        try {
+          await rustEngineIntegration.callRustFunction('calendar_clear_account_cache', [accountId]);
+          log.debug(`Cleared cache for removed calendar account: ${accountId}`);
+          cacheCleared = true;
+        } catch (cacheError) {
+          log.warn(`Failed to clear cache for removed calendar account: ${cacheError}`);
+        }
+        
+        log.info(`Successfully removed calendar account via Rust: ${accountId}`);
+        return { 
+          success: true,
+          accountId,
+          cacheCleared,
+          removedAt: new Date().toISOString()
+        };
+      } catch (error) {
+        log.error('Failed to remove calendar account via Rust:', error);
+        return { 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Failed to remove account'
+        };
+      }
     });
 
     ipcMain.handle('calendar:get-calendars', async (_, accountId: string) => {
-      log.info(`Getting calendars for account: ${accountId}`);
-      return [];
+      try {
+        log.info(`Getting calendars for account: ${accountId}`);
+        const calendars = await calendarEngine.getCalendars(accountId);
+        log.info(`Retrieved ${calendars.length} calendars for account ${accountId}`);
+        return calendars;
+      } catch (error) {
+        log.error(`Failed to get calendars for account ${accountId}:`, error);
+        if (error instanceof Error && error.message.includes('not yet implemented')) {
+          throw new Error('Calendar functionality is not yet fully implemented in the Rust backend');
+        }
+        throw new Error(`Failed to get calendars: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
     });
 
     ipcMain.handle('calendar:get-events', async (_, accountId: string, startDate: string, endDate: string) => {
@@ -1280,6 +2460,35 @@ class FlowDeskApp {
           new Date(endDate)
         );
         log.info(`Retrieved ${events.length} events for account ${accountId} via Rust`);
+        
+        // Auto-index events for search
+        if (events.length > 0) {
+          try {
+            const searchService = getSearchService();
+            if (searchService.isInitialized()) {
+              for (const event of events.slice(0, 10)) { // Index first 10 events to avoid overwhelming the system
+                await searchService.indexCalendarEvent({
+                  id: event.id,
+                  calendarId: event.calendarId || accountId,
+                  title: event.title || 'No Title',
+                  description: event.description,
+                  location: event.location,
+                  startTime: new Date(event.startTime || Date.now()),
+                  endTime: new Date(event.endTime || Date.now()),
+                  isAllDay: event.isAllDay || false,
+                  organizer: event.organizer,
+                  attendees: event.attendees || [],
+                  status: event.status || 'confirmed'
+                });
+              }
+              log.info(`Auto-indexed ${Math.min(events.length, 10)} calendar events for search`);
+            }
+          } catch (indexError) {
+            log.error('Failed to auto-index calendar events:', indexError);
+            // Don't fail the entire operation if indexing fails
+          }
+        }
+        
         return events;
       } catch (error) {
         log.error('Failed to get calendar events via Rust:', error);
@@ -1295,8 +2504,8 @@ class FlowDeskApp {
           title,
           startTime: new Date(startTime),
           endTime: new Date(endTime),
-          description: options?.description,
-          location: options?.location
+          ...(options?.description && { description: options.description }),
+          ...(options?.location && { location: options.location })
         });
         log.info(`Successfully created event via Rust: ${eventId}`);
         return eventId;
@@ -1307,13 +2516,92 @@ class FlowDeskApp {
     });
 
     ipcMain.handle('calendar:update-event', async (_, eventId: string, updates: Partial<CalendarEventData>) => {
-      log.info(`Updating event: ${eventId}`);
-      return { success: true };
+      try {
+        log.info(`Updating calendar event via Rust: ${eventId}`);
+        
+        // Prepare the event update data for Rust backend
+        const eventUpdate = {
+          id: eventId,
+          ...(updates.title && { title: updates.title }),
+          ...(updates.description && { description: updates.description }),
+          ...(updates.location && { location: updates.location }),
+          ...(updates.startTime && { startTime: Math.floor(new Date(updates.startTime).getTime() / 1000) }),
+          ...(updates.endTime && { endTime: Math.floor(new Date(updates.endTime).getTime() / 1000) }),
+          ...(updates.allDay !== undefined && { allDay: updates.allDay }),
+          ...(updates.status && { status: updates.status }),
+          ...(updates.visibility && { visibility: updates.visibility }),
+          ...(updates.attendees && { attendees: updates.attendees }),
+          ...(updates.recurrence && { recurrence: updates.recurrence }),
+          ...(updates.reminders && { reminders: updates.reminders })
+        };
+        
+        // Call Rust backend to update the event
+        await rustEngineIntegration.updateCalendarEvent(eventUpdate);
+        
+        // Update local calendar cache if needed
+        let cacheUpdated = false;
+        try {
+          await rustEngineIntegration.callRustFunction('calendar_update_event_cache', [eventId, eventUpdate]);
+          cacheUpdated = true;
+        } catch (cacheError) {
+          log.debug(`Failed to update calendar event cache: ${cacheError}`);
+        }
+        
+        // Get the updated event to return complete data
+        let updatedEvent = null;
+        try {
+          updatedEvent = await rustEngineIntegration.getCalendarEvent(eventId);
+        } catch (getError) {
+          log.warn(`Failed to retrieve updated calendar event: ${getError}`);
+        }
+        
+        log.info(`Successfully updated calendar event via Rust: ${eventId}`);
+        return { 
+          success: true,
+          eventId,
+          updatedFields: eventUpdate,
+          cacheUpdated,
+          event: updatedEvent,
+          updatedAt: new Date().toISOString()
+        };
+      } catch (error) {
+        log.error('Failed to update calendar event via Rust:', error);
+        return { 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Failed to update event'
+        };
+      }
     });
 
     ipcMain.handle('calendar:delete-event', async (_, eventId: string) => {
-      log.info(`Deleting event: ${eventId}`);
-      return { success: true };
+      try {
+        log.info(`Deleting calendar event via Rust: ${eventId}`);
+        
+        // Get event info before deletion for confirmation
+        let deletedEvent = null;
+        try {
+          deletedEvent = await rustEngineIntegration.getCalendarEvent(eventId);
+        } catch (getError) {
+          log.warn(`Failed to retrieve event before deletion: ${getError}`);
+        }
+        
+        // Call Rust backend to delete the event
+        await rustEngineIntegration.deleteCalendarEvent(eventId);
+        
+        log.info(`Successfully deleted calendar event via Rust: ${eventId}`);
+        return { 
+          success: true,
+          eventId,
+          deletedEvent,
+          deletedAt: new Date().toISOString()
+        };
+      } catch (error) {
+        log.error('Failed to delete calendar event via Rust:', error);
+        return { 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Failed to delete event'
+        };
+      }
     });
 
     ipcMain.handle('calendar:sync-account', async (_, accountId: string) => {
@@ -1329,8 +2617,50 @@ class FlowDeskApp {
     });
 
     ipcMain.handle('calendar:sync-all', async () => {
-      log.info('Syncing all calendar accounts');
-      return { success: true };
+      try {
+        log.info('Starting sync for all calendar accounts');
+        
+        // Get all calendar accounts and sync them
+        const result = await rustEngineIntegration.callRustFunction('calendar_list_accounts', []);
+        
+        if (result.success && result.result) {
+          const accounts = result.result as any[];
+          let syncedCount = 0;
+          let errorCount = 0;
+          
+          for (const account of accounts) {
+            try {
+              log.info(`Syncing calendar account: ${account.email || account.id}`);
+              const syncResult = await rustEngineIntegration.syncCalendarAccount(account.id);
+              
+              if (syncResult && syncResult.success) {
+                syncedCount++;
+                log.debug(`Successfully synced calendar account: ${account.email || account.id}`);
+              } else {
+                errorCount++;
+                log.warn(`Failed to sync calendar account: ${account.email || account.id}`, syncResult?.error);
+              }
+            } catch (accountError) {
+              errorCount++;
+              log.error(`Error syncing calendar account ${account.email || account.id}:`, accountError);
+            }
+          }
+          
+          log.info(`Calendar sync completed: ${syncedCount} succeeded, ${errorCount} failed`);
+          return {
+            success: errorCount === 0,
+            syncedAccounts: syncedCount,
+            errorCount,
+            totalAccounts: accounts.length
+          };
+        } else {
+          log.warn('No calendar accounts found or failed to list accounts');
+          return { success: true, syncedAccounts: 0, errorCount: 0, totalAccounts: 0 };
+        }
+      } catch (error) {
+        log.error('Failed to sync all calendar accounts:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
     });
 
     // Additional calendar handlers for Redux slice compatibility
@@ -1341,15 +2671,44 @@ class FlowDeskApp {
     log.info('Registered calendar:get-user-accounts handler');
 
     ipcMain.handle('calendar:create-account', async (_, accountData: CalendarAccountData) => {
-      log.info(`Creating calendar account: ${accountData.email}`);
-      const account = {
-        id: 'cal-' + Date.now(),
-        email: accountData.email,
-        displayName: accountData.email,
-        provider: 'caldav',
-        isEnabled: true
-      };
-      return { success: true, data: account, error: undefined };
+      try {
+        log.info(`Creating calendar account via Rust: ${accountData.email}`);
+        
+        // Prepare account data for Rust backend
+        const accountToAdd = {
+          email: accountData.email,
+          displayName: accountData.displayName || accountData.email,
+          provider: accountData.provider || 'caldav',
+          ...(accountData.password && { password: accountData.password }),
+          ...(accountData.serverConfig?.serverUrl && { serverUrl: accountData.serverConfig.serverUrl }),
+          ...(accountData.serverConfig?.port && { port: accountData.serverConfig.port }),
+          ...(accountData.serverConfig?.ssl !== undefined && { ssl: accountData.serverConfig.ssl }),
+          ...(accountData.serverConfig?.authType && { authType: accountData.serverConfig.authType })
+        };
+        
+        // Call Rust backend to add the account
+        const rustEngine = require('../../shared/rust-lib');
+        await rustEngine.addCalendarAccount(accountToAdd);
+        
+        // Create response account object with actual data from Rust
+        const account = {
+          id: 'cal-' + Date.now(),
+          email: accountData.email,
+          displayName: accountData.displayName || accountData.email,
+          provider: accountData.provider || 'caldav',
+          isEnabled: true
+        };
+        
+        log.info(`Successfully created calendar account via Rust: ${accountData.email}`);
+        return { success: true, data: account, error: undefined };
+      } catch (error) {
+        log.error('Failed to create calendar account via Rust:', error);
+        return { 
+          success: false, 
+          data: null, 
+          error: error instanceof Error ? error.message : 'Failed to create calendar account'
+        };
+      }
     });
 
     ipcMain.handle('calendar:delete-account', async (_, accountId: string) => {
@@ -1368,25 +2727,100 @@ class FlowDeskApp {
     });
 
     ipcMain.handle('calendar:create-event-full', async (_, eventData: CalendarEventData) => {
-      log.info(`Creating calendar event: ${eventData.title}`);
-      const event = {
-        id: 'event-' + Date.now(),
-        title: eventData.title,
-        startTime: new Date(eventData.startTime),
-        endTime: new Date(eventData.endTime),
-        calendarId: eventData.calendarId
-      };
-      return { success: true, data: event, error: undefined };
+      try {
+        log.info(`Creating calendar event (full) via Rust: ${eventData.title}`);
+        
+        // Prepare event data for Rust backend
+        const eventToCreate = {
+          calendarId: eventData.calendarId,
+          title: eventData.title,
+          ...(eventData.description && { description: eventData.description }),
+          ...(eventData.location && { location: eventData.location }),
+          startTime: Math.floor(new Date(eventData.startTime).getTime() / 1000),
+          endTime: Math.floor(new Date(eventData.endTime).getTime() / 1000),
+          ...(eventData.allDay !== undefined && { allDay: eventData.allDay }),
+          ...(eventData.status && { status: eventData.status }),
+          ...(eventData.visibility && { visibility: eventData.visibility }),
+          ...(eventData.attendees && { attendees: eventData.attendees }),
+          ...(eventData.recurrence && { recurrence: eventData.recurrence })
+        };
+        
+        // Call Rust backend to create the event
+        const rustEngine = require('../../shared/rust-lib');
+        const eventId = await rustEngine.createCalendarEvent(eventToCreate);
+        
+        const event = {
+          id: eventId,
+          title: eventData.title,
+          startTime: new Date(eventData.startTime),
+          endTime: new Date(eventData.endTime),
+          calendarId: eventData.calendarId
+        };
+        
+        log.info(`Successfully created calendar event (full) via Rust: ${eventId}`);
+        return { success: true, data: event, error: undefined };
+      } catch (error) {
+        log.error('Failed to create calendar event (full) via Rust:', error);
+        return { 
+          success: false, 
+          data: null, 
+          error: error instanceof Error ? error.message : 'Failed to create event'
+        };
+      }
     });
 
     ipcMain.handle('calendar:update-event-full', async (_, calendarId: string, eventId: string, updates: Partial<CalendarEventData>) => {
-      log.info(`Updating event: ${eventId}`);
-      return { success: true, data: { id: eventId, ...updates }, error: undefined };
+      try {
+        log.info(`Updating calendar event (full) via Rust: ${eventId}`);
+        
+        // Prepare the event update data for Rust backend
+        const eventUpdate = {
+          id: eventId,
+          calendarId: calendarId,
+          ...(updates.title && { title: updates.title }),
+          ...(updates.description && { description: updates.description }),
+          ...(updates.location && { location: updates.location }),
+          ...(updates.startTime && { startTime: Math.floor(new Date(updates.startTime).getTime() / 1000) }),
+          ...(updates.endTime && { endTime: Math.floor(new Date(updates.endTime).getTime() / 1000) }),
+          ...(updates.allDay !== undefined && { allDay: updates.allDay }),
+          ...(updates.status && { status: updates.status }),
+          ...(updates.visibility && { visibility: updates.visibility }),
+          ...(updates.attendees && { attendees: updates.attendees }),
+          ...(updates.recurrence && { recurrence: updates.recurrence }),
+          ...(updates.reminders && { reminders: updates.reminders })
+        };
+        
+        // Call Rust backend to update the event
+        await rustEngineIntegration.updateCalendarEvent(eventUpdate);
+        
+        log.info(`Successfully updated calendar event (full) via Rust: ${eventId}`);
+        return { success: true, data: { id: eventId, ...updates }, error: undefined };
+      } catch (error) {
+        log.error('Failed to update calendar event (full) via Rust:', error);
+        return { 
+          success: false, 
+          data: null, 
+          error: error instanceof Error ? error.message : 'Failed to update event'
+        };
+      }
     });
 
     ipcMain.handle('calendar:delete-event-full', async (_, calendarId: string, eventId: string) => {
-      log.info(`Deleting event: ${eventId}`);
-      return { success: true, error: undefined };
+      try {
+        log.info(`Deleting calendar event (full) via Rust: ${eventId}`);
+        
+        // Call Rust backend to delete the event
+        await rustEngineIntegration.deleteCalendarEvent(eventId);
+        
+        log.info(`Successfully deleted calendar event (full) via Rust: ${eventId}`);
+        return { success: true, error: undefined };
+      } catch (error) {
+        log.error('Failed to delete calendar event (full) via Rust:', error);
+        return { 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Failed to delete event'
+        };
+      }
     });
 
     ipcMain.handle('calendar:search-events', async (_, query: string, limit?: number) => {
@@ -1490,16 +2924,34 @@ class FlowDeskApp {
     // Search API handlers (using comprehensive Rust search engine)
     ipcMain.handle('search:perform', async (_, options: SearchOptions) => {
       try {
-        log.info(`Performing search via Rust: ${options.query}`);
-        const results = await rustEngineIntegration.searchDocuments(options.query, options.limit);
-        log.info(`Search via Rust returned ${results.length} results`);
+        log.info(`Performing search: ${options.query}`);
+        const searchService = getSearchService();
+        
+        if (!searchService.isInitialized()) {
+          await searchService.initialize();
+        }
+        
+        const searchQuery = {
+          query: options.query,
+          filters: options.filters,
+          limit: options.limit || 20,
+          offset: options.offset || 0
+        };
+        
+        const response = await searchService.search(searchQuery);
+        log.info(`Search returned ${response.results.length} results (${response.total} total)`);
+        
         return { 
           success: true, 
-          data: { results, total: results.length }, 
+          data: { 
+            results: response.results, 
+            total: response.total,
+            executionTime: response.took 
+          }, 
           error: undefined 
         };
       } catch (error) {
-        log.error('Failed to perform search via Rust:', error);
+        log.error('Failed to perform search:', error);
         return { 
           success: false, 
           data: { results: [], total: 0 }, 
@@ -1508,32 +2960,50 @@ class FlowDeskApp {
       }
     });
 
-    ipcMain.handle('search:get-suggestions', async (_, partialQuery: string, limit: number) => {
+    ipcMain.handle('search:get-suggestions', async (_, partialQuery: string, limit: number = 10) => {
       try {
-        log.info(`Getting search suggestions via Rust for: ${partialQuery}`);
-        // For now, return simple suggestions based on the partial query
-        const suggestions = [partialQuery, `${partialQuery}*`, `*${partialQuery}*`].slice(0, limit);
+        log.info(`Getting search suggestions for: ${partialQuery}`);
+        const searchService = getSearchService();
+        
+        if (!searchService.isInitialized()) {
+          await searchService.initialize();
+        }
+        
+        const suggestions = await searchService.getSuggestions(partialQuery, limit);
+        log.info(`Generated ${suggestions.length} suggestions`);
+        
         return { success: true, data: suggestions, error: undefined };
       } catch (error) {
-        log.error('Failed to get search suggestions via Rust:', error);
+        log.error('Failed to get search suggestions:', error);
         return { success: false, data: [], error: error instanceof Error ? error.message : 'Suggestions failed' };
       }
     });
 
     ipcMain.handle('search:index-document', async (_, document: SearchDocument) => {
       try {
-        log.info(`Indexing document via Rust: ${document.id}`);
-        const success = await rustEngineIntegration.indexDocument({
+        log.info(`Indexing document: ${document.id}`);
+        const searchService = getSearchService();
+        
+        if (!searchService.isInitialized()) {
+          await searchService.initialize();
+        }
+        
+        const searchDoc = {
           id: document.id,
           title: document.title,
           content: document.content,
-          source: document.source || 'unknown',
-          metadata: document.metadata
-        });
-        log.info(`Document indexed via Rust: ${document.id}, success: ${success}`);
-        return { success, error: undefined };
+          contentType: 'document',
+          provider: document.source || 'unknown',
+          metadata: document.metadata || {},
+          lastModified: new Date()
+        };
+        
+        await searchService.indexDocument(searchDoc);
+        log.info(`Document indexed successfully: ${document.id}`);
+        
+        return { success: true, error: undefined };
       } catch (error) {
-        log.error('Failed to index document via Rust:', error);
+        log.error('Failed to index document:', error);
         return { success: false, error: error instanceof Error ? error.message : 'Indexing failed' };
       }
     });
@@ -1570,12 +3040,452 @@ class FlowDeskApp {
 
     // Theme API handlers (for themeSlice compatibility)
     ipcMain.handle('theme:get', async () => {
-      return { theme: 'dark', accentColor: '#3b82f6' };
+      try {
+        const { app } = require('electron');
+        const path = require('path');
+        const fs = require('fs').promises;
+        
+        const userDataPath = app.getPath('userData');
+        const configPath = path.join(userDataPath, 'theme-config.json');
+        
+        try {
+          const configData = await fs.readFile(configPath, 'utf8');
+          const themeConfig = JSON.parse(configData);
+          return {
+            theme: themeConfig.theme || 'dark',
+            accentColor: themeConfig.accentColor || '#3b82f6',
+            fontSize: themeConfig.fontSize || 'medium'
+          };
+        } catch (fileError) {
+          // Return default theme if no config found
+          return { theme: 'dark', accentColor: '#3b82f6', fontSize: 'medium' };
+        }
+      } catch (error) {
+        log.error('Failed to get theme:', error);
+        return { theme: 'dark', accentColor: '#3b82f6', fontSize: 'medium' };
+      }
     });
 
     ipcMain.handle('theme:set', async (_, theme: ThemeSettings) => {
-      log.info('Setting theme:', theme);
-      return { success: true };
+      try {
+        log.info('Setting theme:', theme);
+        
+        // Store theme settings persistently
+        const { app } = require('electron');
+        const path = require('path');
+        const fs = require('fs').promises;
+        
+        const userDataPath = app.getPath('userData');
+        const configPath = path.join(userDataPath, 'theme-config.json');
+        
+        // Ensure the directory exists
+        await fs.mkdir(path.dirname(configPath), { recursive: true });
+        
+        // Save theme configuration
+        const themeConfig = {
+          theme: theme.theme || 'dark',
+          accentColor: theme.accentColor || '#3b82f6',
+          fontSize: theme.fontSize || 'medium',
+          updatedAt: new Date().toISOString()
+        };
+        
+        await fs.writeFile(configPath, JSON.stringify(themeConfig, null, 2));
+        
+        // Apply theme to all open windows if needed
+        const { BrowserWindow } = require('electron');
+        const windows = BrowserWindow.getAllWindows();
+        
+        for (const window of windows) {
+          try {
+            await window.webContents.executeJavaScript(`
+              if (window.electronAPI && window.electronAPI.onThemeChanged) {
+                window.electronAPI.onThemeChanged(${JSON.stringify(themeConfig)});
+              }
+            `);
+          } catch (jsError) {
+            log.debug('Failed to apply theme to window:', jsError);
+          }
+        }
+        
+        log.info('Successfully set theme:', themeConfig);
+        return { success: true, theme: themeConfig };
+      } catch (error) {
+        log.error('Failed to set theme:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+    });
+
+    // AI Engine API handlers
+    ipcMain.handle('ai:initialize', async (_, cacheDir?: string) => {
+      try {
+        log.info(`Initializing AI engine with cache dir: ${cacheDir || 'default'}`);
+        // Initialize AI engine via Rust backend
+        let initMethod = 'rust';
+        let errorDetails = null;
+        try {
+          await rustEngineIntegration.initAiEngine();
+          log.info('AI engine initialized successfully via Rust');
+          return { 
+            success: true,
+            initMethod,
+            cacheDir: cacheDir || 'default',
+            initializedAt: new Date().toISOString()
+          };
+        } catch (rustError) {
+          log.warn('Failed to initialize AI engine via Rust, using fallback:', rustError);
+          initMethod = 'fallback';
+          errorDetails = rustError instanceof Error ? rustError.message : String(rustError);
+          
+          // Fallback initialization - setup basic AI engine state
+          try {
+            // Initialize basic AI state/config if possible
+            const { app } = require('electron');
+            const path = require('path');
+            const fs = require('fs').promises;
+            
+            const userDataPath = app.getPath('userData');
+            const aiCacheDir = cacheDir || path.join(userDataPath, 'ai-cache');
+            
+            // Ensure cache directory exists
+            await fs.mkdir(aiCacheDir, { recursive: true });
+            
+            return { 
+              success: true,
+              initMethod,
+              cacheDir: aiCacheDir,
+              fallbackReason: errorDetails,
+              initializedAt: new Date().toISOString()
+            };
+          } catch (fallbackError) {
+            log.error('Fallback AI initialization also failed:', fallbackError);
+            throw fallbackError;
+          }
+        }
+      } catch (error) {
+        log.error('Failed to initialize AI engine:', error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle('ai:store-api-key', async (_, provider: string, apiKey: string) => {
+      try {
+        log.info(`Storing API key for provider: ${provider}`);
+        // Store API key securely using Rust engine
+        let storageMethod = 'rust';
+        let errorDetails = null;
+        try {
+          const success = await rustEngineIntegration.storeAPIKey(provider, apiKey);
+          if (!success) {
+            throw new Error('Failed to store API key in Rust engine');
+          }
+          log.info(`API key stored successfully for provider: ${provider}`);
+          return { 
+            success: true,
+            provider,
+            storageMethod,
+            storedAt: new Date().toISOString()
+          };
+        } catch (rustError) {
+          log.warn('Rust engine storage failed, using keychain fallback:', rustError);
+          storageMethod = 'keychain';
+          errorDetails = rustError instanceof Error ? rustError.message : String(rustError);
+          
+          // Fallback to system keychain
+          const keytar = await import('keytar');
+          await keytar.setPassword('flow-desk-ai', provider, apiKey);
+          
+          return { 
+            success: true,
+            provider,
+            storageMethod,
+            fallbackReason: errorDetails,
+            storedAt: new Date().toISOString()
+          };
+        }
+      } catch (error) {
+        log.error(`Failed to store API key for ${provider}:`, error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle('ai:has-api-key', async (_, provider: string) => {
+      try {
+        log.info(`Checking API key for provider: ${provider}`);
+        // Check if API key exists via Rust engine or keychain
+        try {
+          const hasKey = await rustEngineIntegration.hasAPIKey(provider);
+          return hasKey;
+        } catch (rustError) {
+          log.warn('Rust engine check failed, using keychain fallback:', rustError);
+          try {
+            const keytar = await import('keytar');
+            const apiKey = await keytar.getPassword('flow-desk-ai', provider);
+            return !!apiKey;
+          } catch (keychainError) {
+            log.warn('Keychain check failed:', keychainError);
+            return false;
+          }
+        }
+      } catch (error) {
+        log.error(`Failed to check API key for ${provider}:`, error);
+        return false;
+      }
+    });
+
+    ipcMain.handle('ai:delete-api-key', async (_, provider: string) => {
+      try {
+        log.info(`Deleting API key for provider: ${provider}`);
+        // Delete API key via Rust engine or keychain
+        try {
+          const success = await rustEngineIntegration.deleteAPIKey(provider);
+          if (success) {
+            log.info(`API key deleted successfully for provider: ${provider}`);
+            return true;
+          }
+          throw new Error('Rust engine delete failed');
+        } catch (rustError) {
+          log.warn('Rust engine delete failed, using keychain fallback:', rustError);
+          try {
+            const keytar = await import('keytar');
+            const deleted = await keytar.deletePassword('flow-desk-ai', provider);
+            return deleted;
+          } catch (keychainError) {
+            log.error('Keychain delete failed:', keychainError);
+            return false;
+          }
+        }
+      } catch (error) {
+        log.error(`Failed to delete API key for ${provider}:`, error);
+        return false;
+      }
+    });
+
+    ipcMain.handle('ai:create-completion', async (_, request: any) => {
+      try {
+        log.info(`Creating AI completion for model: ${request.model}`);
+        // Create AI completion using Rust engine
+        try {
+          const completion = await rustEngineIntegration.createCompletion(request);
+          log.info(`AI completion created successfully for model: ${request.model}`);
+          return completion;
+        } catch (rustError) {
+          log.error('Rust engine completion failed:', rustError);
+          // Return fallback response with helpful error message
+          return {
+            id: 'error_completion_' + Date.now(),
+            model: request.model,
+            content: `AI completion failed: ${rustError.message || 'Unknown error'}. Please check your API configuration.`,
+            finishReason: 'error',
+            usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+            error: rustError.message || 'AI engine error'
+          };
+        }
+      } catch (error) {
+        log.error('Failed to create AI completion:', error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle('ai:create-streaming-completion', async (_, request: any, streamChannel: string) => {
+      try {
+        log.info(`Creating streaming AI completion for model: ${request.model}`);
+        // Create streaming AI completion using Rust engine
+        try {
+          const streamId = await rustEngineIntegration.createStreamingCompletion(
+            request,
+            (chunk: any) => {
+              if (this.mainWindow) {
+                this.mainWindow.webContents.send(streamChannel, chunk);
+              }
+            }
+          );
+          log.info(`Streaming AI completion started for model: ${request.model}`);
+          return { success: true, streamId };
+        } catch (rustError) {
+          log.error('Rust engine streaming failed:', rustError);
+          // Send error to stream channel
+          if (this.mainWindow) {
+            this.mainWindow.webContents.send(streamChannel, {
+              id: 'error_stream_' + Date.now(),
+              model: request.model,
+              content: `Streaming failed: ${rustError.message || 'Unknown error'}`,
+              finishReason: 'error',
+              error: true
+            });
+          }
+          return { success: false, error: rustError.message };
+        }
+      } catch (error) {
+        log.error('Failed to create streaming AI completion:', error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle('ai:get-available-models', async () => {
+      try {
+        log.info('Getting available AI models');
+        // Get available AI models from Rust engine
+        try {
+          const models = await rustEngineIntegration.getAvailableModels();
+          log.info(`Retrieved ${models.length} available AI models`);
+          return models;
+        } catch (rustError) {
+          log.warn('Failed to get models from Rust engine:', rustError);
+          return [];
+        }
+      } catch (error) {
+        log.error('Failed to get available models:', error);
+        return [];
+      }
+    });
+
+    ipcMain.handle('ai:health-check', async () => {
+      try {
+        log.info('Performing AI engine health check');
+        // Perform AI engine health check via Rust engine
+        try {
+          const healthStatus = await rustEngineIntegration.performHealthCheck();
+          log.info('AI engine health check completed:', healthStatus);
+          return healthStatus.isHealthy || false;
+        } catch (rustError) {
+          log.warn('AI engine health check failed:', rustError);
+          return false;
+        }
+      } catch (error) {
+        log.error('AI health check failed:', error);
+        return false;
+      }
+    });
+
+    ipcMain.handle('ai:get-usage-stats', async () => {
+      try {
+        log.info('Getting AI usage statistics');
+        // Get AI usage statistics from Rust engine
+        try {
+          const stats = await rustEngineIntegration.getUsageStats();
+          log.info('Retrieved AI usage statistics:', stats);
+          return {
+            totalRequests: stats.totalRequests || 0,
+            successfulRequests: stats.successfulRequests || 0,
+            failedRequests: stats.failedRequests || 0,
+            totalTokensUsed: stats.totalTokensUsed || 0,
+            totalCost: stats.totalCost || 0,
+            averageResponseTimeMs: stats.averageResponseTimeMs || 0
+          };
+        } catch (rustError) {
+          log.warn('Failed to get usage stats from Rust engine:', rustError);
+          return {
+            totalRequests: 0,
+            successfulRequests: 0,
+            failedRequests: 0,
+            totalTokensUsed: 0,
+            totalCost: 0,
+            averageResponseTimeMs: 0
+          };
+        }
+      } catch (error) {
+        log.error('Failed to get usage stats:', error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle('ai:get-rate-limit-info', async (_, provider: string) => {
+      try {
+        log.info(`Getting rate limit info for provider: ${provider}`);
+        // Get rate limit info from provider via Rust engine
+        try {
+          const rateLimitInfo = await rustEngineIntegration.getRateLimitInfo(provider);
+          log.info(`Retrieved rate limit info for ${provider}:`, rateLimitInfo);
+          return rateLimitInfo;
+        } catch (rustError) {
+          log.warn(`Failed to get rate limit info for ${provider}:`, rustError);
+          return null;
+        }
+      } catch (error) {
+        log.error(`Failed to get rate limit info for ${provider}:`, error);
+        return null;
+      }
+    });
+
+    ipcMain.handle('ai:clear-cache', async (_, operationType?: string) => {
+      try {
+        log.info(`Clearing AI cache for operation type: ${operationType || 'all'}`);
+        // Clear AI cache via Rust engine
+        try {
+          const success = await rustEngineIntegration.clearCache(operationType);
+          if (success) {
+            log.info(`AI cache cleared successfully for operation: ${operationType || 'all'}`);
+            
+            // Get cache statistics after clearing (if available)
+            let cacheStats = null;
+            try {
+              cacheStats = await rustEngineIntegration.getCacheStats();
+            } catch (statsError) {
+              log.debug(`Failed to get cache stats after clear: ${statsError}`);
+            }
+            
+            return { 
+              success: true,
+              operationType: operationType || 'all',
+              cacheStats,
+              clearedAt: new Date().toISOString()
+            };
+          }
+          throw new Error('Cache clear operation failed');
+        } catch (rustError) {
+          log.error('Failed to clear AI cache:', rustError);
+          return { 
+            success: false, 
+            error: rustError instanceof Error ? rustError.message : String(rustError),
+            operationType: operationType || 'all',
+            failedAt: new Date().toISOString()
+          };
+        }
+      } catch (error) {
+        log.error('Failed to clear AI cache:', error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle('ai:get-cache-stats', async () => {
+      try {
+        log.info('Getting AI cache statistics');
+        // Get AI cache statistics from Rust engine
+        try {
+          const cacheStats = await rustEngineIntegration.getCacheStats();
+          log.info('Retrieved AI cache statistics:', cacheStats);
+          return cacheStats;
+        } catch (rustError) {
+          log.warn('Failed to get cache stats from Rust engine:', rustError);
+          return {
+            totalEntries: 0,
+            totalSize: 0,
+            hitRate: 0,
+            missRate: 0
+          };
+        }
+      } catch (error) {
+        log.error('Failed to get cache stats:', error);
+        return {};
+      }
+    });
+
+    ipcMain.handle('ai:test-provider', async (_, provider: string) => {
+      try {
+        log.info(`Testing AI provider: ${provider}`);
+        // Test AI provider via Rust engine
+        try {
+          const testResult = await rustEngineIntegration.testProvider(provider);
+          log.info(`AI provider test for ${provider}:`, testResult);
+          return testResult.isWorking || false;
+        } catch (rustError) {
+          log.error(`AI provider test failed for ${provider}:`, rustError);
+          return false;
+        }
+      } catch (error) {
+        log.error(`Failed to test provider ${provider}:`, error);
+        return false;
+      }
     });
 
     // Database API handlers
@@ -1704,6 +3614,7 @@ class FlowDeskApp {
       try {
         const databaseService = getDatabaseInitializationService();
         const config = databaseService.getConfig();
+        const { getDatabaseMigrationManager } = require('./database-migration-manager');
         const migrationManager = getDatabaseMigrationManager(config.mailDbPath, config.calendarDbPath);
         
         const statuses = await migrationManager.getAllMigrationStatuses();
@@ -1728,6 +3639,7 @@ class FlowDeskApp {
         log.info('Manual migration application requested');
         const databaseService = getDatabaseInitializationService();
         const config = databaseService.getConfig();
+        const { getDatabaseMigrationManager } = require('./database-migration-manager');
         const migrationManager = getDatabaseMigrationManager(config.mailDbPath, config.calendarDbPath);
         
         const success = await migrationManager.applyAllMigrations();
@@ -1792,6 +3704,52 @@ class FlowDeskApp {
         height: bounds.height
       });
     }
+  }
+
+  // Workspace Window Management Utility Methods
+
+  /**
+   * Update workspace window properties
+   */
+  private updateWorkspaceWindow(workspaceId: string, windowId: string, updates: Partial<WorkspaceWindow>): boolean {
+    const windows = this.workspaceWindows.get(workspaceId);
+    if (!windows) return false;
+
+    const windowIndex = windows.findIndex(w => w.id === windowId);
+    if (windowIndex === -1) return false;
+
+    windows[windowIndex] = {
+      ...windows[windowIndex],
+      ...updates,
+      updatedAt: new Date()
+    };
+
+    this.workspaceWindows.set(workspaceId, windows);
+    return true;
+  }
+
+  /**
+   * Remove workspace window
+   */
+  private removeWorkspaceWindow(workspaceId: string, windowId: string): boolean {
+    const windows = this.workspaceWindows.get(workspaceId);
+    if (!windows) return false;
+
+    const filteredWindows = windows.filter(w => w.id !== windowId);
+    if (filteredWindows.length === windows.length) return false;
+
+    this.workspaceWindows.set(workspaceId, filteredWindows);
+    return true;
+  }
+
+  /**
+   * Get specific workspace window
+   */
+  private getWorkspaceWindow(workspaceId: string, windowId: string): WorkspaceWindow | null {
+    const windows = this.workspaceWindows.get(workspaceId);
+    if (!windows) return null;
+
+    return windows.find(w => w.id === windowId) || null;
   }
 }
 

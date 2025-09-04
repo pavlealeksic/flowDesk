@@ -15,6 +15,8 @@ interface AccessibilitySettings {
   colorBlindMode: 'none' | 'protanopia' | 'deuteranopia' | 'tritanopia' | 'monochrome';
   colorBlindnessMode: 'none' | 'protanopia' | 'deuteranopia' | 'tritanopia' | 'monochrome' | 'achromatopsia'; // Extended alias
   voiceNavigation: boolean;
+  stickyKeys: boolean;
+  soundFeedback: boolean;
 }
 
 // Accessibility actions
@@ -30,7 +32,10 @@ type AccessibilityAction =
   | { type: 'SET_COLOR_BLIND_MODE'; payload: AccessibilitySettings['colorBlindMode'] }
   | { type: 'SET_COLOR_BLINDNESS_MODE'; payload: AccessibilitySettings['colorBlindnessMode'] }
   | { type: 'TOGGLE_VOICE_NAVIGATION' }
-  | { type: 'RESET_SETTINGS' };
+  | { type: 'TOGGLE_STICKY_KEYS' }
+  | { type: 'TOGGLE_SOUND_FEEDBACK' }
+  | { type: 'RESET_SETTINGS' }
+  | { type: 'LOAD_FROM_SYSTEM' };
 
 // Default accessibility settings
 const defaultSettings: AccessibilitySettings = {
@@ -47,6 +52,8 @@ const defaultSettings: AccessibilitySettings = {
   colorBlindMode: 'none',
   colorBlindnessMode: 'none',
   voiceNavigation: false,
+  stickyKeys: false,
+  soundFeedback: false,
 };
 
 // Accessibility actions interface
@@ -61,6 +68,10 @@ interface AccessibilityActions {
   toggleVoiceNavigation: () => void;
   toggleKeyboardOnly: () => void;
   toggleEnhancedFocus: () => void;
+  toggleStickyKeys: () => void;
+  toggleSoundFeedback: () => void;
+  resetToDefaults: () => void;
+  loadFromSystem: () => void;
   resetSettings: () => void;
 }
 
@@ -111,8 +122,15 @@ function accessibilityReducer(state: AccessibilitySettings, action: Accessibilit
     }
     case 'TOGGLE_VOICE_NAVIGATION':
       return { ...state, voiceNavigation: !state.voiceNavigation };
+    case 'TOGGLE_STICKY_KEYS':
+      return { ...state, stickyKeys: !state.stickyKeys };
+    case 'TOGGLE_SOUND_FEEDBACK':
+      return { ...state, soundFeedback: !state.soundFeedback };
     case 'RESET_SETTINGS':
       return defaultSettings;
+    case 'LOAD_FROM_SYSTEM':
+      // Load system accessibility preferences - implementation would depend on platform APIs
+      return state; // For now, just return current state
     default:
       return state;
   }
@@ -223,6 +241,10 @@ export function AccessibilityProvider({ children }: AccessibilityProviderProps) 
     setColorBlindnessMode: (mode: AccessibilitySettings['colorBlindnessMode']) => 
       dispatch({ type: 'SET_COLOR_BLINDNESS_MODE', payload: mode }),
     toggleVoiceNavigation: () => dispatch({ type: 'TOGGLE_VOICE_NAVIGATION' }),
+    toggleStickyKeys: () => dispatch({ type: 'TOGGLE_STICKY_KEYS' }),
+    toggleSoundFeedback: () => dispatch({ type: 'TOGGLE_SOUND_FEEDBACK' }),
+    resetToDefaults: () => dispatch({ type: 'RESET_SETTINGS' }),
+    loadFromSystem: () => dispatch({ type: 'LOAD_FROM_SYSTEM' }),
     resetSettings: () => dispatch({ type: 'RESET_SETTINGS' }),
   };
 

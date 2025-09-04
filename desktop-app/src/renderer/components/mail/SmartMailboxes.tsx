@@ -135,9 +135,12 @@ export const SmartMailboxes: React.FC<SmartMailboxesProps> = ({
         <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
           Smart Mailboxes
         </h3>
-        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-          <Plus className="h-3 w-3" />
-        </Button>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="h-6 w-6"
+          leftIcon={<Plus className="h-3 w-3" />}
+        />
       </div>
 
       <div className="space-y-1">
@@ -188,8 +191,8 @@ export const SmartMailboxes: React.FC<SmartMailboxesProps> = ({
           variant="ghost"
           size="sm"
           className="w-full justify-start text-xs text-muted-foreground"
+          leftIcon={<Plus className="h-3 w-3" />}
         >
-          <Plus className="h-3 w-3 mr-2" />
           Create Smart Mailbox...
         </Button>
       </div>

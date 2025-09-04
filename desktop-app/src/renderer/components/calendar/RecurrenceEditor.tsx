@@ -243,7 +243,7 @@ export const RecurrenceEditor: React.FC<RecurrenceEditorProps> = ({
         <div className="grid grid-cols-2 gap-4">
           <div>
             <Label htmlFor="frequency">Frequency</Label>
-            <Select value={frequency} onValueChange={(value: RecurrenceFrequency) => setFrequency(value)}>
+            <Select value={frequency} onValueChange={(value: string) => setFrequency(value as RecurrenceFrequency)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -264,7 +264,7 @@ export const RecurrenceEditor: React.FC<RecurrenceEditorProps> = ({
                 type="number"
                 min="1"
                 max="999"
-                value={interval}
+                value={interval.toString()}
                 onChange={(e) => setInterval(parseInt(e.target.value) || 1)}
                 className="w-20"
               />
@@ -283,7 +283,7 @@ export const RecurrenceEditor: React.FC<RecurrenceEditorProps> = ({
               {WEEKDAYS.map(({ value, label }) => (
                 <Button
                   key={value}
-                  variant={selectedWeekDays.includes(value) ? 'default' : 'outline'}
+                  variant={selectedWeekDays.includes(value) ? 'primary' : 'outline'}
                   size="sm"
                   className="w-12 h-8 text-xs"
                   onClick={() => toggleWeekDay(value)}
@@ -300,7 +300,7 @@ export const RecurrenceEditor: React.FC<RecurrenceEditorProps> = ({
             <Label className="text-sm font-medium mb-2 block">Monthly recurrence</Label>
             <RadioGroup
               value={monthlyType}
-              onValueChange={(value: 'date' | 'day') => setMonthlyType(value)}
+              onValueChange={(value: string) => setMonthlyType(value as 'date' | 'day')}
               className="space-y-2"
             >
               <div className="flex items-center space-x-2">
@@ -311,7 +311,7 @@ export const RecurrenceEditor: React.FC<RecurrenceEditorProps> = ({
                     type="number"
                     min="1"
                     max="31"
-                    value={monthDay}
+                    value={monthDay.toString()}
                     onChange={(e) => setMonthDay(parseInt(e.target.value) || 1)}
                     className="w-16 h-8"
                   />
@@ -356,7 +356,7 @@ export const RecurrenceEditor: React.FC<RecurrenceEditorProps> = ({
           <Label className="text-sm font-medium mb-2 block">Ends</Label>
           <RadioGroup
             value={endType}
-            onValueChange={(value: 'never' | 'count' | 'until') => setEndType(value)}
+            onValueChange={(value: string) => setEndType(value as 'never' | 'count' | 'until')}
             className="space-y-2"
           >
             <div className="flex items-center space-x-2">
@@ -371,7 +371,7 @@ export const RecurrenceEditor: React.FC<RecurrenceEditorProps> = ({
                   type="number"
                   min="1"
                   max="999"
-                  value={count}
+                  value={count.toString()}
                   onChange={(e) => setCount(parseInt(e.target.value) || 1)}
                   disabled={endType !== 'count'}
                   className="w-16 h-8"

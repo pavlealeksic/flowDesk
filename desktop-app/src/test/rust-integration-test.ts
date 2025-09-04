@@ -282,8 +282,8 @@ class RustIntegrationTester {
         tokenType: 'Bearer'
       };
       
-      const encrypted = rustOAuthManager.encryptCredentials(testCredentials);
-      const decrypted = rustOAuthManager.decryptCredentials(encrypted);
+      const encrypted = await rustOAuthManager.encryptCredentials(testCredentials);
+      const decrypted = await rustOAuthManager.decryptCredentials(encrypted);
       
       if (!decrypted || decrypted.accessToken !== testCredentials.accessToken) {
         throw new Error('Credential encryption/decryption failed');
@@ -318,7 +318,7 @@ class RustIntegrationTester {
 
     // Test key pair generation
     await this.runTest('Generate Encryption Key Pair', async () => {
-      const keyPair = rustEngineIntegration.generateEncryptionKeyPair();
+      const keyPair = await rustEngineIntegration.generateEncryptionKeyPair();
       
       if (!keyPair.publicKey || !keyPair.privateKey) {
         throw new Error('Invalid key pair generated');
@@ -334,10 +334,10 @@ class RustIntegrationTester {
     // Test data encryption/decryption
     await this.runTest('Data Encryption/Decryption', async () => {
       const testData = 'This is sensitive data that needs to be encrypted using the Rust engine!';
-      const keyPair = rustEngineIntegration.generateEncryptionKeyPair();
+      const keyPair = await rustEngineIntegration.generateEncryptionKeyPair();
       
-      const encrypted = rustEngineIntegration.encryptData(testData, keyPair.privateKey);
-      const decrypted = rustEngineIntegration.decryptData(encrypted, keyPair.privateKey);
+      const encrypted = await rustEngineIntegration.encryptData(testData, keyPair.privateKey);
+      const decrypted = await rustEngineIntegration.decryptData(encrypted, keyPair.privateKey);
       
       if (decrypted !== testData) {
         throw new Error(`Decryption failed: expected "${testData}", got "${decrypted}"`);
@@ -353,11 +353,11 @@ class RustIntegrationTester {
     // Test large data encryption
     await this.runTest('Large Data Encryption', async () => {
       const largeData = 'Large data content: ' + 'x'.repeat(10000);
-      const keyPair = rustEngineIntegration.generateEncryptionKeyPair();
+      const keyPair = await rustEngineIntegration.generateEncryptionKeyPair();
       
       const start = Date.now();
-      const encrypted = rustEngineIntegration.encryptData(largeData, keyPair.privateKey);
-      const decrypted = rustEngineIntegration.decryptData(encrypted, keyPair.privateKey);
+      const encrypted = await rustEngineIntegration.encryptData(largeData, keyPair.privateKey);
+      const decrypted = await rustEngineIntegration.decryptData(encrypted, keyPair.privateKey);
       const duration = Date.now() - start;
       
       if (decrypted !== largeData) {

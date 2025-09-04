@@ -35,7 +35,7 @@ import {
 import {
   Plus,
   Settings,
-  Sync,
+  RotateCcw as Sync,
   Trash2,
   CheckCircle,
   AlertTriangle,

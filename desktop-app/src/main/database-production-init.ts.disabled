@@ -1,0 +1,422 @@
+/**
+ * Production Database Initialization Service
+ * 
+ * This service handles ALL database operations via the Rust backend.
+ * No direct SQLite3 dependencies - everything goes through NAPI bindings.
+ */
+
+import { app } from 'electron';
+import { join } from 'path';
+import { promises as fs } from 'fs';
+import log from 'electron-log';
+
+// Import the Rust engine bindings
+const rustEngine = require('../lib/rust-engine');
+
+export interface DatabaseConfig {
+  userDataPath: string;
+  mailDbPath: string;
+  calendarDbPath: string;
+  searchIndexPath: string;
+  schemaVersion: number;
+}
+
+export interface DatabaseInitProgress {
+  stage: string;
+  progress: number;
+  message: string;
+  details?: string;
+}
+
+export interface DatabaseHealth {
+  healthy: boolean;
+  issues: string[];
+  recommendations: string[];
+}
+
+/**
+ * Production-ready database initialization using Rust backend
+ */
+export class ProductionDatabaseService {
+  private config: DatabaseConfig;
+  private isInitialized: boolean = false;
+
+  constructor() {
+    this.config = this.generateConfig();
+  }
+
+  /**
+   * Generate database configuration
+   */
+  private generateConfig(): DatabaseConfig {
+    const userDataPath = join(app.getPath('userData'), 'FlowDesk');
+    const databasesPath = join(userDataPath, 'databases');
+    
+    return {
+      userDataPath,
+      mailDbPath: join(databasesPath, 'mail.db'),
+      calendarDbPath: join(databasesPath, 'calendar.db'),
+      searchIndexPath: join(databasesPath, 'search_index'),
+      schemaVersion: 1
+    };
+  }
+
+  /**
+   * Initialize the Rust database engine
+   */
+  async initializeRustEngine(): Promise<void> {
+    try {
+      log.info('Initializing Rust database engine...');
+      
+      // Initialize the Flow Desk database with configuration
+      const result = await rustEngine.initFlowDeskDatabase({
+        mailDbPath: this.config.mailDbPath,
+        calendarDbPath: this.config.calendarDbPath,
+        searchIndexPath: this.config.searchIndexPath,
+        userDataPath: this.config.userDataPath,
+        schemaVersion: this.config.schemaVersion
+      });
+      
+      log.info('Rust database engine initialized:', result);
+      this.isInitialized = true;
+    } catch (error) {
+      log.error('Failed to initialize Rust database engine:', error);
+      throw new Error(`Database engine initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Initialize all databases via Rust backend
+   */
+  async initializeDatabases(progressCallback?: (progress: DatabaseInitProgress) => void): Promise<boolean> {
+    try {
+      log.info('Starting database initialization via Rust backend...');
+      
+      // Ensure Rust engine is initialized
+      if (!this.isInitialized) {
+        await this.initializeRustEngine();
+      }
+
+      // Initialize all databases through Rust
+      const progressUpdates = await rustEngine.initializeAllDatabases();
+      
+      // Report progress updates
+      if (progressCallback && progressUpdates) {
+        for (const update of progressUpdates) {
+          progressCallback({
+            stage: update.stage,
+            progress: update.progress,
+            message: update.message,
+            details: update.details
+          });
+        }
+      }
+
+      log.info('Database initialization completed successfully via Rust backend');
+      return true;
+
+    } catch (error) {
+      log.error('Database initialization failed:', error);
+      
+      // Report error
+      if (progressCallback) {
+        progressCallback({
+          stage: 'error',
+          progress: 0,
+          message: 'Database initialization failed',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+      
+      return false;
+    }
+  }
+
+  /**
+   * Check database health via Rust backend
+   */
+  async checkDatabaseHealth(): Promise<DatabaseHealth[]> {
+    try {
+      if (!this.isInitialized) {
+        await this.initializeRustEngine();
+      }
+
+      const healthReports = await rustEngine.checkDatabaseHealth();
+      
+      return healthReports.map((report: any) => ({
+        healthy: report.healthy,
+        issues: report.issues || [],
+        recommendations: report.recommendations || []
+      }));
+
+    } catch (error) {
+      log.error('Failed to check database health:', error);
+      return [{
+        healthy: false,
+        issues: [`Health check failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
+        recommendations: ['Ensure Rust engine is properly initialized']
+      }];
+    }
+  }
+
+  /**
+   * Repair databases via Rust backend
+   */
+  async repairDatabases(): Promise<boolean> {
+    try {
+      log.info('Starting database repair via Rust backend...');
+      
+      if (!this.isInitialized) {
+        await this.initializeRustEngine();
+      }
+
+      const repairResults = await rustEngine.repairDatabases();
+      
+      // Check if all repairs were successful
+      const allHealthy = repairResults.every((result: any) => result.healthy);
+      
+      if (allHealthy) {
+        log.info('Database repair completed successfully');
+      } else {
+        log.warn('Some database repairs encountered issues:', repairResults);
+      }
+      
+      return allHealthy;
+
+    } catch (error) {
+      log.error('Database repair failed:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Backup databases via Rust backend
+   */
+  async backupDatabases(): Promise<string[]> {
+    try {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const backupDir = join(this.config.userDataPath, 'backups', timestamp);
+      
+      // Create backup directory
+      await fs.mkdir(backupDir, { recursive: true });
+      
+      if (!this.isInitialized) {
+        await this.initializeRustEngine();
+      }
+
+      const backupFiles = await rustEngine.backupDatabases(backupDir);
+      
+      log.info('Database backup completed:', backupFiles);
+      return backupFiles;
+
+    } catch (error) {
+      log.error('Database backup failed:', error);
+      throw new Error(`Backup failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Execute raw SQL query via Rust backend (for migrations)
+   */
+  async executeQuery(database: 'mail' | 'calendar', query: string, params?: any[]): Promise<any> {
+    try {
+      if (!this.isInitialized) {
+        await this.initializeRustEngine();
+      }
+
+      const result = await rustEngine.executeDatabaseQuery({
+        database,
+        query,
+        params: params || []
+      });
+      
+      return result;
+
+    } catch (error) {
+      log.error(`Failed to execute query on ${database} database:`, error);
+      throw new Error(`Query execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get database configuration
+   */
+  getConfig(): DatabaseConfig {
+    return { ...this.config };
+  }
+
+  /**
+   * Check if databases are initialized
+   */
+  async isDatabasesInitialized(): Promise<boolean> {
+    try {
+      const health = await this.checkDatabaseHealth();
+      return health.every(h => h.healthy);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Mail Database Operations
+   */
+  
+  async saveEmailMessage(message: any): Promise<string> {
+    try {
+      if (!this.isInitialized) {
+        await this.initializeRustEngine();
+      }
+
+      const messageId = await rustEngine.saveEmailMessage(message);
+      return messageId;
+    } catch (error) {
+      log.error('Failed to save email message:', error);
+      throw error;
+    }
+  }
+
+  async getEmailMessages(accountId: string, folder: string, limit?: number): Promise<any[]> {
+    try {
+      if (!this.isInitialized) {
+        await this.initializeRustEngine();
+      }
+
+      const messages = await rustEngine.getEmailMessages({
+        accountId,
+        folder,
+        limit: limit || 100
+      });
+      
+      return messages;
+    } catch (error) {
+      log.error('Failed to get email messages:', error);
+      throw error;
+    }
+  }
+
+  async markEmailAsRead(messageId: string, isRead: boolean): Promise<void> {
+    try {
+      if (!this.isInitialized) {
+        await this.initializeRustEngine();
+      }
+
+      await rustEngine.updateEmailReadStatus({
+        messageId,
+        isRead
+      });
+    } catch (error) {
+      log.error('Failed to mark email as read:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Calendar Database Operations
+   */
+  
+  async saveCalendarEvent(event: any): Promise<string> {
+    try {
+      if (!this.isInitialized) {
+        await this.initializeRustEngine();
+      }
+
+      const eventId = await rustEngine.saveCalendarEvent(event);
+      return eventId;
+    } catch (error) {
+      log.error('Failed to save calendar event:', error);
+      throw error;
+    }
+  }
+
+  async getCalendarEvents(calendarId: string, startTime: Date, endTime: Date): Promise<any[]> {
+    try {
+      if (!this.isInitialized) {
+        await this.initializeRustEngine();
+      }
+
+      const events = await rustEngine.getCalendarEvents({
+        calendarId,
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString()
+      });
+      
+      return events;
+    } catch (error) {
+      log.error('Failed to get calendar events:', error);
+      throw error;
+    }
+  }
+
+  async updateCalendarEvent(eventId: string, updates: any): Promise<void> {
+    try {
+      if (!this.isInitialized) {
+        await this.initializeRustEngine();
+      }
+
+      await rustEngine.updateCalendarEvent({
+        eventId,
+        ...updates
+      });
+    } catch (error) {
+      log.error('Failed to update calendar event:', error);
+      throw error;
+    }
+  }
+
+  async deleteCalendarEvent(eventId: string): Promise<void> {
+    try {
+      if (!this.isInitialized) {
+        await this.initializeRustEngine();
+      }
+
+      await rustEngine.deleteCalendarEvent(eventId);
+    } catch (error) {
+      log.error('Failed to delete calendar event:', error);
+      throw error;
+    }
+  }
+}
+
+/**
+ * Export singleton instance
+ */
+let productionDatabaseService: ProductionDatabaseService | null = null;
+
+export function getProductionDatabaseService(): ProductionDatabaseService {
+  if (!productionDatabaseService) {
+    productionDatabaseService = new ProductionDatabaseService();
+  }
+  return productionDatabaseService;
+}
+
+/**
+ * Initialize databases on app startup
+ */
+export async function initializeDatabases(progressCallback?: (progress: DatabaseInitProgress) => void): Promise<boolean> {
+  const service = getProductionDatabaseService();
+  return service.initializeDatabases(progressCallback);
+}
+
+/**
+ * Check database health
+ */
+export async function checkDatabaseHealth(): Promise<DatabaseHealth[]> {
+  const service = getProductionDatabaseService();
+  return service.checkDatabaseHealth();
+}
+
+/**
+ * Repair databases if needed
+ */
+export async function repairDatabases(): Promise<boolean> {
+  const service = getProductionDatabaseService();
+  return service.repairDatabases();
+}
+
+/**
+ * Backup databases
+ */
+export async function backupDatabases(): Promise<string[]> {
+  const service = getProductionDatabaseService();
+  return service.backupDatabases();
+}

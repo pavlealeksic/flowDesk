@@ -10,8 +10,33 @@ import calendarSlice from './slices/calendarSlice'
 import pluginSlice from './slices/pluginSlice'
 import notificationSlice from './slices/notificationSlice'
 import searchSlice from './slices/searchSlice'
-import automationSlice from './slices/automationSlice'
+// automationSlice removed to simplify the app
 import productivitySlice from './slices/productivitySlice'
+
+// Serialization helpers
+const isSerializable = (value: unknown): boolean => {
+  if (value === null || typeof value !== 'object') {
+    return true
+  }
+  
+  // Check for non-serializable objects
+  if (
+    value instanceof Date || 
+    value instanceof RegExp || 
+    value instanceof Error ||
+    value instanceof Map ||
+    value instanceof Set ||
+    value instanceof WeakMap ||
+    value instanceof WeakSet ||
+    value instanceof Function ||
+    (typeof value === 'object' && value.constructor && 
+     value.constructor.name !== 'Object' && value.constructor.name !== 'Array')
+  ) {
+    return false
+  }
+  
+  return true
+}
 
 export const store = configureStore({
   reducer: {
@@ -23,16 +48,54 @@ export const store = configureStore({
     plugin: pluginSlice,
     notification: notificationSlice,
     search: searchSlice,
-    automation: automationSlice,
+    // automation: removed to simplify the app,
     productivity: productivitySlice,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        ignoredActions: ['persist/PERSIST', 'persist/REHYDRATE'],
+        // Ignore these action types
+        ignoredActions: [
+          'persist/PERSIST',
+          'persist/REHYDRATE',
+          'persist/REGISTER',
+          'persist/PURGE',
+          'persist/FLUSH',
+          'persist/PAUSE',
+        ],
+        // Ignore these field paths in all actions
+        ignoredActionsPaths: ['meta.arg', 'payload.timestamp', 'payload.date'],
+        // Ignore these paths in the state
+        ignoredPaths: [
+          'workspace.workspaces.*.created',
+          'workspace.workspaces.*.lastAccessed',
+          'workspace.workspaces.*.createdAt',
+          'workspace.workspaces.*.updatedAt',
+          'mail.threads.*.lastMessageDate',
+          'mail.scheduledMessages.*.scheduledDate',
+          'mail.scheduledMessages.*.createdAt',
+          'mail.messages.*.date',
+          'mail.messages.*.receivedAt',
+          'mail.unifiedMessages.*.date',
+          'mail.unifiedMessages.*.receivedAt',
+          'mail.searchResults.*.date',
+          'mail.searchResults.*.receivedAt',
+        ],
+        // Custom serializable check
+        isSerializable,
+        // Additional options for production
+        warnAfter: 128,
       },
+      // Disable immutability check in production for performance
+      immutableCheck: process.env.NODE_ENV !== 'production' ? {
+        warnAfter: 128,
+      } : false,
     }),
-  devTools: process.env.NODE_ENV !== 'production',
+  devTools: process.env.NODE_ENV !== 'production' ? {
+    maxAge: 50,
+    trace: true,
+    traceLimit: 25,
+  } : false,
 })
 
 export type RootState = ReturnType<typeof store.getState>

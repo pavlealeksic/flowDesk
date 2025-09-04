@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
+import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@reduxjs/toolkit'
 import type { MailAccount, EmailMessage, MailFolder, MailSyncStatus, CreateMailAccountInput, UpdateMailAccountInput } from '@flow-desk/shared'
 import type { MailMessageOptions, ComposeMessageInput } from '../../types/preload'
 
@@ -17,7 +17,7 @@ interface MessageThread {
   messages: EmailMessage[]
   subject: string
   participants: string[]
-  lastMessageDate: Date
+  lastMessageDate: string // ISO string for serialization
   unreadCount: number
 }
 
@@ -29,9 +29,9 @@ interface ScheduledMessage {
   bcc?: string[]
   subject: string
   body: string
-  scheduledDate: Date
+  scheduledDate: string // ISO string for serialization
   status: 'pending' | 'sent' | 'failed'
-  createdAt: Date
+  createdAt: string // ISO string for serialization
 }
 
 interface EmailAlias {
@@ -319,14 +319,20 @@ export const scheduleMessage = createAsyncThunk(
   }: { 
     accountId: string
     message: ComposeMessageInput
-    scheduledDate: Date
+    scheduledDate: Date | string
   }, { rejectWithValue }) => {
     try {
       if (!window.flowDesk?.mail) {
         throw new Error('Mail API not available')
       }
-      const scheduledId = await window.flowDesk.mail.scheduleMessage(accountId, message, scheduledDate)
-      return { accountId, message, scheduledDate, scheduledId }
+      const dateToSchedule = scheduledDate instanceof Date ? scheduledDate : new Date(scheduledDate)
+      const scheduledId = await window.flowDesk.mail.scheduleMessage(accountId, message, dateToSchedule)
+      return { 
+        accountId, 
+        message, 
+        scheduledDate: dateToSchedule.toISOString(), 
+        scheduledId 
+      }
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to schedule message')
     }
@@ -644,7 +650,11 @@ const mailSlice = createSlice({
           messages,
           subject: messages[0]?.subject || '',
           participants: [...new Set(messages.flatMap(m => [m.from.address, ...m.to.map(t => t.address)]))],
-          lastMessageDate: messages[messages.length - 1]?.date || new Date(),
+          lastMessageDate: messages[messages.length - 1]?.date ? 
+            (typeof messages[messages.length - 1].date === 'string' ? 
+              messages[messages.length - 1].date : 
+              new Date(messages[messages.length - 1].date).toISOString()) : 
+            new Date().toISOString(),
           unreadCount: messages.filter(m => !m.flags.isRead).length
         }
       })
@@ -665,9 +675,9 @@ const mailSlice = createSlice({
           bcc: message.bcc,
           subject: message.subject || '',
           body: message.body || '',
-          scheduledDate,
+          scheduledDate: scheduledDate,
           status: 'pending',
-          createdAt: new Date()
+          createdAt: new Date().toISOString()
         })
       })
 
@@ -712,45 +722,130 @@ export const {
   updateSmartMailboxCounts
 } = mailSlice.actions
 
-// Selectors
-export const selectMailAccounts = (state: { mail: MailState }) => state.mail.accounts
-export const selectCurrentAccount = (state: { mail: MailState }) => {
-  const { accounts, currentAccountId } = state.mail
-  return accounts.find(account => account.id === currentAccountId) || null
-}
-export const selectCurrentMessages = (state: { mail: MailState }) => {
-  const { messages, currentAccountId, currentFolderId } = state.mail
-  if (!currentAccountId) return []
-  const key = `${currentAccountId}:${currentFolderId || 'inbox'}`
-  return messages[key] || []
-}
-export const selectCurrentFolders = (state: { mail: MailState }) => {
-  const { folders, currentAccountId } = state.mail
-  return currentAccountId ? folders[currentAccountId] || [] : []
-}
+// Base selectors
+const selectMailState = (state: { mail: MailState }) => state.mail
+const selectAccounts = (state: { mail: MailState }) => state.mail.accounts
+const selectCurrentAccountId = (state: { mail: MailState }) => state.mail.currentAccountId
+const selectCurrentFolderId = (state: { mail: MailState }) => state.mail.currentFolderId
+const selectMessages = (state: { mail: MailState }) => state.mail.messages
+const selectFolders = (state: { mail: MailState }) => state.mail.folders
+const selectThreads = (state: { mail: MailState }) => state.mail.threads
+const selectCurrentThreadId = (state: { mail: MailState }) => state.mail.currentThreadId
+const selectAliases = (state: { mail: MailState }) => state.mail.aliases
+
+// Memoized selectors
+export const selectMailAccounts = createSelector(
+  [selectAccounts],
+  (accounts) => accounts
+)
+
+export const selectCurrentAccount = createSelector(
+  [selectAccounts, selectCurrentAccountId],
+  (accounts, currentAccountId) =>
+    accounts.find(account => account.id === currentAccountId) || null
+)
+
+export const selectCurrentMessages = createSelector(
+  [selectMessages, selectCurrentAccountId, selectCurrentFolderId],
+  (messages, currentAccountId, currentFolderId) => {
+    if (!currentAccountId) return []
+    const key = `${currentAccountId}:${currentFolderId || 'inbox'}`
+    return messages[key] || []
+  }
+)
+
+export const selectCurrentFolders = createSelector(
+  [selectFolders, selectCurrentAccountId],
+  (folders, currentAccountId) =>
+    currentAccountId ? folders[currentAccountId] || [] : []
+)
+
+export const selectCurrentThread = createSelector(
+  [selectThreads, selectCurrentThreadId],
+  (threads, currentThreadId) =>
+    currentThreadId ? threads[currentThreadId] : null
+)
+
+export const selectEmailAliases = createSelector(
+  [selectAliases, selectCurrentAccountId],
+  (aliases, currentAccountId) =>
+    currentAccountId ? aliases[currentAccountId] || [] : []
+)
+
+// Simple selectors that don't need memoization
 export const selectMailSyncStatus = (state: { mail: MailState }) => state.mail.syncStatus
 export const selectIsLoadingMail = (state: { mail: MailState }) => 
   state.mail.isLoading || state.mail.isLoadingMessages || state.mail.isLoadingAccounts || state.mail.isLoadingThreads
 export const selectMailError = (state: { mail: MailState }) => state.mail.error
-
-// New selectors for advanced features
 export const selectUnifiedMessages = (state: { mail: MailState }) => state.mail.unifiedMessages
 export const selectSmartMailboxes = (state: { mail: MailState }) => state.mail.smartMailboxes
 export const selectMessageThreads = (state: { mail: MailState }) => state.mail.threads
-export const selectCurrentThread = (state: { mail: MailState }) => {
-  const { threads, currentThreadId } = state.mail
-  return currentThreadId ? threads[currentThreadId] : null
-}
 export const selectScheduledMessages = (state: { mail: MailState }) => state.mail.scheduledMessages
-export const selectEmailAliases = (state: { mail: MailState }) => {
-  const { aliases, currentAccountId } = state.mail
-  return currentAccountId ? aliases[currentAccountId] || [] : []
-}
 export const selectViewMode = (state: { mail: MailState }) => state.mail.viewMode
 export const selectPreviewPane = (state: { mail: MailState }) => state.mail.previewPane
 export const selectIdleStatus = (state: { mail: MailState }) => state.mail.isIdleActive
-export const selectSmartMailboxMessages = (criteria: string) => (state: { mail: MailState }) => {
-  return state.mail.messages[`smart:${criteria}`] || []
-}
+
+// Factory selector for smart mailbox messages
+export const selectSmartMailboxMessages = (criteria: string) =>
+  createSelector(
+    [selectMessages],
+    (messages) => messages[`smart:${criteria}`] || []
+  )
+
+// Additional memoized selectors for better performance
+export const selectUnreadMessagesCount = createSelector(
+  [selectCurrentMessages],
+  (messages) => messages.filter(message => !message.flags.isRead).length
+)
+
+export const selectStarredMessages = createSelector(
+  [selectCurrentMessages],
+  (messages) => messages.filter(message => message.flags.isStarred)
+)
+
+export const selectMessagesByThread = createSelector(
+  [selectCurrentMessages],
+  (messages) => messages.reduce((acc, message) => {
+    const threadId = message.threadId || message.id
+    if (!acc[threadId]) acc[threadId] = []
+    acc[threadId].push(message)
+    return acc
+  }, {} as Record<string, EmailMessage[]>)
+)
+
+export const selectSelectedMessages = createSelector(
+  [selectCurrentMessages, (state: { mail: MailState }) => state.mail.selectedMessageIds],
+  (messages, selectedIds) => 
+    messages.filter(message => selectedIds.includes(message.id))
+)
+
+export const selectFolderUnreadCounts = createSelector(
+  [selectMessages, selectCurrentAccountId],
+  (messages, currentAccountId) => {
+    if (!currentAccountId) return {}
+    
+    return Object.keys(messages)
+      .filter(key => key.startsWith(`${currentAccountId}:`))
+      .reduce((acc, key) => {
+        const folderId = key.split(':')[1]
+        const folderMessages = messages[key] || []
+        acc[folderId] = folderMessages.filter(msg => !msg.flags.isRead).length
+        return acc
+      }, {} as Record<string, number>)
+  }
+)
+
+export const selectRecentMessages = createSelector(
+  [selectCurrentMessages],
+  (messages) => {
+    const now = new Date()
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+    return messages.filter(message => 
+      new Date(message.date) > oneDayAgo
+    ).sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    )
+  }
+)
 
 export default mailSlice.reducer

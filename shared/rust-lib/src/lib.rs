@@ -19,6 +19,7 @@ pub mod calendar;
 pub mod search;
 pub mod storage;
 pub mod transports;
+pub mod database;
 // pub mod ai; // Temporarily disabled for audit
 
 // NAPI bindings

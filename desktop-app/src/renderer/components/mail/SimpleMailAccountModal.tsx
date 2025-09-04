@@ -71,28 +71,41 @@ export const SimpleMailAccountModal: React.FC<SimpleMailAccountModalProps> = ({
     setError('');
 
     try {
-      // Call the mail API to add account
-      if (window.flowDesk?.mail) {
-        const account = await window.flowDesk.mail.addAccount({
-          email: formData.email,
-          password: formData.password,
-          displayName: formData.displayName || formData.email
-        });
-        
-        console.log('Mail account added:', account);
-        onSuccess?.(account);
-        
-        // Reset form
-        setFormData({
-          email: '',
-          password: '',
-          displayName: ''
-        });
-        
-        handleClose();
-      } else {
-        throw new Error('Mail API not available');
+      // Check if email provider is supported
+      const providerInfo = await window.flowDesk?.simpleMail?.detectEmailProvider(formData.email);
+      
+      if (!providerInfo) {
+        throw new Error('Email provider not supported. Supported providers: Gmail, Outlook, Yahoo, iCloud, and FastMail.');
       }
+
+      // Test connection first
+      const connectionTest = await window.flowDesk?.simpleMail?.testConnection(
+        formData.email,
+        formData.password
+      );
+
+      if (!connectionTest) {
+        throw new Error('Authentication failed. Please check your email and password. For Gmail and Outlook, you may need to use an app-specific password.');
+      }
+
+      // Add the account
+      const account = await window.flowDesk?.simpleMail?.addAccount({
+        email: formData.email,
+        password: formData.password,
+        displayName: formData.displayName || formData.email
+      });
+      
+      console.log('Simple mail account added:', account);
+      onSuccess?.(account);
+      
+      // Reset form
+      setFormData({
+        email: '',
+        password: '',
+        displayName: ''
+      });
+      
+      handleClose();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to add mail account');
     } finally {

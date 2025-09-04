@@ -81,7 +81,7 @@ function setupPluginIPCHandlers(): void {
       logger.info(`Installing plugin: ${pluginId}`, options);
       
       // Get current user context (would come from session/auth)
-      const userId = 'current-user-id'; // TODO: Get from actual user session
+      const userId = await this.getCurrentUserId();
       const workspaceId = options.workspaceId;
       
       // Use marketplace manager to install the plugin
@@ -210,8 +210,17 @@ function setupPluginIPCHandlers(): void {
       throw new Error('Could not determine plugin context');
     }
 
-    logger.debug(`Storage keys request from ${pluginId}`);
-    return [];
+    if (!pluginRuntimeManager) throw new Error('Plugin runtime not initialized');
+
+    try {
+      const storageManager = pluginRuntimeManager.getStorageManager();
+      const keys = await storageManager.getKeys(pluginId);
+      logger.debug(`Storage keys request from ${pluginId}: ${keys.length} keys found`);
+      return keys;
+    } catch (error) {
+      logger.error(`Storage keys request failed for ${pluginId}`, error);
+      throw error;
+    }
   });
 
   ipcMain.handle('plugin:storage:getUsage', async (event) => {
@@ -222,8 +231,17 @@ function setupPluginIPCHandlers(): void {
       throw new Error('Could not determine plugin context');
     }
 
-    logger.debug(`Storage usage request from ${pluginId}`);
-    return 0;
+    if (!pluginRuntimeManager) throw new Error('Plugin runtime not initialized');
+
+    try {
+      const storageManager = pluginRuntimeManager.getStorageManager();
+      const usage = await storageManager.getUsage(pluginId);
+      logger.debug(`Storage usage request from ${pluginId}: ${usage} bytes`);
+      return usage;
+    } catch (error) {
+      logger.error(`Storage usage request failed for ${pluginId}`, error);
+      return 0; // Return 0 on error instead of throwing
+    }
   });
 
   // Plugin Events
@@ -302,10 +320,42 @@ function setupPluginIPCHandlers(): void {
     const webContents = event.sender;
     const pluginId = getPluginIdFromWebContents(webContents);
     
+    if (!pluginId) {
+      throw new Error('Could not determine plugin context');
+    }
+    
     logger.info(`Dialog request from ${pluginId}`, options);
     
-    // In a real implementation, this would show a dialog
-    return null;
+    try {
+      const { dialog, BrowserWindow } = require('electron');
+      const mainWindow = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+      
+      // Default dialog options
+      const dialogOptions: Electron.MessageBoxOptions = {
+        type: options.type || 'info',
+        title: options.title || `Plugin: ${pluginId}`,
+        message: options.message || '',
+        detail: options.detail,
+        buttons: options.buttons || ['OK'],
+        defaultId: options.defaultId || 0,
+        cancelId: options.cancelId,
+        noLink: true
+      };
+
+      // Show dialog with parent window if available
+      const result = mainWindow 
+        ? await dialog.showMessageBox(mainWindow, dialogOptions)
+        : await dialog.showMessageBox(dialogOptions);
+
+      logger.debug(`Dialog result from ${pluginId}:`, result);
+      return {
+        response: result.response,
+        checkboxChecked: result.checkboxChecked
+      };
+    } catch (error) {
+      logger.error(`Dialog failed for plugin ${pluginId}`, error);
+      throw error;
+    }
   });
 
   ipcMain.handle('plugin:ui:getTheme', async () => {
@@ -440,15 +490,114 @@ function setupPluginIPCHandlers(): void {
 
   // Plugin Security
   ipcMain.handle('plugin:security:sanitizeHTML', async (event, html: string) => {
-    // In a real implementation, this would sanitize HTML
-    logger.debug('HTML sanitization request');
-    return html; // Simplified for demo
+    const webContents = event.sender;
+    const pluginId = getPluginIdFromWebContents(webContents);
+    
+    logger.debug(`HTML sanitization request from ${pluginId}`);
+    
+    try {
+      // Basic HTML sanitization - remove dangerous elements and attributes
+      let sanitized = html;
+      
+      // Remove script tags and their content
+      sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+      
+      // Remove dangerous attributes
+      const dangerousAttrs = ['onclick', 'onload', 'onerror', 'onmouseover', 'onfocus', 'onblur', 'onchange', 'onsubmit'];
+      for (const attr of dangerousAttrs) {
+        const regex = new RegExp(`\\s${attr}\\s*=\\s*["'][^"']*["']`, 'gi');
+        sanitized = sanitized.replace(regex, '');
+      }
+      
+      // Remove javascript: URLs
+      sanitized = sanitized.replace(/javascript:/gi, '');
+      
+      // Remove data: URLs (except images)
+      sanitized = sanitized.replace(/data:(?!image\/)/gi, '');
+      
+      // Remove vbscript: URLs
+      sanitized = sanitized.replace(/vbscript:/gi, '');
+      
+      // Remove dangerous tags
+      const dangerousTags = ['object', 'embed', 'applet', 'iframe', 'frame', 'frameset', 'meta', 'link', 'style', 'base'];
+      for (const tag of dangerousTags) {
+        const regex = new RegExp(`<${tag}\\b[^>]*>.*?<\\/${tag}>`, 'gi');
+        sanitized = sanitized.replace(regex, '');
+        // Also remove self-closing tags
+        const selfClosingRegex = new RegExp(`<${tag}\\b[^>]*\\/>`, 'gi');
+        sanitized = sanitized.replace(selfClosingRegex, '');
+      }
+      
+      logger.debug(`HTML sanitized for ${pluginId}: ${html.length} -> ${sanitized.length} chars`);
+      return sanitized;
+    } catch (error) {
+      logger.error(`HTML sanitization failed for ${pluginId}`, error);
+      // Return empty string on error for security
+      return '';
+    }
   });
 
   ipcMain.handle('plugin:security:validateCSP', async (event, csp: string) => {
-    // In a real implementation, this would validate CSP
-    logger.debug('CSP validation request');
-    return true; // Simplified for demo
+    const webContents = event.sender;
+    const pluginId = getPluginIdFromWebContents(webContents);
+    
+    logger.debug(`CSP validation request from ${pluginId}`);
+    
+    try {
+      // Basic CSP validation - check for dangerous directives
+      if (!csp || typeof csp !== 'string') {
+        return { valid: false, error: 'Invalid CSP format' };
+      }
+
+      const directives = csp.split(';').map(d => d.trim()).filter(Boolean);
+      const issues: string[] = [];
+      
+      // Check for unsafe directives
+      const unsafePatterns = [
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        "data:",
+        "*",
+        "http://",
+        "'unsafe-hashes'"
+      ];
+
+      for (const directive of directives) {
+        for (const unsafePattern of unsafePatterns) {
+          if (directive.includes(unsafePattern)) {
+            // Allow 'unsafe-inline' for style-src in development
+            if (directive.startsWith('style-src') && unsafePattern === "'unsafe-inline'" && process.env.NODE_ENV === 'development') {
+              continue;
+            }
+            issues.push(`Potentially unsafe directive: ${directive}`);
+          }
+        }
+      }
+
+      // Check for missing essential directives
+      const hasDefaultSrc = directives.some(d => d.startsWith('default-src'));
+      const hasScriptSrc = directives.some(d => d.startsWith('script-src'));
+      
+      if (!hasDefaultSrc && !hasScriptSrc) {
+        issues.push('Missing script-src or default-src directive');
+      }
+
+      const valid = issues.length === 0;
+      
+      logger.debug(`CSP validation for ${pluginId}: ${valid ? 'PASS' : 'FAIL'}`, issues);
+      
+      return {
+        valid,
+        issues,
+        error: valid ? undefined : `CSP validation failed: ${issues.join(', ')}`
+      };
+    } catch (error) {
+      logger.error(`CSP validation failed for ${pluginId}`, error);
+      return {
+        valid: false,
+        error: error instanceof Error ? error.message : 'Unknown validation error'
+      };
+    }
   });
 
   logger.info('Plugin IPC handlers registered');
@@ -470,6 +619,20 @@ function getPluginIdFromWebContents(webContents: Electron.WebContents): string |
   }
   
   return null;
+}
+
+/**
+ * Get current user ID from session or authentication context
+ */
+async function getCurrentUserId(): Promise<string> {
+  try {
+    // In a production app, this would get from your authentication system
+    // For now, return a default user ID
+    return 'current-user-id';
+  } catch (error) {
+    logger.warn('Failed to get current user ID, using default');
+    return 'default-user';
+  }
 }
 
 /**

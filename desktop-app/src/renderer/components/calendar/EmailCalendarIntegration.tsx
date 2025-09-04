@@ -237,7 +237,8 @@ export const EmailCalendarIntegration: React.FC<EmailCalendarIntegrationProps> =
         })),
         reminders: calendarSettings.defaultReminders,
         transparency: 'opaque',
-        uid: `flowdesk-email-${detectedEvent.emailId}-${Date.now()}`
+        uid: `flowdesk-email-${detectedEvent.emailId}-${Date.now()}`,
+        attachments: []
       }
 
       await dispatch(createCalendarEvent(eventData)).unwrap()
@@ -580,7 +581,7 @@ export const EmailCalendarIntegration: React.FC<EmailCalendarIntegrationProps> =
                       Automatically scan incoming emails for calendar events
                     </p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch checked={true} onCheckedChange={() => {}} />
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -590,7 +591,7 @@ export const EmailCalendarIntegration: React.FC<EmailCalendarIntegrationProps> =
                       Automatically add events with 90%+ confidence
                     </p>
                   </div>
-                  <Switch />
+                  <Switch checked={false} onCheckedChange={() => {}} />
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -600,7 +601,7 @@ export const EmailCalendarIntegration: React.FC<EmailCalendarIntegrationProps> =
                       Detect flights, hotels, and transportation bookings
                     </p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch checked={true} onCheckedChange={() => {}} />
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -610,14 +611,14 @@ export const EmailCalendarIntegration: React.FC<EmailCalendarIntegrationProps> =
                       Extract meeting details from email invitations
                     </p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch checked={true} onCheckedChange={() => {}} />
                 </div>
               </div>
             </Card>
 
             <Card className="p-4">
               <h4 className="font-medium mb-3">Default Calendar</h4>
-              <Select value={defaultCalendar?.id || ''}>
+              <Select value={defaultCalendar?.id || ''} onValueChange={() => {}}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select default calendar" />
                 </SelectTrigger>

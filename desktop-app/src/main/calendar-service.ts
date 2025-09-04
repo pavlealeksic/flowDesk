@@ -218,10 +218,20 @@ const setupCalendarIPC = (): void => {
 
       await calendarEngine.deleteAccount(accountId);
       
+      // Clean up stored credentials
+      await deleteCredentials(accountId);
+      
       // Send real-time update
       mainWindow?.webContents.send('calendar:account-deleted', { accountId });
       
-      return { success: true };
+      return { 
+        success: true, 
+        data: { 
+          accountId,
+          deletedAt: new Date().toISOString(),
+          message: 'Calendar account deleted successfully' 
+        } 
+      };
     } catch (error) {
       log.error('Error deleting calendar account:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
@@ -325,7 +335,15 @@ const setupCalendarIPC = (): void => {
       // Send real-time update
       mainWindow?.webContents.send('calendar:event-deleted', { calendarId, eventId });
       
-      return { success: true };
+      return { 
+        success: true, 
+        data: { 
+          calendarId,
+          eventId,
+          deletedAt: new Date().toISOString(),
+          message: 'Calendar event deleted successfully' 
+        } 
+      };
     } catch (error) {
       log.error('Error deleting calendar event:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };

@@ -3,6 +3,9 @@
  * Handles plugin loading, lifecycle, and communication
  */
 
+import Store from 'electron-store';
+import log from 'electron-log';
+
 export interface Plugin {
   id: string;
   name: string;
@@ -43,6 +46,39 @@ export class PluginManager {
   private plugins: Map<string, Plugin> = new Map();
   private loadedPlugins: Map<string, any> = new Map();
   private eventHandlers: Map<string, Function[]> = new Map();
+  private configStore: Store;
+  private pluginConfigs: Map<string, Map<string, any>> = new Map();
+
+  constructor() {
+    this.configStore = new Store({
+      name: 'plugin-configurations'
+    });
+    this.loadPluginConfigs();
+  }
+
+  private loadPluginConfigs(): void {
+    try {
+      const savedConfigs = this.configStore.get('pluginConfigs', {}) as Record<string, Record<string, any>>;
+      for (const [pluginId, config] of Object.entries(savedConfigs)) {
+        this.pluginConfigs.set(pluginId, new Map(Object.entries(config)));
+      }
+      log.info(`Loaded configurations for ${Object.keys(savedConfigs).length} plugins`);
+    } catch (error) {
+      log.error('Failed to load plugin configurations:', error);
+    }
+  }
+
+  private savePluginConfigs(): void {
+    try {
+      const configsToSave: Record<string, Record<string, any>> = {};
+      for (const [pluginId, configMap] of this.pluginConfigs) {
+        configsToSave[pluginId] = Object.fromEntries(configMap);
+      }
+      this.configStore.set('pluginConfigs', configsToSave);
+    } catch (error) {
+      log.error('Failed to save plugin configurations:', error);
+    }
+  }
 
   async initialize(): Promise<void> {
     console.log('Plugin manager initialized');
@@ -155,10 +191,21 @@ export class PluginManager {
           console.log(`Plugin ${pluginId} registered command: ${name}`);
         },
         getConfig: (key: string) => {
-          return null; // Mock implementation
+          const pluginConfig = this.pluginConfigs.get(pluginId);
+          if (!pluginConfig) {
+            return null;
+          }
+          return pluginConfig.get(key) || null;
         },
         setConfig: (key: string, value: any) => {
-          console.log(`Plugin ${pluginId} set config ${key}:`, value);
+          let pluginConfig = this.pluginConfigs.get(pluginId);
+          if (!pluginConfig) {
+            pluginConfig = new Map();
+            this.pluginConfigs.set(pluginId, pluginConfig);
+          }
+          pluginConfig.set(key, value);
+          this.savePluginConfigs();
+          log.debug(`Plugin ${pluginId} set config ${key}:`, value);
         }
       },
       events: {

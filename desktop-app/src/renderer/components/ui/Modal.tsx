@@ -265,20 +265,15 @@ const Modal = forwardRef<HTMLDivElement, ModalProps>(
         >
           {/* Close Button */}
           {showCloseButton && (
-            <button
+            <Button
               data-close-button
               onClick={handleCloseClick}
-              className={cn(
-                'absolute top-4 right-4 p-1 rounded-md',
-                'hover:bg-accent focus:bg-accent',
-                'transition-colors',
-                getFocusClasses('button')
-              )}
+              variant="ghost"
+              size="icon"
+              className="absolute top-4 right-4"
               aria-label="Close dialog"
-              type="button"
-            >
-              <X className="h-5 w-5" aria-hidden="true" />
-            </button>
+              leftIcon={<X className="h-4 w-4" />}
+            />
           )}
 
           {/* Header */}

@@ -9,6 +9,7 @@
 
 import { EventEmitter } from 'events';
 import { ipcMain, BrowserWindow, app, dialog } from 'electron';
+import log from 'electron-log';
 import { createTypedStore, TypedStore } from '../types/store';
 import { machineId } from 'node-machine-id';
 import type { DeviceInfo, SyncResult, WorkspaceConfig } from '@flow-desk/shared';
@@ -140,7 +141,7 @@ export class ConfigSyncManager extends EventEmitter {
       this.broadcastToRenderer('config-sync:initialized');
       
     } catch (error) {
-      console.error('Failed to initialize ConfigSyncManager:', error);
+      log.error('Failed to initialize ConfigSyncManager:', error);
       this.emit('error', error);
       throw error;
     }
@@ -158,7 +159,7 @@ export class ConfigSyncManager extends EventEmitter {
       await this.syncEngine.updateConfig(config);
       this.broadcastToRenderer('config-sync:config-updated', config);
     } catch (error) {
-      console.error('Failed to update config:', error);
+      log.error('Failed to update config:', error);
       throw error;
     }
   }
@@ -182,7 +183,7 @@ export class ConfigSyncManager extends EventEmitter {
       
       return result;
     } catch (error) {
-      console.error('Sync failed:', error);
+      log.error('Sync failed:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
       this.broadcastToRenderer('config-sync:sync-failed', errorMessage);
       throw error;
@@ -244,7 +245,7 @@ export class ConfigSyncManager extends EventEmitter {
       await this.syncEngine.exportConfig(result.filePath, 'Manual export');
       return result.filePath;
     } catch (error) {
-      console.error('Export failed:', error);
+      log.error('Export failed:', error);
       throw error;
     }
   }
@@ -276,7 +277,7 @@ export class ConfigSyncManager extends EventEmitter {
       
       return config;
     } catch (error) {
-      console.error('Import failed:', error);
+      log.error('Import failed:', error);
       throw error;
     }
   }
@@ -316,7 +317,7 @@ export class ConfigSyncManager extends EventEmitter {
       this.broadcastToRenderer('config-sync:device-paired', device);
       return device;
     } catch (error) {
-      console.error('Device pairing failed:', error);
+      log.error('Device pairing failed:', error);
       throw error;
     }
   }
@@ -505,7 +506,7 @@ export class ConfigSyncManager extends EventEmitter {
     });
 
     this.syncEngine.on('error', (error) => {
-      console.error('Sync engine error:', error);
+      log.error('Sync engine error:', error);
       this.broadcastToRenderer('config-sync:error', error.message);
     });
   }
@@ -579,12 +580,12 @@ export class ConfigSyncManager extends EventEmitter {
       try {
         await this.performSync();
       } catch (error) {
-        console.error('Auto-sync failed:', error);
+        log.error('Auto-sync failed:', error);
       }
     }, intervalMs);
     
     if (this.options.debug) {
-      console.log(`Auto-sync started with ${intervalMinutes} minute interval`);
+      log.info(`Auto-sync started with ${intervalMinutes} minute interval`);
     }
   }
 
@@ -594,7 +595,7 @@ export class ConfigSyncManager extends EventEmitter {
       this.syncInterval = undefined;
       
       if (this.options.debug) {
-        console.log('Auto-sync stopped');
+        log.info('Auto-sync stopped');
       }
     }
   }

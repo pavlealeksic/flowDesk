@@ -55,7 +55,12 @@ function AppContent() {
       workspaceCount: workspaceValues.length,
       workspaces: workspaceValues.map(w => ({ id: w.id, name: w.name }))
     })
-    return workspaceValues
+    // Convert ISO strings back to Date objects for compatibility with Workspace interface
+    return workspaceValues.map(workspace => ({
+      ...workspace,
+      created: new Date(workspace.created),
+      lastAccessed: new Date(workspace.lastAccessed)
+    }))
   }, (left, right) => JSON.stringify(left) === JSON.stringify(right)) as Workspace[]
   
   const currentWorkspace = useMemo(() => {

@@ -41,11 +41,7 @@ export type {
   BaseSyncTransport,
   SyncTransportConfig,
   SyncResult,
-  AutomationConfigs,
-  AutomationRule,
-  AutomationTrigger as ConfigAutomationTrigger,
-  AutomationCondition as ConfigAutomationCondition,
-  AutomationAction as ConfigAutomationAction,
+  // Automation types removed to simplify the app
   NotificationConfigs,
   NotificationRule as ConfigNotificationRule
 } from './config';
@@ -75,21 +71,7 @@ export type {
   NotificationDeliveryLog
 } from './notifications';
 
-// Export specific types from automations
-export type {
-  AutomationTriggerType,
-  AutomationActionType,
-  AutomationCondition,
-  AutomationAction,
-  AutomationTrigger,
-  AutomationExecution,
-  AutomationExecutionStatus,
-  AutomationTest,
-  AutomationVariable,
-  AutomationVariableContext,
-  AutomationRecipe,
-  ConditionOperator
-} from './automations';
+// Automation types removed to simplify the app
 
 // Legacy types have been removed to prevent duplicate exports
 // Import types directly from their respective modules:

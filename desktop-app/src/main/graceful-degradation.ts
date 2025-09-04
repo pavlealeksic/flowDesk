@@ -10,6 +10,11 @@ import { app, BrowserWindow } from 'electron';
 import log from 'electron-log';
 import path from 'path';
 import fs from 'fs/promises';
+import { RealEmailService, SendEmailOptions } from './real-email-service';
+import { GoogleCalendarService } from './google-calendar-service';
+import * as CryptoJS from 'crypto-js';
+import * as crypto from 'crypto';
+import { net } from 'electron';
 
 // Types for degradation modes
 export enum DegradationLevel {
@@ -159,9 +164,13 @@ class OfflineStorageManager {
 // Fallback implementations
 class FallbackImplementations {
   private offlineStorage: OfflineStorageManager;
+  private emailService: RealEmailService;
+  private calendarService: GoogleCalendarService;
 
   constructor(offlineStorage: OfflineStorageManager) {
     this.offlineStorage = offlineStorage;
+    this.emailService = new RealEmailService();
+    this.calendarService = new GoogleCalendarService();
   }
 
   // Fallback mail operations
@@ -276,21 +285,39 @@ class FallbackImplementations {
     return results.sort((a, b) => (b.relevance || 0) - (a.relevance || 0));
   }
 
-  // Fallback crypto operations using Web Crypto API
+  // Fallback crypto operations using Web Crypto API and crypto-js
   public async fallbackEncryption(data: string, key: string): Promise<string> {
-    log.info('Using fallback JavaScript encryption');
+    log.info('Using fallback JavaScript encryption with crypto-js');
     
     try {
-      // Simple base64 encoding as minimal fallback
-      // In production, you'd use proper Web Crypto API
-      const encoded = Buffer.from(JSON.stringify({
+      // Use crypto-js for proper encryption
+      const derivedKey = CryptoJS.PBKDF2(key, 'flow-desk-salt', {
+        keySize: 256/32,
+        iterations: 100000
+      });
+      
+      // Generate a random IV for each encryption
+      const iv = CryptoJS.lib.WordArray.random(128/8);
+      
+      // Encrypt the data
+      const encrypted = CryptoJS.AES.encrypt(JSON.stringify({
         data,
         encrypted: true,
         fallback: true,
         timestamp: new Date().toISOString()
-      })).toString('base64');
+      }), derivedKey, {
+        iv: iv,
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7
+      });
       
-      return encoded;
+      // Combine IV and encrypted data
+      const combined = {
+        iv: iv.toString(CryptoJS.enc.Hex),
+        data: encrypted.toString()
+      };
+      
+      return Buffer.from(JSON.stringify(combined)).toString('base64');
     } catch (error) {
       log.error('Fallback encryption failed:', error);
       throw new Error('Encryption not available');
@@ -298,17 +325,44 @@ class FallbackImplementations {
   }
 
   public async fallbackDecryption(encryptedData: string, key: string): Promise<string> {
-    log.info('Using fallback JavaScript decryption');
+    log.info('Using fallback JavaScript decryption with crypto-js');
     
     try {
-      const decoded = Buffer.from(encryptedData, 'base64').toString();
-      const parsed = JSON.parse(decoded);
+      const decodedBase64 = Buffer.from(encryptedData, 'base64').toString();
+      const combined = JSON.parse(decodedBase64);
       
-      if (parsed.fallback && parsed.encrypted) {
-        return parsed.data;
+      // Check if it's the new encrypted format
+      if (combined.iv && combined.data) {
+        // Use crypto-js for proper decryption
+        const derivedKey = CryptoJS.PBKDF2(key, 'flow-desk-salt', {
+          keySize: 256/32,
+          iterations: 100000
+        });
+        
+        const iv = CryptoJS.enc.Hex.parse(combined.iv);
+        
+        const decrypted = CryptoJS.AES.decrypt(combined.data, derivedKey, {
+          iv: iv,
+          mode: CryptoJS.mode.CBC,
+          padding: CryptoJS.pad.Pkcs7
+        });
+        
+        const decryptedString = decrypted.toString(CryptoJS.enc.Utf8);
+        const parsed = JSON.parse(decryptedString);
+        
+        if (parsed.fallback && parsed.encrypted) {
+          return parsed.data;
+        }
+        
+        return decryptedString;
+      } else {
+        // Handle old format (base64 only)
+        const parsed = combined;
+        if (parsed.fallback && parsed.encrypted) {
+          return parsed.data;
+        }
+        return decodedBase64;
       }
-      
-      return decoded;
     } catch (error) {
       log.error('Fallback decryption failed:', error);
       throw new Error('Decryption not available');
@@ -331,10 +385,34 @@ class FallbackImplementations {
       try {
         const draft = await this.offlineStorage.retrieveData(key);
         if (draft && draft.status === 'queued') {
-          // In production, you would actually send the email here
           log.info(`Processing queued email: ${key}`);
-          await this.offlineStorage.clearData(key);
-          processed++;
+          
+          // Actually send the email using the real email service
+          try {
+            const emailOptions: SendEmailOptions = {
+              to: draft.message.to || [],
+              cc: draft.message.cc,
+              bcc: draft.message.bcc,
+              subject: draft.message.subject,
+              text: draft.message.text,
+              html: draft.message.html,
+              attachments: draft.message.attachments
+            };
+            
+            const messageId = await this.emailService.sendEmail(draft.accountId, emailOptions);
+            log.info(`Successfully sent queued email ${key}, message ID: ${messageId}`);
+            
+            await this.offlineStorage.clearData(key);
+            processed++;
+          } catch (sendError) {
+            log.error(`Failed to send queued email ${key}:`, sendError);
+            // Update draft status to failed for retry later
+            draft.status = 'failed';
+            draft.lastError = sendError instanceof Error ? sendError.message : 'Unknown error';
+            draft.retryCount = (draft.retryCount || 0) + 1;
+            await this.offlineStorage.storeData(key, draft);
+            failed++;
+          }
         }
       } catch (error) {
         log.error(`Failed to process draft ${key}:`, error);
@@ -347,10 +425,48 @@ class FallbackImplementations {
       try {
         const event = await this.offlineStorage.retrieveData(key);
         if (event && event.status === 'pending_sync') {
-          // In production, you would sync the event with the server
           log.info(`Processing local event: ${key}`);
-          await this.offlineStorage.clearData(key);
-          processed++;
+          
+          // Actually sync the event with the calendar service
+          try {
+            // Get calendar account associated with this event
+            const calendarAccounts = this.calendarService.getAccounts();
+            const account = calendarAccounts.find(acc => 
+              acc.id === event.accountId || acc.email === event.accountEmail
+            );
+            
+            if (account) {
+              const eventId = await this.calendarService.createEvent(
+                account.id,
+                event.calendarId,
+                event.title,
+                new Date(event.startTime),
+                new Date(event.endTime),
+                event.description,
+                event.location,
+                event.attendees || []
+              );
+              
+              log.info(`Successfully synced local event ${key}, calendar event ID: ${eventId}`);
+              await this.offlineStorage.clearData(key);
+              processed++;
+            } else {
+              log.warn(`No calendar account found for event ${key}`);
+              // Keep the event for later retry
+              event.retryCount = (event.retryCount || 0) + 1;
+              event.lastError = 'No calendar account found';
+              await this.offlineStorage.storeData(key, event);
+              failed++;
+            }
+          } catch (syncError) {
+            log.error(`Failed to sync local event ${key}:`, syncError);
+            // Update event status for retry later
+            event.status = 'sync_failed';
+            event.lastError = syncError instanceof Error ? syncError.message : 'Unknown error';
+            event.retryCount = (event.retryCount || 0) + 1;
+            await this.offlineStorage.storeData(key, event);
+            failed++;
+          }
         }
       } catch (error) {
         log.error(`Failed to process event ${key}:`, error);
@@ -435,22 +551,147 @@ export class GracefulDegradationManager extends EventEmitter {
   }
 
   private async checkServiceHealth(serviceId: string): Promise<boolean> {
-    // In production, this would check actual service health
-    // For now, simulate service availability
-    switch (serviceId) {
-      case 'mail-sync':
-      case 'calendar-sync':
-      case 'unified-search':
-        // These services might be more prone to failure
-        return Math.random() > 0.1; // 90% availability
-      case 'mail-send':
-      case 'calendar-create':
-      case 'encryption':
-        // Critical services should be more reliable
-        return Math.random() > 0.05; // 95% availability
-      default:
-        return true;
+    try {
+      switch (serviceId) {
+        case 'mail-sync':
+        case 'mail-send':
+          return await this.checkEmailServiceHealth();
+        case 'mail-search':
+          return await this.checkEmailSearchHealth();
+        case 'calendar-sync':
+        case 'calendar-create':
+          return await this.checkCalendarServiceHealth();
+        case 'unified-search':
+          return await this.checkUnifiedSearchHealth();
+        case 'encryption':
+          return await this.checkEncryptionHealth();
+        default:
+          return true;
+      }
+    } catch (error) {
+      log.error(`Health check failed for service ${serviceId}:`, error);
+      return false;
     }
+  }
+  
+  private async checkEmailServiceHealth(): Promise<boolean> {
+    try {
+      // Check if we have any configured email accounts
+      const accounts = await this.emailService.getAccounts();
+      if (accounts.length === 0) {
+        return false; // No accounts configured
+      }
+      
+      // Test connection for at least one account
+      for (const account of accounts.slice(0, 1)) { // Test first account only
+        try {
+          const connectionTest = await this.emailService.testAccountConnection(account.id);
+          if (connectionTest.imap || connectionTest.smtp) {
+            return true; // At least one connection type working
+          }
+        } catch (error) {
+          log.warn(`Email account ${account.id} connection test failed:`, error);
+          continue; // Try next account
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      log.error('Email service health check failed:', error);
+      return false;
+    }
+  }
+  
+  private async checkEmailSearchHealth(): Promise<boolean> {
+    try {
+      const accounts = await this.emailService.getAccounts();
+      if (accounts.length === 0) return false;
+      
+      // Test search capability on first account
+      const account = accounts[0];
+      await this.emailService.searchMessages(account.id, 'test', 'INBOX');
+      return true;
+    } catch (error) {
+      log.warn('Email search health check failed:', error);
+      return false;
+    }
+  }
+  
+  private async checkCalendarServiceHealth(): Promise<boolean> {
+    try {
+      const accounts = this.calendarService.getAccounts();
+      if (accounts.length === 0) {
+        return false; // No calendar accounts configured
+      }
+      
+      // Test calendar account health
+      for (const account of accounts.slice(0, 1)) { // Test first account only
+        try {
+          const healthCheck = await this.calendarService.checkAccountHealth(account.id);
+          if (healthCheck.isHealthy) {
+            return true;
+          }
+        } catch (error) {
+          log.warn(`Calendar account ${account.id} health check failed:`, error);
+          continue;
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      log.error('Calendar service health check failed:', error);
+      return false;
+    }
+  }
+  
+  private async checkUnifiedSearchHealth(): Promise<boolean> {
+    try {
+      // Check if basic search dependencies are available
+      const emailHealthy = await this.checkEmailSearchHealth();
+      const calendarHealthy = await this.checkCalendarServiceHealth();
+      
+      // Unified search is healthy if at least one underlying service is healthy
+      return emailHealthy || calendarHealthy;
+    } catch (error) {
+      log.error('Unified search health check failed:', error);
+      return false;
+    }
+  }
+  
+  private async checkEncryptionHealth(): Promise<boolean> {
+    try {
+      // Test encryption/decryption capability
+      const testData = 'health-check-test-data';
+      const testKey = 'test-key';
+      
+      const encrypted = await this.fallbackEncryption(testData, testKey);
+      const decrypted = await this.fallbackDecryption(encrypted, testKey);
+      
+      return decrypted === testData;
+    } catch (error) {
+      log.error('Encryption health check failed:', error);
+      return false;
+    }
+  }
+  
+  private async checkNetworkConnectivity(url: string = 'https://www.google.com'): Promise<boolean> {
+    return new Promise((resolve) => {
+      const request = net.request({
+        method: 'HEAD',
+        url: url,
+        timeout: 5000
+      });
+      
+      request.on('response', (response) => {
+        resolve(response.statusCode >= 200 && response.statusCode < 300);
+      });
+      
+      request.on('error', () => {
+        resolve(false);
+      });
+      
+      request.end();
+    });
   }
 
   private calculateDegradationLevel(serviceStatuses: { [key: string]: ServiceStatus }): DegradationLevel {

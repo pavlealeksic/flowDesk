@@ -17,7 +17,7 @@ export class DesktopNotificationManager {
   private mainWindow?: BrowserWindow;
 
   constructor(mainWindow?: BrowserWindow) {
-    this.mainWindow = mainWindow;
+    this.mainWindow = mainWindow || undefined;
     this.setupNotificationHandlers();
   }
 
@@ -33,35 +33,53 @@ export class DesktopNotificationManager {
 
       // On macOS, check notification permissions
       if (process.platform === 'darwin') {
-        const { systemPreferences } = require('electron');
-        const permission = systemPreferences.getNotificationPermission?.();
-        
-        if (permission) {
-          log.info(`Notification permission status: ${permission}`);
-          if (permission === 'denied') {
-            log.warn('Notification permissions denied. Users can enable them in System Preferences.');
+        try {
+          const { systemPreferences } = require('electron');
+          const getNotificationPermission = (systemPreferences as any).getNotificationPermission;
+          
+          if (typeof getNotificationPermission === 'function') {
+            const permission = getNotificationPermission();
+            log.info(`Notification permission status: ${permission}`);
+            if (permission === 'denied') {
+              log.warn('Notification permissions denied. Users can enable them in System Preferences.');
+            }
+          } else {
+            log.info('getNotificationPermission not available on this Electron version');
           }
+        } catch (permError) {
+          log.warn('Failed to check macOS notification permissions:', permError);
+          // Continue anyway - basic notifications might still work
         }
       }
       
       log.info('Desktop notification manager initialized successfully');
     } catch (error) {
       log.error('Failed to initialize notification manager:', error);
-      throw error;
+      // Don't throw - continue without advanced notification features
+      log.info('Continuing with basic notification support');
     }
   }
 
   private setupNotificationHandlers(): void {
-    // Check and request notification permissions
+    // Check notification permissions
     try {
       if (process.platform === 'darwin') {
         const { systemPreferences } = require('electron');
         
         // Check if we have notification permissions
-        const notificationPermission = systemPreferences.getNotificationPermission?.();
-        if (notificationPermission && notificationPermission !== 'granted') {
-          log.info('Requesting notification permissions...');
-          // Note: On macOS, permissions are requested when first notification is shown
+        try {
+          const getNotificationPermission = (systemPreferences as any).getNotificationPermission;
+          if (typeof getNotificationPermission === 'function') {
+            const notificationPermission = getNotificationPermission();
+            log.info(`Notification permission status: ${notificationPermission}`);
+            if (notificationPermission === 'denied') {
+              log.warn('Notification permissions denied. Notifications will not be shown.');
+              return;
+            }
+          }
+        } catch (permError) {
+          log.warn('Failed to check notification permissions:', permError);
+          // Continue anyway - permissions might still work
         }
       }
       
@@ -74,6 +92,7 @@ export class DesktopNotificationManager {
       log.info('Notification system initialized successfully');
     } catch (error) {
       log.warn('Failed to setup notification handlers:', error);
+      // Don't throw - continue without notifications
     }
   }
 
@@ -87,12 +106,20 @@ export class DesktopNotificationManager {
 
       // Check permissions on macOS
       if (process.platform === 'darwin') {
-        const { systemPreferences } = require('electron');
-        const permission = systemPreferences.getNotificationPermission?.();
-        
-        if (permission === 'denied') {
-          log.warn('Notification permissions denied, skipping notification');
-          return;
+        try {
+          const { systemPreferences } = require('electron');
+          const getNotificationPermission = (systemPreferences as any).getNotificationPermission;
+          
+          if (typeof getNotificationPermission === 'function') {
+            const permission = getNotificationPermission();
+            if (permission === 'denied') {
+              log.warn('Notification permissions denied, skipping notification');
+              return;
+            }
+          }
+        } catch (permError) {
+          log.warn('Failed to check notification permissions, attempting to show notification anyway:', permError);
+          // Continue with showing notification - it might still work
         }
       }
 
@@ -188,8 +215,19 @@ export class DesktopNotificationManager {
   getNotificationPermissionStatus(): 'granted' | 'denied' | 'unknown' | 'not-determined' {
     try {
       if (process.platform === 'darwin') {
-        const { systemPreferences } = require('electron');
-        return systemPreferences.getNotificationPermission?.() || 'unknown';
+        try {
+          const { systemPreferences } = require('electron');
+          const getNotificationPermission = (systemPreferences as any).getNotificationPermission;
+          if (typeof getNotificationPermission === 'function') {
+            const permission = getNotificationPermission();
+            return permission || 'unknown';
+          } else {
+            return 'unknown';
+          }
+        } catch (macError) {
+          log.warn('Failed to get macOS notification permission status:', macError);
+          return 'unknown';
+        }
       }
       // On Windows and Linux, permissions are typically granted by default
       return 'granted';

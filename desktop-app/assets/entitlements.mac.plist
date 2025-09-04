@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <!-- Enable hardened runtime -->
+    <key>com.apple.security.cs.hardened-runtime</key>
+    <true/>
+    
+    <!-- Allow unsigned executable memory for Node.js JIT -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    
+    <!-- Allow JIT compilation -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    
+    <!-- Network access for email and calendar sync -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    
+    <!-- Outgoing network connections -->
+    <key>com.apple.security.network.server</key>
+    <true/>
+    
+    <!-- File system access for user documents -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    
+    <!-- Allow loading unsigned libraries (required for native modules) -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    
+    <!-- Camera access (for future features) -->
+    <key>com.apple.security.device.camera</key>
+    <true/>
+    
+    <!-- Microphone access (for future features) -->
+    <key>com.apple.security.device.microphone</key>
+    <true/>
+    
+    <!-- Keychain access for secure credential storage -->
+    <key>keychain-access-groups</key>
+    <array>
+      <string>$(AppIdentifierPrefix)com.flowdesk.desktop</string>
+    </array>
+    
+    <!-- Location access (for calendar location features) -->
+    <key>com.apple.security.personal-information.location</key>
+    <true/>
+    
+    <!-- Contacts access (for email address completion) -->
+    <key>com.apple.security.personal-information.addressbook</key>
+    <true/>
+    
+    <!-- Calendar access -->
+    <key>com.apple.security.personal-information.calendars</key>
+    <true/>
+    
+    <!-- Allow dylib loading -->
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+    
+    <!-- Enable automatic app updates -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+  </dict>
+</plist>

@@ -250,8 +250,8 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ className }) => {
             variant="outline" 
             onClick={() => activeTab === 'installed' ? loadInstalledPlugins() : loadAvailablePlugins()}
             disabled={isLoading}
+            leftIcon={<RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />}
           >
-            <RefreshCw className={cn('h-4 w-4 mr-2', isLoading && 'animate-spin')} />
             Refresh
           </Button>
         </div>

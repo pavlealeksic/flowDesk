@@ -157,10 +157,22 @@ metrics-exporter-prometheus = "0.12"
 keyring = "2.3"
 secrecy = { version = "0.8", features = ["serde"] }
 
+# macOS keychain support
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "2.9"
+
 # Additional utilities
 memchr = "2.7"
 nom = "7.1"
 pin-project-lite = "0.2"
+
+# Text extraction dependencies
+lopdf = "0.32"  # PDF text extraction
+docx-rs = "0.4"  # Word document extraction
+zip = "2.1"     # ZIP file handling for docx
+xml = "0.8"     # XML parsing
+quick-xml = "0.31"  # Fast XML parsing
+encoding_rs = "0.8"  # Text encoding detection
 
 # AI and ML dependencies - temporarily simplified to fix compilation
 async-openai = "0.24"

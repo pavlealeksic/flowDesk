@@ -21,6 +21,9 @@ const useDropdown = () => {
 }
 
 export interface DropdownProps extends BaseComponentProps {
+  value?: string
+  onChange?: (value: string) => void
+  options?: Array<{ label: string; value: string }>
   onOpenChange?: (open: boolean) => void
   defaultOpen?: boolean
   modal?: boolean
@@ -28,6 +31,9 @@ export interface DropdownProps extends BaseComponentProps {
 
 export const Dropdown: React.FC<DropdownProps> = ({
   children,
+  value,
+  onChange,
+  options,
   onOpenChange,
   defaultOpen = false,
   modal = false,
@@ -67,6 +73,67 @@ export const Dropdown: React.FC<DropdownProps> = ({
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [isOpen])
+
+  // If used as a simple select with options prop, render a select dropdown
+  if (options && !children) {
+    const selectedOption = options.find(opt => opt.value === value)
+    
+    return (
+      <div className="relative" data-testid={testId}>
+        <button
+          ref={triggerRef as React.RefObject<HTMLButtonElement>}
+          className={cn(
+            'inline-flex items-center justify-between gap-2 w-full',
+            'px-4 py-2 text-sm font-medium',
+            'bg-background border border-border rounded-md',
+            'hover:bg-accent hover:text-accent-foreground',
+            'disabled:opacity-50 disabled:pointer-events-none',
+            ...focusRing()
+          )}
+          onClick={() => handleOpenChange(!isOpen)}
+          aria-expanded={isOpen}
+          aria-haspopup="true"
+        >
+          <span>{selectedOption?.label || 'Select an option...'}</span>
+          <ChevronDown className={cn(
+            'h-4 w-4 transition-transform duration-150',
+            isOpen && 'rotate-180'
+          )} />
+        </button>
+        
+        {isOpen && (
+          <div
+            className={cn(
+              'absolute z-50 mt-1 w-full rounded-md border bg-popover p-1 text-popover-foreground shadow-md',
+              'animate-in fade-in-0 zoom-in-95 slide-in-from-top-2'
+            )}
+            data-dropdown-content
+          >
+            {options.map((option) => (
+              <div
+                key={option.value}
+                className={cn(
+                  'relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none',
+                  'transition-colors duration-150',
+                  'hover:bg-accent hover:text-accent-foreground',
+                  value === option.value && 'bg-accent text-accent-foreground'
+                )}
+                onClick={() => {
+                  onChange?.(option.value)
+                  handleOpenChange(false)
+                }}
+              >
+                <span className="flex-1">{option.label}</span>
+                {value === option.value && (
+                  <Check className="ml-2 h-4 w-4" />
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <DropdownContext.Provider

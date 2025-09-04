@@ -29,8 +29,7 @@ export interface WorkspaceConfig {
   ui: UICustomizations;
   /** Sync settings */
   sync: SyncSettings;
-  /** Automation rules */
-  automations: AutomationConfigs;
+  /** Automation functionality removed to simplify the app */
   /** Notification rules */
   notifications: NotificationConfigs;
   /** Additional workspace settings */
@@ -719,87 +718,7 @@ export interface BackupSettings {
   encrypt: boolean;
 }
 
-/**
- * Automation configurations
- */
-export interface AutomationConfigs {
-  /** Automation rules by ID */
-  rules: Record<string, AutomationRule>;
-  /** Global automation settings */
-  global: {
-    enabled: boolean;
-    maxExecutionsPerHour: number;
-    logLevel: 'error' | 'warn' | 'info' | 'debug';
-  };
-}
-
-/**
- * Automation rule
- */
-export interface AutomationRule {
-  /** Rule ID */
-  id: string;
-  /** Rule name */
-  name: string;
-  /** Rule description */
-  description?: string;
-  /** Whether rule is enabled */
-  enabled: boolean;
-  /** Rule trigger */
-  trigger: AutomationTrigger;
-  /** Rule conditions */
-  conditions: AutomationCondition[];
-  /** Rule actions */
-  actions: AutomationAction[];
-  /** Rule settings */
-  settings: {
-    runOnce: boolean;
-    maxExecutions?: number;
-    timeout: number;
-    retries: number;
-  };
-  /** Rule statistics */
-  stats: {
-    executions: number;
-    successes: number;
-    failures: number;
-    lastExecution?: Date;
-  };
-}
-
-/**
- * Automation trigger
- */
-export interface AutomationTrigger {
-  /** Trigger type */
-  type: string;
-  /** Trigger configuration */
-  config: Record<string, any>;
-}
-
-/**
- * Automation condition
- */
-export interface AutomationCondition {
-  /** Condition type */
-  type: string;
-  /** Condition configuration */
-  config: Record<string, any>;
-  /** Negate condition */
-  negate: boolean;
-}
-
-/**
- * Automation action
- */
-export interface AutomationAction {
-  /** Action type */
-  type: string;
-  /** Action configuration */
-  config: Record<string, any>;
-  /** Continue on error */
-  continueOnError: boolean;
-}
+// Automation interfaces removed to simplify the app
 
 /**
  * Notification configurations
@@ -1117,7 +1036,7 @@ export const WorkspaceConfigSchema = z.object({
       encrypt: z.boolean()
     })
   }),
-  automations: z.record(z.any()),
+  // automations: removed to simplify the app,
   notifications: z.record(z.any()),
   lastModified: z.object({
     timestamp: z.date(),

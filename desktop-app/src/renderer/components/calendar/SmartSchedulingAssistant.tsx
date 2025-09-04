@@ -509,7 +509,7 @@ export const SmartSchedulingAssistant: React.FC<SmartSchedulingAssistantProps> =
                     {['09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00'].map(time => (
                       <Button
                         key={time}
-                        variant={preferredTimes.includes(time) ? 'default' : 'outline'}
+                        variant={preferredTimes.includes(time) ? 'primary' : 'outline'}
                         size="sm"
                         className="text-xs"
                       >

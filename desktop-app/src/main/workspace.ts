@@ -3,7 +3,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, BrowserView, session, shell } from 'electron';
 import log from 'electron-log';
 import { rustEngineIntegration } from '../lib/rust-integration/rust-engine-integration';
 
@@ -72,6 +72,8 @@ export class WorkspaceManager extends EventEmitter {
   private workspaces: Map<string, Workspace> = new Map();
   private currentWorkspace?: string;
   private initialized: boolean = false;
+  private browserViews: Map<string, BrowserView> = new Map();
+  private workspaceSessions: Map<string, Electron.Session> = new Map();
 
   constructor() {
     super();
@@ -357,13 +359,47 @@ export class WorkspaceManager extends EventEmitter {
     }
   }
 
-  async loadService(workspaceId: string, serviceId: string, mainWindow?: BrowserWindow): Promise<void> {
+  async loadService(workspaceId: string, serviceId: string, mainWindow?: BrowserWindow): Promise<BrowserView | void> {
     const workspace = this.workspaces.get(workspaceId);
-    if (!workspace) return;
+    if (!workspace || !mainWindow) {
+      log.warn(`Cannot load service: workspace=${!!workspace}, mainWindow=${!!mainWindow}`);
+      return;
+    }
 
     const service = workspace.services.find(s => s.id === serviceId);
-    if (service) {
-      this.emit('service-load-requested', { workspace, service });
+    if (!service) {
+      log.warn(`Service not found: ${serviceId} in workspace ${workspaceId}`);
+      return;
+    }
+
+    try {
+      // Get or create workspace session for isolation
+      await this.ensureWorkspaceSession(workspace);
+
+      // Get or create browser view for service
+      let browserView = this.browserViews.get(`${workspaceId}:${serviceId}`);
+      
+      if (!browserView) {
+        browserView = await this.createServiceBrowserView(workspace, service);
+        this.browserViews.set(`${workspaceId}:${serviceId}`, browserView);
+      }
+
+      // Attach to main window and configure bounds
+      mainWindow.setBrowserView(browserView);
+      this.configureBrowserViewBounds(browserView, mainWindow);
+
+      // Load service URL if not already loaded
+      if (browserView.webContents.getURL() !== service.url) {
+        await browserView.webContents.loadURL(service.url);
+      }
+
+      this.emit('service-loaded', { workspace, service, browserView });
+      log.info(`Loaded service ${service.name} in workspace ${workspace.name}`);
+      
+      return browserView;
+    } catch (error) {
+      log.error(`Failed to load service ${service.name}:`, error);
+      this.emit('service-load-error', { workspace, service, error });
     }
   }
 
@@ -450,10 +486,182 @@ export class WorkspaceManager extends EventEmitter {
     ];
   }
 
+  private async ensureWorkspaceSession(workspace: Workspace): Promise<void> {
+    if (!this.workspaceSessions.has(workspace.id)) {
+      await this.createWorkspaceSession(workspace);
+    }
+  }
+
+  private async createWorkspaceSession(workspace: Workspace): Promise<void> {
+    const partitionName = workspace.browserIsolation === 'isolated' 
+      ? `persist:workspace-${workspace.id}` 
+      : 'persist:shared';
+      
+    const workspaceSession = session.fromPartition(partitionName);
+
+    // Configure session security and permissions
+    workspaceSession.setPermissionRequestHandler((webContents, permission, callback) => {
+      // Allow permissions needed for productivity services
+      const allowedPermissions = [
+        'notifications', 
+        'camera', 
+        'microphone', 
+        'clipboard-read',
+        'clipboard-sanitized-write',
+        'display-capture',
+        'geolocation'
+      ];
+      callback(allowedPermissions.includes(permission));
+    });
+
+    // Configure user agent if needed
+    workspaceSession.setUserAgent(
+      workspaceSession.getUserAgent() + ' FlowDesk/' + require('electron').app.getVersion()
+    );
+
+    this.workspaceSessions.set(workspace.id, workspaceSession);
+    log.debug(`Created ${workspace.browserIsolation} session for workspace: ${workspace.name} (${workspace.id})`);
+  }
+
+  private async createServiceBrowserView(workspace: Workspace, service: WorkspaceService): Promise<BrowserView> {
+    const workspaceSession = this.workspaceSessions.get(workspace.id);
+    if (!workspaceSession) {
+      throw new Error(`No session found for workspace: ${workspace.id}`);
+    }
+
+    // Use service-specific partition if configured, otherwise use workspace session
+    const partition = service.config.webviewOptions?.partition || `persist:workspace-${workspace.id}`;
+    const serviceSession = partition !== `persist:workspace-${workspace.id}` 
+      ? session.fromPartition(partition)
+      : workspaceSession;
+
+    const browserView = new BrowserView({
+      webPreferences: {
+        session: serviceSession,
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+        webSecurity: true,
+        allowRunningInsecureContent: false,
+        experimentalFeatures: false,
+        ...service.config.webviewOptions
+      }
+    });
+
+    // Configure navigation security
+    browserView.webContents.on('will-navigate', (event, navigationUrl) => {
+      try {
+        const serviceUrl = new URL(service.url);
+        const targetUrl = new URL(navigationUrl);
+        
+        // Allow same-origin navigation and configured domains
+        const allowedDomains = this.getAllowedDomainsForService(service);
+        const isAllowedDomain = allowedDomains.some(domain => 
+          targetUrl.hostname === domain || targetUrl.hostname.endsWith('.' + domain)
+        );
+
+        if (!isAllowedDomain && targetUrl.hostname !== serviceUrl.hostname) {
+          event.preventDefault();
+          shell.openExternal(navigationUrl);
+          log.info(`External navigation blocked: ${navigationUrl} (opened in system browser)`);
+        }
+      } catch (error) {
+        log.warn('Navigation URL parse error:', error);
+        event.preventDefault();
+      }
+    });
+
+    // Handle new window requests
+    browserView.webContents.setWindowOpenHandler(({ url, frameName, disposition }) => {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    });
+
+    // Handle download requests
+    browserView.webContents.session.on('will-download', (event, item, webContents) => {
+      log.info(`Download started: ${item.getFilename()} from ${service.name}`);
+    });
+
+    log.debug(`Created BrowserView for service: ${service.name} in workspace: ${workspace.name}`);
+    return browserView;
+  }
+
+  private getAllowedDomainsForService(service: WorkspaceService): string[] {
+    // Define allowed domains for each service type
+    const serviceDomainsMap: Record<string, string[]> = {
+      'slack': ['slack.com', 'slack-edge.com', 'slack-msgs.com'],
+      'notion': ['notion.so', 'notion.site', 'notion-static.com'],
+      'github': ['github.com', 'githubusercontent.com', 'githubassets.com'],
+      'gmail': ['gmail.com', 'google.com', 'accounts.google.com'],
+      'gdrive': ['drive.google.com', 'docs.google.com', 'sheets.google.com', 'slides.google.com'],
+      'teams': ['teams.microsoft.com', 'login.microsoftonline.com', 'office.com'],
+      'discord': ['discord.com', 'discordapp.com'],
+      'zoom': ['zoom.us', 'zoom.com'],
+      'trello': ['trello.com', 'atlassian.com'],
+      'asana': ['asana.com'],
+      'jira': ['atlassian.net', 'atlassian.com'],
+    };
+
+    try {
+      const baseUrl = new URL(service.url);
+      const baseDomain = baseUrl.hostname;
+      
+      // Get predefined domains for this service type
+      const predefinedDomains = serviceDomainsMap[service.name.toLowerCase()] || [];
+      
+      return [baseDomain, ...predefinedDomains];
+    } catch (error) {
+      log.warn(`Invalid service URL: ${service.url}`, error);
+      return [];
+    }
+  }
+
+  private configureBrowserViewBounds(browserView: BrowserView, mainWindow: BrowserWindow): void {
+    const bounds = mainWindow.getBounds();
+    const sidebarWidth = 280; // Standard sidebar width
+    
+    browserView.setBounds({
+      x: sidebarWidth,
+      y: 0,
+      width: bounds.width - sidebarWidth,
+      height: bounds.height
+    });
+  }
+
+  async closeService(workspaceId: string, serviceId: string): Promise<void> {
+    const browserViewKey = `${workspaceId}:${serviceId}`;
+    const browserView = this.browserViews.get(browserViewKey);
+    
+    if (browserView) {
+      try {
+        browserView.webContents.close();
+      } catch (error) {
+        log.warn('Error closing browser view:', error);
+      }
+      this.browserViews.delete(browserViewKey);
+      log.info(`Closed service ${serviceId} in workspace ${workspaceId}`);
+    }
+  }
+
   async cleanup(): Promise<void> {
+    // Close all browser views
+    for (const [key, browserView] of this.browserViews.entries()) {
+      try {
+        browserView.webContents.close();
+      } catch (error) {
+        log.warn(`Error closing browser view ${key}:`, error);
+      }
+    }
+    this.browserViews.clear();
+
+    // Clear workspace sessions
+    this.workspaceSessions.clear();
+
+    // Save workspace data
     for (const workspace of this.workspaces.values()) {
       await this.saveWorkspace(workspace);
     }
+    
     await this.shutdown();
   }
 

@@ -2,6 +2,7 @@
 export { default as AIChatInterface } from './AIChatInterface';
 export { default as AISettingsPanel } from './AISettingsPanel';
 export { default as AIPage } from './AIPage';
+export { default as AIClientTest } from './AIClientTest';
 export { default as aiClient } from './AIClient';
 export { useAI } from './useAI';
 

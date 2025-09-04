@@ -31,7 +31,7 @@ import {
 import { type BaseComponentProps } from '../ui/types'
 import type { CalendarEvent } from '@flow-desk/shared'
 
-type ViewType = 'day' | 'week' | 'month' | 'agenda'
+type ViewType = 'day' | 'week' | 'month' | 'year' | 'agenda' | 'timeline'
 
 // Helper function to get week days
 const getWeekDays = (currentDate: Date | string) => {
@@ -151,7 +151,7 @@ const CalendarHeader: React.FC<CalendarHeaderProps> = ({
 
       <div className="flex items-center gap-2">
         <Dropdown>
-          <DropdownTrigger>
+          <DropdownTrigger asChild>
             <Button variant="outline" className="capitalize">
               {viewType} <ChevronDown className="ml-2 h-4 w-4" />
             </Button>
@@ -655,7 +655,8 @@ export const CalendarViews: React.FC<CalendarViewsProps> = ({
     if (allCalendarIds.length === 0) return
     
     // Calculate date range based on current view
-    let timeMin: Date, timeMax: Date
+    let timeMin: Date;
+    let timeMax: Date;
     
     switch (viewType) {
       case 'day':
@@ -677,11 +678,31 @@ export const CalendarViews: React.FC<CalendarViewsProps> = ({
         timeMax = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
         timeMax.setHours(23, 59, 59, 999)
         break
+      case 'year':
+        timeMin = new Date(currentDate.getFullYear(), 0, 1)
+        timeMax = new Date(currentDate.getFullYear(), 11, 31)
+        timeMax.setHours(23, 59, 59, 999)
+        break
       case 'agenda':
         timeMin = new Date()
         timeMin.setHours(0, 0, 0, 0)
         timeMax = new Date(timeMin)
         timeMax.setDate(timeMax.getDate() + 30) // Show next 30 days
+        break
+      case 'timeline':
+        timeMin = new Date(currentDate)
+        timeMin.setDate(currentDate.getDate() - 7) // Show past week
+        timeMin.setHours(0, 0, 0, 0)
+        timeMax = new Date(currentDate)
+        timeMax.setDate(currentDate.getDate() + 7) // Show next week
+        timeMax.setHours(23, 59, 59, 999)
+        break
+      default:
+        // Default to day view
+        timeMin = new Date(currentDate)
+        timeMin.setHours(0, 0, 0, 0)
+        timeMax = new Date(currentDate)
+        timeMax.setHours(23, 59, 59, 999)
         break
     }
     
@@ -838,7 +859,7 @@ export const CalendarViews: React.FC<CalendarViewsProps> = ({
         onSuccess={(account) => {
           console.log('Calendar account added successfully:', account);
           // Refresh calendar accounts
-          dispatch(fetchCalendarAccounts());
+          dispatch(fetchUserAccounts('default-user'));
         }}
       />
     </div>

@@ -149,15 +149,85 @@ export function getCalendarEvents(accountId: string): Promise<NapiCalendarEvent[
 export function createCalendarEvent(calendarId: string, title: string, startTime: number, endTime: number): Promise<string>;
 
 // Search Engine Functions
-export function initSearchEngine(): Promise<string>;
+export function initSearchEngine(indexDir?: string): Promise<string>;
 export function indexDocument(id: string, title: string, content: string, source: string, metadata: string): Promise<void>;
-export function searchDocuments(query: string, limit?: number): Promise<NapiSearchResult[]>;
+export function searchDocuments(query: any): Promise<{ results: NapiSearchResult[], total_count: number, execution_time_ms: number, suggestions?: string[] }>;
+export function searchSimple(query: string, limit?: number): Promise<NapiSearchResult[]>;
+export function getSearchSuggestions(partialQuery: string, limit?: number): Promise<string[]>;
+export function indexEmailMessage(messageId: string, accountId: string, subject: string, fromAddress: string, fromName: string | null, toAddresses: string[], bodyText: string | null, bodyHtml: string | null, receivedAt: number, folder: string | null): Promise<void>;
+export function indexCalendarEvent(eventId: string, calendarId: string, title: string, description: string | null, location: string | null, startTime: number, endTime: number, isAllDay: boolean, organizer: string | null, attendees: string[], status: string): Promise<void>;
+export function deleteDocumentFromIndex(documentId: string): Promise<boolean>;
+export function optimizeSearchIndex(): Promise<void>;
+export function getSearchAnalytics(): Promise<{ total_documents: number, total_searches: number, avg_response_time_ms: number, success_rate: number, error_rate: number, popular_queries: string[] }>;
+export function clearSearchCache(): Promise<void>;
 
 // Crypto Functions
 export function generateEncryptionKeyPair(): Promise<string>;
 export function encryptString(data: string, key: string): Promise<string>;
 export function decryptString(encryptedData: string, key: string): Promise<string>;
 export function getVersion(): Promise<string>;
+
+// OAuth Types
+export interface NapiOAuthProviderConfig {
+  provider: string;
+  clientId: string;
+  clientSecret?: string;
+  redirectUri: string;
+  scopes: string[];
+  authUrl?: string;
+  tokenUrl?: string;
+  userInfoUrl?: string;
+  requiresClientSecret: boolean;
+  supportsPkce: boolean;
+}
+
+export interface NapiOAuthFlowOptions {
+  provider: string;
+  interactive?: boolean;
+  forceConsent?: boolean;
+  loginHint?: string;
+  usePkce?: boolean;
+  additionalScopes?: string[];
+}
+
+export interface NapiOAuthAuthUrl {
+  url: string;
+  state: string;
+  codeVerifier?: string;
+  codeChallenge?: string;
+}
+
+export interface NapiOAuthTokens {
+  accessToken: string;
+  refreshToken?: string;
+  expiresAt?: number;
+  tokenType?: string;
+  scope?: string;
+  idToken?: string;
+}
+
+export interface NapiOAuthUserInfo {
+  email: string;
+  name?: string;
+  picture?: string;
+  verifiedEmail?: boolean;
+}
+
+export interface NapiOAuthCallbackResult {
+  tokens: NapiOAuthTokens;
+  userInfo: NapiOAuthUserInfo;
+}
+
+// OAuth Functions
+export function initProductionOauthManager(storagePath?: string): Promise<void>;
+export function configureOauthProvider(config: NapiOAuthProviderConfig): Promise<void>;
+export function startOauthFlow(options: NapiOAuthFlowOptions): Promise<NapiOAuthAuthUrl>;
+export function handleOauthCallbackExchange(provider: string, code: string, state: string, redirectUri: string): Promise<NapiOAuthCallbackResult>;
+export function refreshOauthTokenProduction(provider: string, refreshToken: string): Promise<NapiOAuthTokens>;
+export function revokeOauthTokenProduction(provider: string, accessToken: string): Promise<void>;
+export function needsOauthTokenRefresh(expiresAt?: number): Promise<boolean>;
+export function validateOauthToken(token: string): Promise<boolean>;
+export function cleanupExpiredPkceSessions(): Promise<number>;
 
 // Utility Functions
 export function hello(): Promise<string>;

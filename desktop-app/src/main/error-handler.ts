@@ -65,6 +65,11 @@ export class EmailErrorHandler extends EventEmitter {
     backoffMultiplier: 2,
     jitterRange: 0.1
   }
+  
+  // Error statistics tracking
+  private errorCounts: Map<EmailErrorType, number> = new Map()
+  private errorsByCategory: Map<EmailErrorCategory, number> = new Map()
+  private dailyErrorCounts: Map<string, number> = new Map() // YYYY-MM-DD -> count
 
   constructor() {
     super()
@@ -144,6 +149,9 @@ export class EmailErrorHandler extends EventEmitter {
       maxRetries: this.getMaxRetries(this.categorizeErrorType(error))
     }
 
+    // Update error statistics
+    this.updateErrorStatistics(emailError)
+
     // Log the error
     this.logError(emailError)
 
@@ -190,6 +198,24 @@ export class EmailErrorHandler extends EventEmitter {
 
   private generateErrorId(): string {
     return `err_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  }
+
+  /**
+   * Update error statistics
+   */
+  private updateErrorStatistics(emailError: EmailError): void {
+    // Update error type count
+    const currentTypeCount = this.errorCounts.get(emailError.type) || 0
+    this.errorCounts.set(emailError.type, currentTypeCount + 1)
+    
+    // Update error category count
+    const currentCategoryCount = this.errorsByCategory.get(emailError.category) || 0
+    this.errorsByCategory.set(emailError.category, currentCategoryCount + 1)
+    
+    // Update daily error count
+    const today = emailError.timestamp.toISOString().split('T')[0]
+    const currentDailyCount = this.dailyErrorCounts.get(today) || 0
+    this.dailyErrorCounts.set(today, currentDailyCount + 1)
   }
 
   private categorizeErrorType(error: any): EmailErrorType {
@@ -410,8 +436,26 @@ export class EmailErrorHandler extends EventEmitter {
    * Get error statistics
    */
   getErrorStats(): Record<string, number> {
-    // This would maintain error statistics in a production implementation
-    return {}
+    const stats: Record<string, number> = {}
+    
+    // Add error type counts
+    this.errorCounts.forEach((count, type) => {
+      stats[`type_${type}`] = count
+    })
+    
+    // Add category counts
+    this.errorsByCategory.forEach((count, category) => {
+      stats[`category_${category}`] = count
+    })
+    
+    // Add today's error count
+    const today = new Date().toISOString().split('T')[0]
+    stats['today_total'] = this.dailyErrorCounts.get(today) || 0
+    
+    // Add total errors
+    stats['total_errors'] = Array.from(this.errorCounts.values()).reduce((sum, count) => sum + count, 0)
+    
+    return stats
   }
 
   /**

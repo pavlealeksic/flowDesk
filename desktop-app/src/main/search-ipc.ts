@@ -13,7 +13,13 @@ export function setupSearchIPC(): void {
   ipcMain.handle('search:initialize', async () => {
     try {
       await searchService.initialize();
-      return { success: true };
+      return { 
+        success: true, 
+        data: { 
+          initialized: searchService.isInitialized(),
+          message: 'Search service initialized successfully' 
+        } 
+      };
     } catch (error) {
       log.error('Search initialization failed:', error);
       return { 
@@ -42,7 +48,13 @@ export function setupSearchIPC(): void {
   ipcMain.handle('search:index-document', async (_, document: any) => {
     try {
       await searchService.indexDocument(document);
-      return { success: true };
+      return { 
+        success: true, 
+        data: { 
+          documentId: document.id,
+          message: 'Document indexed successfully' 
+        } 
+      };
     } catch (error) {
       log.error('Document indexing failed:', error);
       return { 
@@ -115,8 +127,16 @@ export function setupSearchIPC(): void {
   // Optimize indices
   ipcMain.handle('search:optimize', async () => {
     try {
+      const startTime = Date.now();
       await searchService.optimizeIndices();
-      return { success: true };
+      const optimizationTime = Date.now() - startTime;
+      return { 
+        success: true, 
+        data: { 
+          optimizationTimeMs: optimizationTime,
+          message: 'Search indices optimized successfully' 
+        } 
+      };
     } catch (error) {
       log.error('Index optimization failed:', error);
       return { 
@@ -131,7 +151,13 @@ export function setupSearchIPC(): void {
   ipcMain.handle('search:clear-cache', async () => {
     try {
       await searchService.clearCache();
-      return { success: true };
+      return { 
+        success: true, 
+        data: { 
+          clearedAt: new Date().toISOString(),
+          message: 'Search cache cleared successfully' 
+        } 
+      };
     } catch (error) {
       log.error('Cache clearing failed:', error);
       return { 

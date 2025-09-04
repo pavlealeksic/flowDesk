@@ -173,7 +173,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
             {(['day', 'week', 'month'] as const).map((range) => (
               <Button
                 key={range}
-                variant={viewRange === range ? 'default' : 'ghost'}
+                variant={viewRange === range ? 'primary' : 'ghost'}
                 size="sm"
                 className="rounded-none border-0"
                 onClick={() => setViewRange(range)}
@@ -313,7 +313,7 @@ const TimelineView: React.FC<TimelineViewProps> = ({
                               {/* Event Status Indicators */}
                               <div className="flex items-center gap-1 flex-shrink-0">
                                 {event.conferencing && (
-                                  <Video className="h-3 w-3 text-blue-500" title="Video call" />
+                                  <Video className="h-3 w-3 text-blue-500" />
                                 )}
                                 {event.attendees.length > 0 && (
                                   <div className="flex items-center gap-1">

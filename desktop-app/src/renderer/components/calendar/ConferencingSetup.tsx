@@ -236,7 +236,7 @@ export const ConferencingSetup: React.FC<ConferencingSetupProps> = ({
       {/* Provider Selection */}
       <div>
         <Label htmlFor="provider">Meeting Provider</Label>
-        <Select value={selectedProvider} onValueChange={(value: ConferencingSolution) => setSelectedProvider(value)}>
+        <Select value={selectedProvider} onValueChange={(value: string) => setSelectedProvider(value as ConferencingSolution)}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
@@ -389,7 +389,7 @@ export const ConferencingSetup: React.FC<ConferencingSetupProps> = ({
           <Textarea
             id="notes"
             value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNotes(e.target.value)}
             placeholder="Add meeting agenda, preparation notes, or instructions..."
             rows={3}
           />

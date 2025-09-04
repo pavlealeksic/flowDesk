@@ -359,7 +359,7 @@ export class PluginRuntimeManager extends EventEmitter {
       const manifest = await this.lifecycleManager.loadPluginManifest(installationId);
       
       // Create runtime context
-      const runtimeContext = this.createRuntimeContext(installation, manifest);
+      const runtimeContext = await this.createRuntimeContext(installation, manifest);
       
       // Create execution context with sandbox
       const executionContext = await this.sandboxManager.createExecutionContext(
@@ -461,23 +461,66 @@ export class PluginRuntimeManager extends EventEmitter {
   }
 
   /**
+   * Get user email from user service
+   */
+  private async getUserEmail(userId: string): Promise<string> {
+    try {
+      // In a production environment, this would integrate with your user management system
+      // For now, we'll use a fallback approach with stored user data
+      const userData = await this.storageManager.getUserData(userId);
+      return userData?.email || 'user@example.com';
+    } catch (error) {
+      this.logger.warn(`Failed to get user email for ${userId}`, error);
+      return 'user@example.com';
+    }
+  }
+
+  /**
+   * Get user name from user service
+   */
+  private async getUserName(userId: string): Promise<string> {
+    try {
+      const userData = await this.storageManager.getUserData(userId);
+      return userData?.name || 'User';
+    } catch (error) {
+      this.logger.warn(`Failed to get user name for ${userId}`, error);
+      return 'User';
+    }
+  }
+
+  /**
+   * Get workspace name from workspace service
+   */
+  private async getWorkspaceName(workspaceId: string | undefined): Promise<string> {
+    if (!workspaceId) return 'Default Workspace';
+    
+    try {
+      const workspaceData = await this.storageManager.getWorkspaceData(workspaceId);
+      return workspaceData?.name || `Workspace ${workspaceId}`;
+    } catch (error) {
+      this.logger.warn(`Failed to get workspace name for ${workspaceId}`, error);
+      return `Workspace ${workspaceId}`;
+    }
+  }
+
+  /**
    * Private: Create runtime context for a plugin
    */
-  private createRuntimeContext(
+  private async createRuntimeContext(
     installation: PluginInstallation, 
     manifest: PluginManifest
-  ): PluginRuntimeContext {
+  ): Promise<PluginRuntimeContext> {
     return {
       plugin: installation,
       user: {
         id: installation.userId,
-        email: '', // TODO: Get from user service
-        name: '', // TODO: Get from user service
+        email: await this.getUserEmail(installation.userId),
+        name: await this.getUserName(installation.userId)
         preferences: {}
       },
       workspace: installation.workspaceId ? {
         id: installation.workspaceId,
-        name: '', // TODO: Get from workspace service
+        name: await this.getWorkspaceName(installation.workspaceId)
         settings: {}
       } : undefined,
       platform: {

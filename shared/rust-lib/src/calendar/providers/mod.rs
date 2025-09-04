@@ -12,12 +12,14 @@ pub mod google;
 pub mod outlook;
 pub mod caldav;
 pub mod traits;
+pub mod detection;
 
 // Re-export main provider types
 pub use traits::*;
 pub use google::GoogleCalendarProvider;
 pub use outlook::OutlookCalendarProvider;
 pub use caldav::CalDavProvider;
+pub use detection::{ProviderDetector, DetectionResult, AutoDetectedConfig};
 
 use async_trait::async_trait;
 use std::collections::HashMap;

@@ -39,7 +39,7 @@ export class NotificationService {
       type: options.type || 'info',
       timestamp: new Date(),
       isRead: false,
-      actions: options.actions
+      ...(options.actions && { actions: options.actions })
     };
 
     this.notifications.set(notification.id, notification);

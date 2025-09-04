@@ -66,6 +66,7 @@ interface FlowDeskAPI {
     updateService(workspaceId: string, serviceId: string, updates: { name?: string; url?: string; isEnabled?: boolean }): Promise<void>;
     removeService(workspaceId: string, serviceId: string): Promise<void>;
     loadService(workspaceId: string, serviceId: string): Promise<void>;
+    closeService(workspaceId: string, serviceId: string): Promise<void>;
     
     // Utility methods
     getPredefinedServices(): Promise<Record<string, { name: string; url: string; type: string }>>;
@@ -113,14 +114,6 @@ interface FlowDeskAPI {
     startSync(): Promise<boolean>;
     stopSync(): Promise<boolean>;
     
-    // OAuth2 Authentication
-    startOAuthFlow(providerId: string): Promise<{ success: boolean; email?: string; config?: any; error?: string; setupInstructions?: string[] }>;
-    authenticateProvider(providerId: string): Promise<{ success: boolean; accountId?: string; email?: string; error?: string }>;
-    getProviderStatus(providerId?: string): Promise<any>;
-    getConfiguredProviders(): Promise<Array<{ providerId: string; name: string; configured: boolean }>>;
-    refreshToken(accountId: string, providerId: string): Promise<{ success: boolean; error?: string }>;
-    revokeToken(accountId: string, providerId: string): Promise<{ success: boolean; error?: string }>;
-    getTokenStatus(accountId?: string, providerId?: string): Promise<any>;
     
     // Real-time sync (IDLE)
     startIdle(accountId: string): Promise<boolean>;
@@ -206,6 +199,10 @@ interface FlowDeskAPI {
     syncAccount(accountId: string, force?: boolean): Promise<{ success: boolean; data?: any; error?: string }>;
     syncAll(): Promise<void>;
     
+    // Privacy sync operations
+    createPrivacySyncRule(rule: any): Promise<{ success: boolean; data?: any; error?: string }>;
+    executePrivacySync(accountId: string): Promise<{ success: boolean; data?: any; error?: string }>;
+    
     // Event callbacks (for useCalendarSync hook)
     onAccountCreated(callback: (account: CalendarAccount) => void): () => void;
     onAccountUpdated(callback: (account: CalendarAccount) => void): () => void;
@@ -242,6 +239,65 @@ interface FlowDeskAPI {
   theme: {
     get(): Promise<any>;
     set(theme: any): Promise<any>;
+  };
+
+  // Simple Mail API (Apple Mail style)
+  simpleMail: {
+    initEngine(): Promise<string>;
+    detectEmailProvider(email: string): Promise<{ name: string; displayName: string; supported: boolean } | null>;
+    testConnection(email: string, password: string): Promise<boolean>;
+    addAccount(input: { email: string; password: string; displayName?: string }): Promise<any>;
+    getAccounts(): Promise<any[]>;
+    getAccount(accountId: string): Promise<any | null>;
+    removeAccount(accountId: string): Promise<void>;
+    updateAccountStatus(accountId: string, isEnabled: boolean): Promise<void>;
+    fetchMessages(accountId: string, folder?: string): Promise<any[]>;
+    sendEmail(accountId: string, to: string[], subject: string, body: string, isHtml?: boolean): Promise<void>;
+    syncAccount(accountId: string): Promise<any>;
+    getSupportedProviders(): Promise<any[]>;
+    validateEmailAddress(email: string): Promise<boolean>;
+  };
+
+  // Production Email API - Professional IMAP/SMTP with Rust backend
+  productionEmail: {
+    // Account Management
+    setupAccount(userId: string, credentials: { email: string; password: string; displayName?: string; providerOverride?: string }): Promise<any>;
+    removeAccount(accountId: string): Promise<void>;
+    updateAccountPassword(accountId: string, newPassword: string): Promise<void>;
+    getStoredAccounts(): Promise<string[]>;
+    testEmailSetup(credentials: { email: string; password: string; displayName?: string; providerOverride?: string }): Promise<any>;
+    
+    // Server Configuration
+    getServerConfig(email: string): Promise<any>;
+    
+    // Email Operations
+    syncAccount(accountId: string): Promise<any>;
+    sendEmail(accountId: string, message: any): Promise<void>;
+    getFolders(accountId: string): Promise<any[]>;
+    getMessages(accountId: string, folderName: string, limit?: number): Promise<any[]>;
+    markMessageRead(accountId: string, folderName: string, messageUid: number, isRead: boolean): Promise<void>;
+    deleteMessage(accountId: string, folderName: string, messageUid: number): Promise<void>;
+    
+    // System Operations
+    getHealthStatus(): Promise<Record<string, [boolean, boolean]>>;
+    closeConnections(accountId: string): Promise<void>;
+  };
+
+  // AI Engine API
+  ai?: {
+    initialize(cacheDir?: string): Promise<void>;
+    storeApiKey(provider: string, apiKey: string): Promise<void>;
+    hasApiKey(provider: string): Promise<boolean>;
+    deleteApiKey(provider: string): Promise<boolean>;
+    createCompletion(request: any): Promise<any>;
+    createStreamingCompletion(request: any, callback: (chunk: any) => void): Promise<void>;
+    getAvailableModels(): Promise<any[]>;
+    healthCheck(): Promise<boolean>;
+    getUsageStats(): Promise<any>;
+    getRateLimitInfo(provider: string): Promise<any>;
+    clearCache(operationType?: string): Promise<void>;
+    getCacheStats(): Promise<Record<string, any>>;
+    testProvider(provider: string): Promise<boolean>;
   };
 
   // Window management
@@ -321,6 +377,8 @@ const flowDeskAPI: FlowDeskAPI = {
       ipcRenderer.invoke('workspace:remove-service', workspaceId, serviceId),
     loadService: (workspaceId: string, serviceId: string) => 
       ipcRenderer.invoke('workspace:load-service', workspaceId, serviceId),
+    closeService: (workspaceId: string, serviceId: string) => 
+      ipcRenderer.invoke('workspace:close-service', workspaceId, serviceId),
     
     // Utility methods
     getPredefinedServices: () => ipcRenderer.invoke('workspace:get-predefined-services'),
@@ -392,21 +450,6 @@ const flowDeskAPI: FlowDeskAPI = {
     stopSync: () => 
       ipcRenderer.invoke('mail:stop-sync'),
     
-    // OAuth2 Authentication (new enhanced methods)
-    startOAuthFlow: (providerId: string) => 
-      ipcRenderer.invoke('oauth:start-flow', providerId),
-    authenticateProvider: (providerId: string) => 
-      ipcRenderer.invoke('oauth:authenticate-provider', providerId),
-    getProviderStatus: (providerId?: string) => 
-      ipcRenderer.invoke('oauth:get-provider-status', providerId),
-    getConfiguredProviders: () => 
-      ipcRenderer.invoke('oauth:get-configured-providers'),
-    refreshToken: (accountId: string, providerId: string) => 
-      ipcRenderer.invoke('oauth:refresh-token', accountId, providerId),
-    revokeToken: (accountId: string, providerId: string) => 
-      ipcRenderer.invoke('oauth:revoke-token', accountId, providerId),
-    getTokenStatus: (accountId?: string, providerId?: string) => 
-      ipcRenderer.invoke('oauth:get-token-status', accountId, providerId),
     
     // Real-time sync (IDLE)
     startIdle: (accountId: string) => 
@@ -523,6 +566,12 @@ const flowDeskAPI: FlowDeskAPI = {
     syncAll: () => 
       ipcRenderer.invoke('calendar:sync-all'),
     
+    // Privacy sync operations
+    createPrivacySyncRule: (rule: any) =>
+      ipcRenderer.invoke('calendar:create-privacy-sync-rule', rule),
+    executePrivacySync: (accountId: string) =>
+      ipcRenderer.invoke('calendar:execute-privacy-sync', accountId),
+    
     // Event callbacks (for useCalendarSync hook)
     onAccountCreated: (callback: (account: CalendarAccount) => void) => {
       ipcRenderer.on('calendar:account-created', (_, account) => callback(account));
@@ -593,6 +642,88 @@ const flowDeskAPI: FlowDeskAPI = {
   theme: {
     get: () => ipcRenderer.invoke('theme:get'),
     set: (theme: any) => ipcRenderer.invoke('theme:set', theme),
+  },
+
+  // Simple Mail API (Apple Mail style)
+  simpleMail: {
+    initEngine: () => ipcRenderer.invoke('simple-mail:init-engine'),
+    detectEmailProvider: (email: string) => ipcRenderer.invoke('simple-mail:detect-provider', email),
+    testConnection: (email: string, password: string) => ipcRenderer.invoke('simple-mail:test-connection', email, password),
+    addAccount: (input: { email: string; password: string; displayName?: string }) => 
+      ipcRenderer.invoke('simple-mail:add-account', input),
+    getAccounts: () => ipcRenderer.invoke('simple-mail:get-accounts'),
+    getAccount: (accountId: string) => ipcRenderer.invoke('simple-mail:get-account', accountId),
+    removeAccount: (accountId: string) => ipcRenderer.invoke('simple-mail:remove-account', accountId),
+    updateAccountStatus: (accountId: string, isEnabled: boolean) => 
+      ipcRenderer.invoke('simple-mail:update-account-status', accountId, isEnabled),
+    fetchMessages: (accountId: string, folder?: string) => 
+      ipcRenderer.invoke('simple-mail:fetch-messages', accountId, folder),
+    sendEmail: (accountId: string, to: string[], subject: string, body: string, isHtml?: boolean) =>
+      ipcRenderer.invoke('simple-mail:send-email', accountId, to, subject, body, isHtml),
+    syncAccount: (accountId: string) => ipcRenderer.invoke('simple-mail:sync-account', accountId),
+    getSupportedProviders: () => ipcRenderer.invoke('simple-mail:get-supported-providers'),
+    validateEmailAddress: (email: string) => ipcRenderer.invoke('simple-mail:validate-email', email),
+  },
+
+  // Production Email API - Professional IMAP/SMTP with Rust backend
+  productionEmail: {
+    // Account Management
+    setupAccount: (userId: string, credentials: { email: string; password: string; displayName?: string; providerOverride?: string }) =>
+      ipcRenderer.invoke('email:setup-account', userId, credentials),
+    removeAccount: (accountId: string) =>
+      ipcRenderer.invoke('email:remove-account', accountId),
+    updateAccountPassword: (accountId: string, newPassword: string) =>
+      ipcRenderer.invoke('email:update-password', accountId, newPassword),
+    getStoredAccounts: () =>
+      ipcRenderer.invoke('email:get-stored-accounts'),
+    testEmailSetup: (credentials: { email: string; password: string; displayName?: string; providerOverride?: string }) =>
+      ipcRenderer.invoke('email:test-setup', credentials),
+    
+    // Server Configuration
+    getServerConfig: (email: string) =>
+      ipcRenderer.invoke('email:get-server-config', email),
+    
+    // Email Operations
+    syncAccount: (accountId: string) =>
+      ipcRenderer.invoke('email:sync-account', accountId),
+    sendEmail: (accountId: string, message: any) =>
+      ipcRenderer.invoke('email:send', accountId, message),
+    getFolders: (accountId: string) =>
+      ipcRenderer.invoke('email:get-folders', accountId),
+    getMessages: (accountId: string, folderName: string, limit?: number) =>
+      ipcRenderer.invoke('email:get-messages', accountId, folderName, limit),
+    markMessageRead: (accountId: string, folderName: string, messageUid: number, isRead: boolean) =>
+      ipcRenderer.invoke('email:mark-read', accountId, folderName, messageUid, isRead),
+    deleteMessage: (accountId: string, folderName: string, messageUid: number) =>
+      ipcRenderer.invoke('email:delete-message', accountId, folderName, messageUid),
+    
+    // System Operations
+    getHealthStatus: () =>
+      ipcRenderer.invoke('email:health-check'),
+    closeConnections: (accountId: string) =>
+      ipcRenderer.invoke('email:close-connections', accountId),
+  },
+
+  // AI Engine API (optional - will only be available if implemented in main process)
+  ai: {
+    initialize: (cacheDir?: string) => ipcRenderer.invoke('ai:initialize', cacheDir),
+    storeApiKey: (provider: string, apiKey: string) => ipcRenderer.invoke('ai:store-api-key', provider, apiKey),
+    hasApiKey: (provider: string) => ipcRenderer.invoke('ai:has-api-key', provider),
+    deleteApiKey: (provider: string) => ipcRenderer.invoke('ai:delete-api-key', provider),
+    createCompletion: (request: any) => ipcRenderer.invoke('ai:create-completion', request),
+    createStreamingCompletion: (request: any, callback: (chunk: any) => void) => {
+      // For streaming, we need to handle it differently - register a listener and then invoke
+      const streamChannel = `ai:streaming-completion-${Date.now()}`;
+      ipcRenderer.on(streamChannel, (_, chunk) => callback(chunk));
+      return ipcRenderer.invoke('ai:create-streaming-completion', request, streamChannel);
+    },
+    getAvailableModels: () => ipcRenderer.invoke('ai:get-available-models'),
+    healthCheck: () => ipcRenderer.invoke('ai:health-check'),
+    getUsageStats: () => ipcRenderer.invoke('ai:get-usage-stats'),
+    getRateLimitInfo: (provider: string) => ipcRenderer.invoke('ai:get-rate-limit-info', provider),
+    clearCache: (operationType?: string) => ipcRenderer.invoke('ai:clear-cache', operationType),
+    getCacheStats: () => ipcRenderer.invoke('ai:get-cache-stats'),
+    testProvider: (provider: string) => ipcRenderer.invoke('ai:test-provider', provider),
   },
 
   // Window management

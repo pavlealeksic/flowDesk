@@ -12,6 +12,21 @@ import {
   ProviderType 
 } from '@flow-desk/shared';
 
+// Logging stub for renderer process
+const log = {
+  error: (message: string, ...args: any[]) => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[Search]', message, ...args);
+    }
+  },
+  warn: (message: string, ...args: any[]) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[Search]', message, ...args);
+    }
+  },
+  debug: () => {}, // No-op
+};
+
 interface UseUnifiedSearchOptions {
   autoInitialize?: boolean;
   debounceMs?: number;
@@ -96,7 +111,7 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
         return false;
       }
     } catch (error) {
-      console.error('Search initialization error:', error);
+      log.error('Search initialization error:', error);
       setState(prev => ({ 
         ...prev, 
         error: error instanceof Error ? error.message : 'Unknown error' 
@@ -108,7 +123,7 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
   // Execute search query
   const search = useCallback(async (query: string, queryOptions: Partial<SearchQuery> = {}): Promise<void> => {
     if (!state.isInitialized) {
-      console.warn('Search engine not initialized');
+      log.warn('Search engine not initialized');
       return;
     }
 
@@ -166,7 +181,7 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
           }));
         }
       } catch (error) {
-        console.error('Search error:', error);
+        log.error('Search error:', error);
         setState(prev => ({
           ...prev,
           error: error instanceof Error ? error.message : 'Search error',
@@ -192,7 +207,7 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
   // Index a single document
   const indexDocument = useCallback(async (document: SearchDocument): Promise<boolean> => {
     if (!state.isInitialized) {
-      console.warn('Search engine not initialized');
+      log.warn('Search engine not initialized');
       return false;
     }
 
@@ -209,7 +224,7 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
       
       return result.success;
     } catch (error) {
-      console.error('Document indexing error:', error);
+      log.error('Document indexing error:', error);
       setState(prev => ({
         ...prev,
         isIndexing: false,
@@ -222,7 +237,7 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
   // Index multiple documents
   const indexDocuments = useCallback(async (documents: SearchDocument[]): Promise<number> => {
     if (!state.isInitialized) {
-      console.warn('Search engine not initialized');
+      log.warn('Search engine not initialized');
       return 0;
     }
 
@@ -239,7 +254,7 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
       
       return result.success ? (result.data || 0) : 0;
     } catch (error) {
-      console.error('Batch document indexing error:', error);
+      log.error('Batch document indexing error:', error);
       setState(prev => ({
         ...prev,
         isIndexing: false,
@@ -252,7 +267,7 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
   // Delete a document
   const deleteDocument = useCallback(async (documentId: string): Promise<boolean> => {
     if (!state.isInitialized) {
-      console.warn('Search engine not initialized');
+      log.warn('Search engine not initialized');
       return false;
     }
 
@@ -268,7 +283,7 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
       
       return result.success && (result.data || false);
     } catch (error) {
-      console.error('Document deletion error:', error);
+      log.error('Document deletion error:', error);
       setState(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Document deletion error',
@@ -290,7 +305,7 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
         setState(prev => ({ ...prev, suggestions: result.data }));
       }
     } catch (error) {
-      console.error('Suggestions error:', error);
+      log.error('Suggestions error:', error);
       // Don't set error state for suggestions
     }
   }, [state.isInitialized, enableSuggestions]);
@@ -313,7 +328,7 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
         }));
       }
     } catch (error) {
-      console.error('Analytics error:', error);
+      log.error('Analytics error:', error);
       setState(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Analytics error',
@@ -339,7 +354,7 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
       
       return result.success;
     } catch (error) {
-      console.error('Index optimization error:', error);
+      log.error('Index optimization error:', error);
       setState(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Index optimization error',
@@ -366,7 +381,7 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
       
       return result.success;
     } catch (error) {
-      console.error('Cache clearing error:', error);
+      log.error('Cache clearing error:', error);
       setState(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Cache clearing error',

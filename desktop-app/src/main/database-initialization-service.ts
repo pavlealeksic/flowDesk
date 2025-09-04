@@ -10,6 +10,7 @@ import { join, dirname } from 'path';
 import { promises as fs, constants, existsSync } from 'fs';
 import log from 'electron-log';
 import { spawn } from 'child_process';
+import { getDatabaseMigrationManager } from './database-migration-manager';
 
 // SQLite3 type definitions
 interface SQLite3Database {
@@ -71,7 +72,7 @@ export class DatabaseInitializationService {
   private progressCallback?: (progress: InitializationProgress) => void;
 
   constructor(progressCallback?: (progress: InitializationProgress) => void) {
-    this.progressCallback = progressCallback;
+    this.progressCallback = progressCallback || undefined;
     this.config = this.generateConfig();
   }
 
@@ -233,17 +234,31 @@ export class DatabaseInitializationService {
 
     log.info('Creating mail database...');
     
-    // Use the Rust engine to initialize the database
+    // Create empty database file first
     try {
-      const rustEngine = require('../lib/rust-engine');
+      // Create an empty SQLite database - migrations will handle the schema
+      const sqlite3 = await this.loadSQLite3();
       
-      // Create database with proper initialization
-      await this.executeDatabaseCommand('init_mail_database', this.config.mailDbPath);
-      
-      log.info('Mail database created successfully');
+      await new Promise<void>((resolve, reject) => {
+        const db = new sqlite3.Database(this.config.mailDbPath, (err: Error | null) => {
+          if (err) {
+            reject(new Error(`Failed to create mail database: ${err.message}`));
+          } else {
+            // Just close it immediately - migrations will create the schema
+            db.close((closeErr: any) => {
+              if (closeErr) {
+                reject(new Error(`Failed to close mail database: ${closeErr.message}`));
+              } else {
+                log.info('Mail database file created successfully');
+                resolve();
+              }
+            });
+          }
+        });
+      });
     } catch (error) {
-      log.error('Failed to create mail database via Rust, trying SQLite fallback:', error);
-      await this.createSQLiteDatabase(this.config.mailDbPath, this.getMailSchema());
+      log.error('Failed to create mail database:', error);
+      throw error;
     }
   }
 
@@ -258,16 +273,31 @@ export class DatabaseInitializationService {
 
     log.info('Creating calendar database...');
     
+    // Create empty database file first
     try {
-      const rustEngine = require('../lib/rust-engine');
+      // Create an empty SQLite database - migrations will handle the schema
+      const sqlite3 = await this.loadSQLite3();
       
-      // Create database with proper initialization
-      await this.executeDatabaseCommand('init_calendar_database', this.config.calendarDbPath);
-      
-      log.info('Calendar database created successfully');
+      await new Promise<void>((resolve, reject) => {
+        const db = new sqlite3.Database(this.config.calendarDbPath, (err: Error | null) => {
+          if (err) {
+            reject(new Error(`Failed to create calendar database: ${err.message}`));
+          } else {
+            // Just close it immediately - migrations will create the schema
+            db.close((closeErr: any) => {
+              if (closeErr) {
+                reject(new Error(`Failed to close calendar database: ${closeErr.message}`));
+              } else {
+                log.info('Calendar database file created successfully');
+                resolve();
+              }
+            });
+          }
+        });
+      });
     } catch (error) {
-      log.error('Failed to create calendar database via Rust, trying SQLite fallback:', error);
-      await this.createSQLiteDatabase(this.config.calendarDbPath, this.getCalendarSchema());
+      log.error('Failed to create calendar database:', error);
+      throw error;
     }
   }
 
@@ -355,31 +385,6 @@ export class DatabaseInitializationService {
     });
   }
 
-  /**
-   * Create SQLite database with schema (fallback method)
-   */
-  private async createSQLiteDatabase(dbPath: string, schema: string): Promise<void> {
-    const sqlite3 = await this.loadSQLite3();
-    
-    return new Promise((resolve, reject) => {
-      const db = new sqlite3.Database(dbPath, (err: Error | null) => {
-        if (err) {
-          reject(new Error(`Failed to create database ${dbPath}: ${err.message}`));
-          return;
-        }
-
-        // Execute schema
-        db.exec(schema, (err: Error | null) => {
-          db.close();
-          if (err) {
-            reject(new Error(`Failed to create schema: ${err.message}`));
-          } else {
-            resolve();
-          }
-        });
-      });
-    });
-  }
 
   /**
    * Load SQLite3 module
@@ -392,251 +397,6 @@ export class DatabaseInitializationService {
     }
   }
 
-  /**
-   * Get mail database schema
-   */
-  private getMailSchema(): string {
-    return `
-      -- Enable foreign key support
-      PRAGMA foreign_keys = ON;
-      
-      -- Mail accounts table
-      CREATE TABLE IF NOT EXISTS accounts (
-        id TEXT PRIMARY KEY,
-        email TEXT NOT NULL,
-        provider TEXT NOT NULL,
-        display_name TEXT NOT NULL,
-        is_enabled BOOLEAN NOT NULL DEFAULT 1,
-        imap_config TEXT,
-        smtp_config TEXT,
-        oauth_tokens TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
-      -- Mail messages table
-      CREATE TABLE IF NOT EXISTS messages (
-        id TEXT PRIMARY KEY,
-        account_id TEXT NOT NULL,
-        provider_id TEXT NOT NULL,
-        folder TEXT NOT NULL,
-        thread_id TEXT,
-        subject TEXT NOT NULL,
-        from_address TEXT NOT NULL,
-        from_name TEXT NOT NULL,
-        to_addresses TEXT NOT NULL,
-        cc_addresses TEXT NOT NULL,
-        bcc_addresses TEXT NOT NULL,
-        reply_to TEXT,
-        body_text TEXT,
-        body_html TEXT,
-        is_read BOOLEAN NOT NULL DEFAULT 0,
-        is_starred BOOLEAN NOT NULL DEFAULT 0,
-        is_important BOOLEAN NOT NULL DEFAULT 0,
-        has_attachments BOOLEAN NOT NULL DEFAULT 0,
-        received_at DATETIME NOT NULL,
-        sent_at DATETIME,
-        labels TEXT NOT NULL DEFAULT '[]',
-        message_id TEXT,
-        in_reply_to TEXT,
-        message_references TEXT NOT NULL DEFAULT '[]',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
-      );
-
-      -- Mail folders table
-      CREATE TABLE IF NOT EXISTS folders (
-        id TEXT PRIMARY KEY,
-        account_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        display_name TEXT NOT NULL,
-        folder_type TEXT NOT NULL,
-        parent_id TEXT,
-        path TEXT NOT NULL,
-        attributes TEXT NOT NULL DEFAULT '[]',
-        message_count INTEGER NOT NULL DEFAULT 0,
-        unread_count INTEGER NOT NULL DEFAULT 0,
-        is_selectable BOOLEAN NOT NULL DEFAULT 1,
-        can_select BOOLEAN NOT NULL DEFAULT 1,
-        last_sync_at DATETIME,
-        is_being_synced BOOLEAN NOT NULL DEFAULT 0,
-        sync_progress REAL,
-        sync_error TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
-        FOREIGN KEY (parent_id) REFERENCES folders(id) ON DELETE CASCADE
-      );
-
-      -- Mail threads table
-      CREATE TABLE IF NOT EXISTS threads (
-        id TEXT PRIMARY KEY,
-        account_id TEXT NOT NULL,
-        subject TEXT NOT NULL,
-        message_ids TEXT NOT NULL DEFAULT '[]',
-        participants TEXT NOT NULL DEFAULT '[]',
-        labels TEXT NOT NULL DEFAULT '[]',
-        has_unread BOOLEAN NOT NULL DEFAULT 0,
-        has_starred BOOLEAN NOT NULL DEFAULT 0,
-        has_important BOOLEAN NOT NULL DEFAULT 0,
-        has_attachments BOOLEAN NOT NULL DEFAULT 0,
-        last_message_at DATETIME NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
-      );
-
-      -- Create performance indexes
-      CREATE INDEX IF NOT EXISTS idx_messages_account_folder ON messages (account_id, folder);
-      CREATE INDEX IF NOT EXISTS idx_messages_received_at ON messages (received_at);
-      CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages (thread_id);
-      CREATE INDEX IF NOT EXISTS idx_folders_account_path ON folders (account_id, path);
-      CREATE INDEX IF NOT EXISTS idx_threads_account_last_message ON threads (account_id, last_message_at);
-
-      -- Schema version tracking
-      CREATE TABLE IF NOT EXISTS schema_version (
-        version INTEGER NOT NULL,
-        applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
-      INSERT OR REPLACE INTO schema_version (version) VALUES (1);
-    `;
-  }
-
-  /**
-   * Get calendar database schema
-   */
-  private getCalendarSchema(): string {
-    return `
-      -- Enable foreign key support
-      PRAGMA foreign_keys = ON;
-      
-      -- Calendar accounts table
-      CREATE TABLE IF NOT EXISTS calendar_accounts (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        email TEXT NOT NULL,
-        provider TEXT NOT NULL CHECK (provider IN ('google', 'outlook', 'exchange', 'caldav', 'icloud', 'fastmail')),
-        config TEXT NOT NULL,
-        credentials TEXT,
-        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'auth_error', 'quota_exceeded', 'suspended', 'disabled', 'error')),
-        default_calendar_id TEXT,
-        last_sync_at DATETIME,
-        next_sync_at DATETIME,
-        sync_interval_minutes INTEGER NOT NULL DEFAULT 15,
-        is_enabled BOOLEAN NOT NULL DEFAULT 1,
-        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, email, provider)
-      );
-
-      -- Calendars table
-      CREATE TABLE IF NOT EXISTS calendars (
-        id TEXT PRIMARY KEY,
-        account_id TEXT NOT NULL,
-        provider_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        description TEXT,
-        color TEXT NOT NULL DEFAULT '#3174ad',
-        timezone TEXT NOT NULL DEFAULT 'UTC',
-        is_primary BOOLEAN NOT NULL DEFAULT 0,
-        access_level TEXT NOT NULL DEFAULT 'reader' CHECK (access_level IN ('owner', 'writer', 'reader', 'freeBusyReader')),
-        is_visible BOOLEAN NOT NULL DEFAULT 1,
-        can_sync BOOLEAN NOT NULL DEFAULT 1,
-        calendar_type TEXT NOT NULL DEFAULT 'secondary' CHECK (calendar_type IN ('primary', 'secondary', 'shared', 'public', 'resource', 'holiday', 'birthdays')),
-        is_selected BOOLEAN NOT NULL DEFAULT 1,
-        last_sync_at DATETIME,
-        is_being_synced BOOLEAN NOT NULL DEFAULT 0,
-        sync_error TEXT,
-        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (account_id) REFERENCES calendar_accounts(id) ON DELETE CASCADE,
-        UNIQUE(account_id, provider_id)
-      );
-
-      -- Calendar events table
-      CREATE TABLE IF NOT EXISTS calendar_events (
-        id TEXT PRIMARY KEY,
-        calendar_id TEXT NOT NULL,
-        provider_id TEXT NOT NULL,
-        title TEXT NOT NULL,
-        description TEXT,
-        location TEXT,
-        location_data TEXT,
-        start_time DATETIME NOT NULL,
-        end_time DATETIME NOT NULL,
-        timezone TEXT,
-        is_all_day BOOLEAN NOT NULL DEFAULT 0,
-        status TEXT NOT NULL DEFAULT 'confirmed' CHECK (status IN ('confirmed', 'tentative', 'cancelled')),
-        visibility TEXT NOT NULL DEFAULT 'default' CHECK (visibility IN ('default', 'public', 'private', 'confidential')),
-        creator TEXT,
-        organizer TEXT,
-        attendees TEXT NOT NULL DEFAULT '[]',
-        recurrence TEXT,
-        recurring_event_id TEXT,
-        original_start_time DATETIME,
-        reminders TEXT NOT NULL DEFAULT '[]',
-        conferencing TEXT,
-        attachments TEXT NOT NULL DEFAULT '[]',
-        extended_properties TEXT,
-        source TEXT,
-        color TEXT,
-        transparency TEXT NOT NULL DEFAULT 'opaque' CHECK (transparency IN ('opaque', 'transparent')),
-        uid TEXT NOT NULL,
-        sequence INTEGER NOT NULL DEFAULT 0,
-        sync_hash TEXT,
-        privacy_sync_marker TEXT,
-        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (calendar_id) REFERENCES calendars(id) ON DELETE CASCADE,
-        FOREIGN KEY (recurring_event_id) REFERENCES calendar_events(id) ON DELETE CASCADE,
-        UNIQUE(calendar_id, provider_id)
-      );
-
-      -- Privacy sync rules table
-      CREATE TABLE IF NOT EXISTS privacy_sync_rules (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        name TEXT NOT NULL,
-        is_enabled BOOLEAN NOT NULL DEFAULT 1,
-        source_calendar_ids TEXT NOT NULL,
-        target_calendar_ids TEXT NOT NULL,
-        privacy_settings TEXT NOT NULL,
-        filters TEXT,
-        sync_window TEXT NOT NULL,
-        is_bidirectional BOOLEAN NOT NULL DEFAULT 0,
-        advanced_mode BOOLEAN NOT NULL DEFAULT 0,
-        last_sync_at DATETIME,
-        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, name)
-      );
-
-      -- Create performance indexes
-      CREATE INDEX IF NOT EXISTS idx_calendar_accounts_user_id ON calendar_accounts (user_id);
-      CREATE INDEX IF NOT EXISTS idx_calendar_accounts_status ON calendar_accounts (status);
-      CREATE INDEX IF NOT EXISTS idx_calendar_accounts_next_sync_at ON calendar_accounts (next_sync_at);
-      CREATE INDEX IF NOT EXISTS idx_calendars_account_id ON calendars (account_id);
-      CREATE INDEX IF NOT EXISTS idx_calendars_is_selected ON calendars (is_selected);
-      CREATE INDEX IF NOT EXISTS idx_calendar_events_calendar_id ON calendar_events (calendar_id);
-      CREATE INDEX IF NOT EXISTS idx_calendar_events_start_time ON calendar_events (start_time);
-      CREATE INDEX IF NOT EXISTS idx_calendar_events_end_time ON calendar_events (end_time);
-      CREATE INDEX IF NOT EXISTS idx_calendar_events_time_range ON calendar_events (start_time, end_time);
-      CREATE INDEX IF NOT EXISTS idx_calendar_events_uid ON calendar_events (uid);
-      CREATE INDEX IF NOT EXISTS idx_privacy_sync_rules_user_id ON privacy_sync_rules (user_id);
-      CREATE INDEX IF NOT EXISTS idx_privacy_sync_rules_is_enabled ON privacy_sync_rules (is_enabled);
-
-      -- Schema version tracking
-      CREATE TABLE IF NOT EXISTS schema_version (
-        version INTEGER NOT NULL,
-        applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
-      INSERT OR REPLACE INTO schema_version (version) VALUES (1);
-    `;
-  }
 
   /**
    * Run database migrations
@@ -644,18 +404,25 @@ export class DatabaseInitializationService {
   private async runMigrations(): Promise<void> {
     log.info('Running database migrations...');
     
-    // Future migrations will be handled here
-    // For now, just ensure schema version is set correctly
-    
-    const migrations: string[] = [
-      // Migration 1 is handled by initial schema creation
-    ];
-
-    for (const migration of migrations) {
-      // Execute migration if needed
+    try {
+      // Get the migration manager
+      const migrationManager = getDatabaseMigrationManager(
+        this.config.mailDbPath,
+        this.config.calendarDbPath
+      );
+      
+      // Apply all pending migrations
+      const success = await migrationManager.applyAllMigrations();
+      
+      if (success) {
+        log.info('Database migrations completed successfully');
+      } else {
+        throw new Error('Some database migrations failed');
+      }
+    } catch (error) {
+      log.error('Database migration failed:', error);
+      throw new Error(`Failed to run database migrations: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-
-    log.info('Database migrations completed');
   }
 
   /**
@@ -739,7 +506,12 @@ export class DatabaseInitializationService {
    */
   private updateProgress(stage: InitializationProgress['stage'], progress: number, message: string, details?: string): void {
     if (this.progressCallback) {
-      this.progressCallback({ stage, progress, message, details });
+      this.progressCallback({ 
+        stage, 
+        progress, 
+        message,
+        ...(details && { details })
+      });
     }
     log.debug(`Database initialization: ${stage} (${progress}%) - ${message}`);
   }

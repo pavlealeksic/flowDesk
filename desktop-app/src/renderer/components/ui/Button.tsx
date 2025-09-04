@@ -8,7 +8,7 @@ import { useHighContrast, useReducedMotion, useEnhancedFocus, useColorAccessibil
 const buttonVariants = cva(
   [
     // Base styles
-    'inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium',
+    'inline-flex items-center justify-center whitespace-nowrap text-sm font-medium',
     'transition-all duration-150 ease-out',
     'disabled:pointer-events-none disabled:opacity-50',
     'select-none',
@@ -49,11 +49,11 @@ const buttonVariants = cva(
         ]
       },
       size: {
-        sm: 'h-8 px-3 text-xs rounded-md',
-        md: 'h-9 px-4 py-2 text-sm rounded-md',
-        lg: 'h-10 px-6 py-2 text-base rounded-lg',
-        xl: 'h-12 px-8 py-3 text-lg rounded-lg',
-        icon: 'h-9 w-9 rounded-md'
+        sm: 'h-8 px-3 text-xs rounded-md gap-1.5',
+        md: 'h-9 px-4 py-2 text-sm rounded-md gap-2',
+        lg: 'h-10 px-6 py-2 text-base rounded-lg gap-2',
+        xl: 'h-12 px-8 py-3 text-lg rounded-lg gap-2.5',
+        icon: 'h-9 w-9 rounded-md p-0'
       },
       fullWidth: {
         true: 'w-full'
@@ -160,6 +160,8 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     const showLeftIcon = leftIcon && !loading
     const showRightIcon = rightIcon && !loading
     const showShortcut = shortcut && size !== 'icon' && !loading
+    const isIconOnly = size === 'icon' || (!children && (leftIcon || rightIcon))
+    const hasContent = Boolean(children)
 
     // Build enhanced class names with accessibility features
     const buttonClasses = cn(
@@ -228,26 +230,36 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ].join(' + ')) : undefined}
         {...props}
       >
+        {/* Loading indicator */}
         {loading && (
           <Loader2 
-            className="h-4 w-4 animate-spin" 
+            className={cn(
+              'animate-spin',
+              size === 'sm' ? 'h-3 w-3' : 
+              size === 'lg' ? 'h-5 w-5' : 
+              size === 'xl' ? 'h-6 w-6' : 
+              'h-4 w-4'
+            )}
             aria-hidden="true"
             role="status"
             aria-label={loadingText}
           />
         )}
+        
+        {/* Left icon */}
         {showLeftIcon && (
-          <span className="flex items-center" aria-hidden="true">
+          <span className="flex items-center justify-center" aria-hidden="true">
             {leftIcon}
           </span>
         )}
         
-        {size !== 'icon' && (
-          <span className="flex items-center gap-2">
+        {/* Button content (text + keyboard shortcut) */}
+        {hasContent && !isIconOnly && (
+          <>
             <span className="button-text">{children}</span>
             {showShortcut && (
               <kbd 
-                className="hidden sm:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100"
+                className="ml-auto hidden sm:inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100"
                 aria-hidden="true"
               >
                 {formatKeyboardShortcut([
@@ -256,11 +268,19 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
                 ].join(' + '))}
               </kbd>
             )}
+          </>
+        )}
+        
+        {/* Icon-only content */}
+        {isIconOnly && !loading && (
+          <span className="flex items-center justify-center" aria-hidden="true">
+            {leftIcon || rightIcon}
           </span>
         )}
         
-        {showRightIcon && (
-          <span className="flex items-center" aria-hidden="true">
+        {/* Right icon */}
+        {showRightIcon && !isIconOnly && (
+          <span className="flex items-center justify-center" aria-hidden="true">
             {rightIcon}
           </span>
         )}

@@ -414,8 +414,7 @@ const AttendeeCard: React.FC<AttendeeCardProps> = ({
             <div className="flex items-center space-x-2">
               <Switch
                 checked={attendee.optional}
-                onCheckedChange={(optional) => onUpdate({ optional })}
-                size="sm"
+                onCheckedChange={(optional: boolean) => onUpdate({ optional })}
               />
               <Label className="text-xs">Optional</Label>
             </div>

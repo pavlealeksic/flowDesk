@@ -3,11 +3,17 @@
  * 
  * Implements Gmail API and IMAP/SMTP for comprehensive Gmail support
  * with OAuth2 authentication and real-time push notifications
+ * 
+ * NOTE: This provider now supports both Gmail API and direct IMAP connections
+ * For production Gmail IMAP with OAuth2, use GmailImapProvider
  */
 
 import { BaseEmailProvider, SendMessageOptions, SyncOptions, ProviderCapabilities } from './base-email-provider'
 import { EMAIL_PROVIDERS } from './provider-config'
 import OAuth2Manager from '../oauth-manager'
+import { oAuth2TokenManager } from '../oauth-token-manager'
+import { oAuth2ImapIntegration } from '../oauth-imap-integration'
+import { GmailImapProvider } from './gmail-imap-provider'
 import log from 'electron-log'
 import { gmail_v1, google } from 'googleapis'
 import type { 
@@ -46,10 +52,19 @@ export class GmailProvider extends BaseEmailProvider {
   private oauth2Manager: OAuth2Manager
   private watchExpiration?: Date
   private historyId?: string
+  private gmailImapProvider?: GmailImapProvider
+  private useImapMode: boolean = false
 
   constructor(account: MailAccount, oauth2Manager: OAuth2Manager, imapPool?, smtpPool?, cache?) {
     super(account, imapPool, smtpPool, cache)
     this.oauth2Manager = oauth2Manager
+    
+    // Check if IMAP mode should be used (from account settings or environment)
+    this.useImapMode = account.settings?.useImap === true || process.env.GMAIL_USE_IMAP === 'true'
+    
+    if (this.useImapMode) {
+      this.gmailImapProvider = new GmailImapProvider(account, imapPool, smtpPool, cache)
+    }
   }
 
   getProviderType(): string {
@@ -64,7 +79,18 @@ export class GmailProvider extends BaseEmailProvider {
     if (this.isInitialized) return
 
     try {
-      // Setup OAuth2 authentication
+      log.info(`Initializing Gmail provider for account ${this.account.id} (IMAP mode: ${this.useImapMode})`)
+      
+      if (this.useImapMode && this.gmailImapProvider) {
+        // Use IMAP provider for direct Gmail IMAP connection
+        await this.gmailImapProvider.initialize()
+        this.isInitialized = true
+        this.emit('initialized')
+        log.info(`Gmail IMAP provider initialized for account ${this.account.id}`)
+        return
+      }
+      
+      // Fallback to Gmail API mode
       await this.setupAuthentication()
       
       // Initialize Gmail API
@@ -82,7 +108,7 @@ export class GmailProvider extends BaseEmailProvider {
       this.isInitialized = true
       this.emit('initialized')
       
-      log.info(`Gmail provider initialized for account ${this.account.id}`)
+      log.info(`Gmail API provider initialized for account ${this.account.id}`)
     } catch (error) {
       log.error(`Failed to initialize Gmail provider for account ${this.account.id}:`, error)
       throw error
@@ -130,6 +156,11 @@ export class GmailProvider extends BaseEmailProvider {
 
   async getFolders(): Promise<MailFolder[]> {
     await this.checkRateLimit('getFolders')
+    
+    // Delegate to IMAP provider if in IMAP mode
+    if (this.useImapMode && this.gmailImapProvider) {
+      return this.gmailImapProvider.getFolders()
+    }
     
     try {
       if (!this.gmailApi) {
@@ -211,6 +242,11 @@ export class GmailProvider extends BaseEmailProvider {
 
   async getMessages(folderId = 'INBOX', options: { limit?: number, since?: Date } = {}): Promise<EmailMessage[]> {
     await this.checkRateLimit('getMessages')
+    
+    // Delegate to IMAP provider if in IMAP mode
+    if (this.useImapMode && this.gmailImapProvider) {
+      return this.gmailImapProvider.getMessages(folderId, options)
+    }
     
     try {
       if (!this.gmailApi) {
@@ -511,6 +547,11 @@ export class GmailProvider extends BaseEmailProvider {
 
   async searchMessages(query: string, options: { limit?: number } = {}): Promise<EmailMessage[]> {
     await this.checkRateLimit('searchMessages')
+    
+    // Delegate to IMAP provider if in IMAP mode
+    if (this.useImapMode && this.gmailImapProvider) {
+      return this.gmailImapProvider.searchMessages(query, options)
+    }
     
     try {
       if (!this.gmailApi) {

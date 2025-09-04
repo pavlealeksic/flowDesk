@@ -9,6 +9,22 @@ import { useAppDispatch, useAppSelector } from '../store'
 import { addNotification } from '../store/slices/notificationSlice'
 import type { NotificationData as PreloadNotificationData } from '../types/preload'
 
+// Logging stub for renderer process
+const log = {
+  error: (message: string, ...args: any[]) => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[Notifications]', message, ...args);
+    }
+  },
+  warn: (message: string, ...args: any[]) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[Notifications]', message, ...args);
+    }
+  },
+  info: () => {}, // No-op
+  debug: () => {}, // No-op
+};
+
 interface NotificationData {
   title: string
   body: string
@@ -46,7 +62,7 @@ export const useNotifications = () => {
           setPermission(status)
         }
       } catch (error) {
-        console.error('Failed to check notification permissions:', error)
+        log.error('Failed to check notification permissions:', error)
       }
     }
 
@@ -62,7 +78,7 @@ export const useNotifications = () => {
         return result
       }
     } catch (error) {
-      console.error('Failed to request notification permission:', error)
+      log.error('Failed to request notification permission:', error)
     }
     return 'denied'
   }, [])
@@ -72,7 +88,7 @@ export const useNotifications = () => {
     try {
       // Check if notifications are enabled in settings
       if (!notificationSettings.enabled) {
-        console.log('Notifications disabled in settings')
+        log.debug('Notifications disabled in settings')
         return null
       }
 
@@ -80,14 +96,14 @@ export const useNotifications = () => {
       if (permission.permission !== 'granted') {
         const granted = await requestPermission()
         if (granted !== 'granted') {
-          console.log('Notification permission not granted')
+          log.warn('Notification permission not granted')
           return null
         }
       }
 
       // Check DND status
       if (permission.dndActive && data.importance !== 'critical') {
-        console.log('Do not disturb is active, skipping notification')
+        log.debug('Do not disturb is active, skipping notification')
         return null
       }
 
@@ -135,11 +151,11 @@ export const useNotifications = () => {
         return notification.tag || `notif-${Date.now()}`
       }
 
-      console.warn('No notification system available')
+      log.warn('No notification system available')
       return null
 
     } catch (error) {
-      console.error('Failed to send notification:', error)
+      log.error('Failed to send notification:', error)
       return null
     }
   }, [permission, notificationSettings, dispatch, requestPermission])
@@ -151,7 +167,7 @@ export const useNotifications = () => {
         await window.flowDesk.notifications.clear(notificationId)
       }
     } catch (error) {
-      console.error('Failed to clear notification:', error)
+      log.error('Failed to clear notification:', error)
     }
   }, [])
 
@@ -162,7 +178,7 @@ export const useNotifications = () => {
         await window.flowDesk.notifications.clearAll()
       }
     } catch (error) {
-      console.error('Failed to clear all notifications:', error)
+      log.error('Failed to clear all notifications:', error)
     }
   }, [])
 
@@ -174,7 +190,7 @@ export const useNotifications = () => {
         setPermission(prev => ({ ...prev, dndActive: active }))
       }
     } catch (error) {
-      console.error('Failed to set DND status:', error)
+      log.error('Failed to set DND status:', error)
     }
   }, [])
 
@@ -183,17 +199,17 @@ export const useNotifications = () => {
     if (!window.flowDesk?.notifications) return
 
     const unsubscribeClick = window.flowDesk.notifications.onNotificationClick((data) => {
-      console.log('Notification clicked:', data)
+      log.debug('Notification clicked:', data)
       // Handle notification click (e.g., navigate to relevant view)
     })
 
     const unsubscribeAction = window.flowDesk.notifications.onNotificationAction((data) => {
-      console.log('Notification action:', data)
+      log.debug('Notification action:', data)
       // Handle notification action
     })
 
     const unsubscribeClose = window.flowDesk.notifications.onNotificationClose((data) => {
-      console.log('Notification closed:', data)
+      log.debug('Notification closed:', data)
     })
 
     return () => {

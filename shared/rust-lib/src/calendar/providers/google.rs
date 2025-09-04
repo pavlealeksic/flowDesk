@@ -24,6 +24,7 @@ use crate::calendar::{
     GoogleCalendarConfig, CalendarAccountCredentials, EventLocation,
     CalendarAccessLevel, CalendarType
 };
+use oauth2::{basic::BasicClient, ClientId, AuthUrl, TokenUrl, RefreshToken, TokenResponse};
 
 use super::{
     CalendarProviderTrait, SyncStatus
@@ -70,16 +71,25 @@ impl GoogleCalendarProvider {
     }
 
     /// Get authorization headers for API requests
-    fn get_auth_headers(&self) -> CalendarResult<HeaderMap> {
-        let credentials = self.credentials.as_ref()
+    async fn get_auth_headers(&mut self) -> CalendarResult<HeaderMap> {
+        let mut credentials = self.credentials.as_ref()
             .ok_or_else(|| CalendarError::AuthenticationError {
                 message: "No credentials available".to_string(),
                 provider: CalendarProvider::Google,
                 account_id: self.account_id.clone(),
                 needs_reauth: true,
-            })?;
+            })?.clone();
 
-        let access_token: &str = &credentials.access_token;
+        // Check if token is expired and refresh if necessary
+        if let Some(expires_at) = credentials.expires_at {
+            if chrono::Utc::now() >= expires_at {
+                tracing::info!("Access token expired for account {}, refreshing...", self.account_id);
+                self.refresh_authentication().await?;
+                credentials = self.credentials.as_ref().unwrap().clone();
+            }
+        }
+
+        let access_token = &credentials.access_token;
 
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -93,17 +103,21 @@ impl GoogleCalendarProvider {
                 })?,
         );
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        headers.insert(
+            reqwest::header::USER_AGENT,
+            HeaderValue::from_static("FlowDesk-Calendar/1.0")
+        );
 
         Ok(headers)
     }
 
     /// Make authenticated API request
-    async fn make_request<T>(&self, method: &str, path: &str, body: Option<Value>) -> CalendarResult<T>
+    async fn make_request<T>(&mut self, method: &str, path: &str, body: Option<Value>) -> CalendarResult<T>
     where
         T: serde::de::DeserializeOwned,
     {
         let url = format!("{}{}", self.base_url, path);
-        let headers = self.get_auth_headers()?;
+        let headers = self.get_auth_headers().await?;
 
         let request = match method {
             "GET" => self.client.get(&url).headers(headers),
@@ -451,26 +465,84 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         &self.account_id
     }
 
-    async fn test_connection(&self) -> CalendarResult<()> {
+    async fn test_connection(&mut self) -> CalendarResult<()> {
         let _: GoogleCalendarListResponse = self.make_request("GET", "/users/me/calendarList", None).await?;
         Ok(())
     }
 
     async fn refresh_authentication(&mut self) -> CalendarResult<()> {
-        // Implement OAuth2 token refresh if needed
-        if let Some(refresh_token) = &self.credentials.as_ref().unwrap().refresh_token {
-            // Token refresh logic would go here in a real implementation
-            tracing::debug!("Token refresh available for Google Calendar provider");
-        }
-        // This would use the refresh token to get a new access token
-        Err(CalendarError::InternalError {
-            message: "Token refresh not yet implemented".to_string(),
-            operation: Some("refresh_authentication".to_string()),
-            context: None,
-        })
+        let credentials = self.credentials.as_ref()
+            .ok_or_else(|| CalendarError::AuthenticationError {
+                message: "No credentials available for token refresh".to_string(),
+                provider: CalendarProvider::Google,
+                account_id: self.account_id.clone(),
+                needs_reauth: true,
+            })?;
+
+        let refresh_token = credentials.refresh_token.as_ref()
+            .ok_or_else(|| CalendarError::AuthenticationError {
+                message: "No refresh token available".to_string(),
+                provider: CalendarProvider::Google,
+                account_id: self.account_id.clone(),
+                needs_reauth: true,
+            })?;
+
+        // Create OAuth2 client for token refresh
+        let client = oauth2::basic::BasicClient::new(
+            oauth2::ClientId::new(self.config.client_id.clone()),
+            None, // Client secret not needed for PKCE flow
+            oauth2::AuthUrl::new("https://accounts.google.com/o/oauth2/v2/auth".to_string())
+                .map_err(|e| CalendarError::InternalError {
+                    message: format!("Invalid auth URL: {}", e),
+                    operation: Some("refresh_authentication".to_string()),
+                    context: None,
+                })?,
+            Some(
+                oauth2::TokenUrl::new("https://oauth2.googleapis.com/token".to_string())
+                    .map_err(|e| CalendarError::InternalError {
+                        message: format!("Invalid token URL: {}", e),
+                        operation: Some("refresh_authentication".to_string()),
+                        context: None,
+                    })?
+            ),
+        );
+
+        // Exchange refresh token for new access token
+        let token_result = client
+            .exchange_refresh_token(&oauth2::RefreshToken::new(refresh_token.clone()))
+            .request_async(oauth2::reqwest::async_http_client)
+            .await
+            .map_err(|e| CalendarError::AuthenticationError {
+                message: format!("Token refresh failed: {}", e),
+                provider: CalendarProvider::Google,
+                account_id: self.account_id.clone(),
+                needs_reauth: true,
+            })?;
+
+        // Update credentials with new tokens
+        let new_access_token = token_result.access_token().secret().clone();
+        let new_refresh_token = token_result.refresh_token()
+            .map(|t| t.secret().clone())
+            .unwrap_or_else(|| refresh_token.clone()); // Keep old refresh token if not provided
+        let expires_at = token_result.expires_in().map(|duration| {
+            chrono::Utc::now() + chrono::Duration::seconds(duration.as_secs() as i64)
+        });
+
+        // Update internal credentials
+        self.credentials = Some(CalendarAccountCredentials {
+            access_token: new_access_token.clone(),
+            refresh_token: Some(new_refresh_token),
+            expires_at,
+        });
+
+        // Update access token for immediate use
+        self.access_token = Some(new_access_token);
+
+        tracing::info!("Successfully refreshed Google Calendar access token for account: {}", self.account_id);
+        Ok(())
     }
 
-    async fn list_calendars(&self) -> CalendarResult<Vec<Calendar>> {
+    async fn list_calendars(&mut self) -> CalendarResult<Vec<Calendar>> {
         let response: GoogleCalendarListResponse = self.make_request("GET", "/users/me/calendarList", None).await?;
         
         let mut calendars = Vec::new();
@@ -481,13 +553,13 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         Ok(calendars)
     }
 
-    async fn get_calendar(&self, calendar_id: &str) -> CalendarResult<Calendar> {
+    async fn get_calendar(&mut self, calendar_id: &str) -> CalendarResult<Calendar> {
         let path = format!("/calendars/{}", urlencoding::encode(calendar_id));
         let google_cal: GoogleCalendarData = self.make_request("GET", &path, None).await?;
         self.convert_google_calendar(&google_cal)
     }
 
-    async fn create_calendar(&self, calendar: &Calendar) -> CalendarResult<Calendar> {
+    async fn create_calendar(&mut self, calendar: &Calendar) -> CalendarResult<Calendar> {
         let request_body = json!({
             "summary": calendar.name,
             "description": calendar.description,
@@ -499,7 +571,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         self.convert_google_calendar(&google_cal)
     }
 
-    async fn update_calendar(&self, calendar_id: &str, calendar: &Calendar) -> CalendarResult<Calendar> {
+    async fn update_calendar(&mut self, calendar_id: &str, calendar: &Calendar) -> CalendarResult<Calendar> {
         let path = format!("/calendars/{}", urlencoding::encode(calendar_id));
         let request_body = json!({
             "summary": calendar.name,
@@ -511,14 +583,14 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         self.convert_google_calendar(&google_cal)
     }
 
-    async fn delete_calendar(&self, calendar_id: &str) -> CalendarResult<()> {
+    async fn delete_calendar(&mut self, calendar_id: &str) -> CalendarResult<()> {
         let path = format!("/calendars/{}", urlencoding::encode(calendar_id));
         let _: Value = self.make_request("DELETE", &path, None).await?;
         Ok(())
     }
 
     async fn list_events(
-        &self,
+        &mut self,
         calendar_id: &str,
         time_min: Option<DateTime<Utc>>,
         time_max: Option<DateTime<Utc>>,
@@ -552,7 +624,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         Ok(events)
     }
 
-    async fn get_event(&self, calendar_id: &str, event_id: &str) -> CalendarResult<CalendarEvent> {
+    async fn get_event(&mut self, calendar_id: &str, event_id: &str) -> CalendarResult<CalendarEvent> {
         let path = format!("/calendars/{}/events/{}", 
             urlencoding::encode(calendar_id), 
             urlencoding::encode(event_id)
@@ -561,7 +633,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         self.convert_google_event(&google_event, calendar_id)
     }
 
-    async fn create_event(&self, event: &CreateCalendarEventInput) -> CalendarResult<CalendarEvent> {
+    async fn create_event(&mut self, event: &CreateCalendarEventInput) -> CalendarResult<CalendarEvent> {
         // Convert our event to Google Calendar API format
         let mut request_body = json!({
             "summary": event.title,
@@ -629,7 +701,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
     }
 
     async fn update_event(
-        &self, 
+        &mut self, 
         calendar_id: &str,
         event_id: &str, 
         updates: &UpdateCalendarEventInput
@@ -678,7 +750,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         self.convert_google_event(&google_event, calendar_id)
     }
 
-    async fn delete_event(&self, calendar_id: &str, event_id: &str) -> CalendarResult<()> {
+    async fn delete_event(&mut self, calendar_id: &str, event_id: &str) -> CalendarResult<()> {
         let path = format!("/calendars/{}/events/{}", 
             urlencoding::encode(calendar_id), 
             urlencoding::encode(event_id)
@@ -688,7 +760,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
     }
 
     async fn move_event(
-        &self,
+        &mut self,
         source_calendar_id: &str,
         target_calendar_id: &str,
         event_id: &str,
@@ -708,7 +780,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
     // For brevity, I'm showing the key implementations. The full implementation
     // would include all remaining trait methods.
 
-    async fn query_free_busy(&self, query: &FreeBusyQuery) -> CalendarResult<FreeBusyResponse> {
+    async fn query_free_busy(&mut self, query: &FreeBusyQuery) -> CalendarResult<FreeBusyResponse> {
         let request_body = json!({
             "timeMin": query.time_min.to_rfc3339(),
             "timeMax": query.time_max.to_rfc3339(),
@@ -742,7 +814,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         })
     }
 
-    async fn full_sync(&self) -> CalendarResult<SyncStatus> {
+    async fn full_sync(&mut self) -> CalendarResult<SyncStatus> {
         Ok(SyncStatus {
             operation_id: uuid::Uuid::new_v4().to_string(),
             account_id: "google".to_string(),
@@ -760,7 +832,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         })
     }
 
-    async fn incremental_sync(&self, _sync_token: Option<&str>) -> CalendarResult<SyncStatus> {
+    async fn incremental_sync(&mut self, _sync_token: Option<&str>) -> CalendarResult<SyncStatus> {
         Ok(SyncStatus {
             operation_id: uuid::Uuid::new_v4().to_string(),
             account_id: "google".to_string(),
@@ -778,7 +850,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         })
     }
 
-    async fn get_sync_token(&self, calendar_id: &str) -> CalendarResult<Option<String>> {
+    async fn get_sync_token(&mut self, calendar_id: &str) -> CalendarResult<Option<String>> {
         let url = format!(
             "https://www.googleapis.com/calendar/v3/calendars/{}/events?maxResults=1&fields=nextSyncToken",
             urlencoding::encode(calendar_id)
@@ -816,7 +888,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         Ok(json.get("nextSyncToken").and_then(|v| v.as_str()).map(String::from))
     }
 
-    async fn is_sync_token_valid(&self, sync_token: &str) -> CalendarResult<bool> {
+    async fn is_sync_token_valid(&mut self, sync_token: &str) -> CalendarResult<bool> {
         // Try to use the sync token in a minimal request
         let url = format!(
             "https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1&syncToken={}",
@@ -847,7 +919,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
     }
 
     // Advanced recurring event methods
-    async fn get_recurring_event_instances(&self, calendar_id: &str, recurring_event_id: &str, time_min: DateTime<Utc>, time_max: DateTime<Utc>) -> CalendarResult<Vec<CalendarEvent>> {
+    async fn get_recurring_event_instances(&mut self, calendar_id: &str, recurring_event_id: &str, time_min: DateTime<Utc>, time_max: DateTime<Utc>) -> CalendarResult<Vec<CalendarEvent>> {
         let url = format!(
             "https://www.googleapis.com/calendar/v3/calendars/{}/events/{}/instances?timeMin={}&timeMax={}",
             urlencoding::encode(calendar_id),
@@ -891,7 +963,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
             
         events
     }
-    async fn update_recurring_event_instance(&self, calendar_id: &str, _recurring_event_id: &str, instance_id: &str, updates: &UpdateCalendarEventInput) -> CalendarResult<CalendarEvent> {
+    async fn update_recurring_event_instance(&mut self, calendar_id: &str, _recurring_event_id: &str, instance_id: &str, updates: &UpdateCalendarEventInput) -> CalendarResult<CalendarEvent> {
         // For Google Calendar, we update the specific instance by its instance ID
         let url = format!(
             "https://www.googleapis.com/calendar/v3/calendars/{}/events/{}",
@@ -934,7 +1006,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
             
         self.convert_google_event(&updated_event, calendar_id)
     }
-    async fn delete_recurring_event_instance(&self, calendar_id: &str, _recurring_event_id: &str, instance_id: &str) -> CalendarResult<()> {
+    async fn delete_recurring_event_instance(&mut self, calendar_id: &str, _recurring_event_id: &str, instance_id: &str) -> CalendarResult<()> {
         let url = format!(
             "https://www.googleapis.com/calendar/v3/calendars/{}/events/{}",
             urlencoding::encode(calendar_id),
@@ -967,7 +1039,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         
         Ok(())
     }
-    async fn add_attendees(&self, calendar_id: &str, event_id: &str, attendees: &[EventAttendee]) -> CalendarResult<CalendarEvent> {
+    async fn add_attendees(&mut self, calendar_id: &str, event_id: &str, attendees: &[EventAttendee]) -> CalendarResult<CalendarEvent> {
         // First get the existing event
         let event = self.get_event(calendar_id, event_id).await?;
         
@@ -1040,7 +1112,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         
         self.update_event(calendar_id, event_id, &update).await
     }
-    async fn remove_attendees(&self, calendar_id: &str, event_id: &str, attendee_emails: &[String]) -> CalendarResult<CalendarEvent> {
+    async fn remove_attendees(&mut self, calendar_id: &str, event_id: &str, attendee_emails: &[String]) -> CalendarResult<CalendarEvent> {
         // First get the existing event
         let event = self.get_event(calendar_id, event_id).await?;
         
@@ -1072,7 +1144,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         
         self.update_event(calendar_id, event_id, &update).await
     }
-    async fn send_invitations(&self, calendar_id: &str, event_id: &str, message: Option<&str>) -> CalendarResult<()> {
+    async fn send_invitations(&mut self, calendar_id: &str, event_id: &str, message: Option<&str>) -> CalendarResult<()> {
         let mut url = format!(
             "https://www.googleapis.com/calendar/v3/calendars/{}/events/{}",
             urlencoding::encode(calendar_id),
@@ -1114,7 +1186,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         
         Ok(())
     }
-    async fn get_calendar_free_busy(&self, calendar_id: &str, time_min: DateTime<Utc>, time_max: DateTime<Utc>) -> CalendarResult<FreeBusyResponse> {
+    async fn get_calendar_free_busy(&mut self, calendar_id: &str, time_min: DateTime<Utc>, time_max: DateTime<Utc>) -> CalendarResult<FreeBusyResponse> {
         let url = "https://www.googleapis.com/calendar/v3/freeBusy";
         
         let request_body = serde_json::json!({

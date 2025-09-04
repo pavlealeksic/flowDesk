@@ -126,57 +126,104 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
                 e.stopPropagation();
                 setShowWorkspaceActions(!showWorkspaceActions);
               }}
+              aria-expanded={showWorkspaceActions}
+              aria-haspopup="menu"
+              aria-label="Workspace actions menu"
             >
               <MoreVertical className="h-3 w-3" />
             </Button>
             
             {/* Workspace Actions Menu */}
             {showWorkspaceActions && (
-              <div className="absolute top-full right-0 mt-1 z-50 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[140px]">
-                <button
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center space-x-2"
+              <div 
+                className="absolute top-full right-0 mt-1 z-50 bg-card border border-border rounded-lg shadow-lg py-1 min-w-[140px]"
+                role="menu"
+                aria-orientation="vertical"
+              >
+                <div
+                  role="menuitem"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-accent focus:bg-accent flex items-center space-x-2 cursor-pointer"
+                  tabIndex={0}
                   onClick={() => {
                     if (workspaceId && onEditWorkspace) {
                       onEditWorkspace(workspaceId);
                     }
                     setShowWorkspaceActions(false);
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (workspaceId && onEditWorkspace) {
+                        onEditWorkspace(workspaceId);
+                      }
+                      setShowWorkspaceActions(false);
+                    }
+                  }}
                 >
                   <Edit className="h-3 w-3" />
                   <span>Edit Workspace</span>
-                </button>
-                <button
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center space-x-2"
+                </div>
+                <div
+                  role="menuitem"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-accent focus:bg-accent flex items-center space-x-2 cursor-pointer"
+                  tabIndex={0}
                   onClick={() => {
                     if (workspaceId && onWorkspaceSettings) {
                       onWorkspaceSettings(workspaceId);
                     }
                     setShowWorkspaceActions(false);
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (workspaceId && onWorkspaceSettings) {
+                        onWorkspaceSettings(workspaceId);
+                      }
+                      setShowWorkspaceActions(false);
+                    }
+                  }}
                 >
                   <Settings className="h-3 w-3" />
                   <span>Settings</span>
-                </button>
-                <button
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center space-x-2"
+                </div>
+                <div
+                  role="menuitem"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-accent focus:bg-accent flex items-center space-x-2 cursor-pointer"
+                  tabIndex={0}
                   onClick={() => {
                     console.log('Invite users to workspace:', workspaceId);
                     setShowWorkspaceActions(false);
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      console.log('Invite users to workspace:', workspaceId);
+                      setShowWorkspaceActions(false);
+                    }
+                  }}
                 >
                   <UserPlus className="h-3 w-3" />
                   <span>Invite Users</span>
-                </button>
-                <button
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center space-x-2"
+                </div>
+                <div
+                  role="menuitem"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-accent focus:bg-accent flex items-center space-x-2 cursor-pointer"
+                  tabIndex={0}
                   onClick={() => {
                     console.log('Export workspace:', workspaceId);
                     setShowWorkspaceActions(false);
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      console.log('Export workspace:', workspaceId);
+                      setShowWorkspaceActions(false);
+                    }
+                  }}
                 >
                   <Download className="h-3 w-3" />
                   <span>Export</span>
-                </button>
+                </div>
               </div>
             )}
           </div>
@@ -194,8 +241,8 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
               size="sm"
               onClick={onAddService}
               className="w-full"
+              leftIcon={<Plus className="h-4 w-4" />}
             >
-              <Plus className="h-4 w-4 mr-2" />
               Add Service
             </Button>
           </div>
@@ -250,29 +297,51 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
                       top: `${contextMenuPosition.y}px`, 
                       zIndex: 1000 
                     }}
+                    role="menu"
+                    aria-orientation="vertical"
                   >
-                    <button
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center space-x-2"
+                    <div
+                      role="menuitem"
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-accent focus:bg-accent flex items-center space-x-2 cursor-pointer"
+                      tabIndex={0}
                       onClick={(e) => {
                         e.stopPropagation();
                         onEditService?.(service.id);
                         setContextMenuService(null);
                       }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onEditService?.(service.id);
+                          setContextMenuService(null);
+                        }
+                      }}
                     >
                       <Edit className="h-3 w-3" />
                       <span>Edit</span>
-                    </button>
-                    <button
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-destructive/10 text-destructive flex items-center space-x-2"
+                    </div>
+                    <div
+                      role="menuitem"
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-destructive/10 focus:bg-destructive/10 text-destructive flex items-center space-x-2 cursor-pointer"
+                      tabIndex={0}
                       onClick={(e) => {
                         e.stopPropagation();
                         onDeleteService?.(service.id);
                         setContextMenuService(null);
                       }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onDeleteService?.(service.id);
+                          setContextMenuService(null);
+                        }
+                      }}
                     >
                       <Trash2 className="h-3 w-3" />
                       <span>Remove</span>
-                    </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -289,8 +358,8 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
             size="sm"
             onClick={onAddService}
             className="w-full"
+            leftIcon={<Plus className="h-4 w-4" />}
           >
-            <Plus className="h-4 w-4 mr-2" />
             Add Service
           </Button>
         </div>

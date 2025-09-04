@@ -1,328 +1,308 @@
-# OAuth2 Setup Guide for Flow Desk Desktop App
+# OAuth2 Setup Guide for Flow Desk Desktop App - Email/Calendar API Access
 
 ## Overview
 
-Flow Desk now includes complete OAuth2 integration with real providers including Gmail, Outlook, Google Calendar, and more. This guide will help you set up OAuth2 authentication so users can connect their actual email and calendar accounts.
+Flow Desk uses a **dual authentication architecture**:
+- **User Authentication**: Handled by [Clerk](https://clerk.com) (external service)
+- **Email/Calendar API Access**: OAuth2 for accessing Gmail, Outlook, and calendar data
 
-## Architecture
+This guide focuses on setting up OAuth2 for **email/calendar API access only**. User authentication (login, signup, sessions) is managed entirely by Clerk.
 
-The OAuth2 system consists of several components:
+## Architecture Clarification
 
-1. **OAuth2 Integration Manager** - Orchestrates the complete OAuth flow
-2. **OAuth2 Token Manager** - Handles automatic token refresh and validation
-3. **OAuth2 Provider Config** - Centralized provider configuration
-4. **OAuth2 Callback Server** - Local server for handling OAuth callbacks
-5. **Rust OAuth Bridge** - Integrates with Rust engine for secure storage
-6. **React UI Components** - User interface for authentication flows
+### What Clerk Handles (User Management)
+- User registration and login
+- Session management
+- Multi-factor authentication (MFA)
+- User profiles and metadata
+- Password resets
+- SSO (Single Sign-On)
+- User security and compliance
+
+### What OAuth2 Handles (API Access)
+- Requesting permission to access user's email accounts (Gmail, Outlook, etc.)
+- Requesting permission to access user's calendar accounts
+- Obtaining API access tokens for email/calendar providers
+- Refreshing expired API tokens
+- Storing encrypted API tokens locally
+
+### Data Flow
+```
+1. User logs in via Clerk → Gets user identity
+2. User connects email account → OAuth2 flow for API access
+3. API tokens stored locally → Encrypted and linked to Clerk user ID
+4. App accesses email/calendar → Uses stored API tokens
+```
 
 ## Quick Setup
 
-### 1. Environment Configuration
+### 1. Clerk Configuration (User Authentication)
 
-Create a `.env` file in your project root with the following OAuth2 credentials:
+First, set up Clerk for user authentication:
 
 ```env
-# Gmail OAuth2 (Google Cloud Console)
-GOOGLE_CLIENT_ID=your_google_client_id_here
-GOOGLE_CLIENT_SECRET=your_google_client_secret_here
-
-# Outlook OAuth2 (Azure App Registration)
-MICROSOFT_CLIENT_ID=your_microsoft_client_id_here
-MICROSOFT_CLIENT_SECRET=your_microsoft_client_secret_here
-
-# Optional: Yahoo Mail OAuth2
-YAHOO_CLIENT_ID=your_yahoo_client_id_here
-YAHOO_CLIENT_SECRET=your_yahoo_client_secret_here
-
-# OAuth2 Security
-OAUTH_ENCRYPTION_KEY=your_secure_encryption_key_change_in_production
+# In your .env file
+CLERK_PUBLISHABLE_KEY=pk_test_your_clerk_publishable_key
+CLERK_SECRET_KEY=sk_test_your_clerk_secret_key
 ```
 
-### 2. Provider Setup Instructions
+Get these from [Clerk Dashboard](https://dashboard.clerk.com)
 
-#### Gmail Setup
+### 2. Email/Calendar API Configuration
+
+Then configure OAuth2 for API access:
+
+```env
+# Email/Calendar API Access Tokens
+TOKEN_ENCRYPTION_KEY=your_secure_32_char_key_here
+
+# Gmail/Google Calendar API
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+
+# Outlook/Microsoft Calendar API
+MICROSOFT_CLIENT_ID=your_microsoft_client_id
+MICROSOFT_CLIENT_SECRET=your_microsoft_client_secret
+```
+
+## Provider Setup Instructions
+
+### Gmail/Google Calendar Setup
+
+These credentials allow the app to access Gmail and Google Calendar on behalf of users:
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
-3. Enable the Gmail API and Google Calendar API
-4. Go to **Credentials > Create Credentials > OAuth 2.0 Client IDs**
-5. Choose **Desktop Application** as the application type
-6. Add authorized redirect URI: `http://localhost:8080/oauth/callback`
-7. Copy the Client ID and Client Secret to your `.env` file
-8. Ensure your Google account has 2-factor authentication enabled
+2. Create a new project or select existing
+3. Enable APIs:
+   - Gmail API (for email access)
+   - Google Calendar API (for calendar access)
+4. Create OAuth 2.0 credentials:
+   - Go to **Credentials > Create Credentials > OAuth 2.0 Client ID**
+   - Choose **Desktop Application** as type
+   - Name: "Flow Desk Desktop"
+5. Add redirect URIs:
+   - `http://localhost:8080/oauth/callback`
+   - `http://127.0.0.1:8080/oauth/callback`
+6. Copy Client ID and Secret to `.env`
 
-#### Outlook Setup
+**Required Scopes**:
+- `https://www.googleapis.com/auth/gmail.readonly` - Read emails
+- `https://www.googleapis.com/auth/gmail.send` - Send emails
+- `https://www.googleapis.com/auth/calendar` - Calendar access
+
+### Outlook/Microsoft Calendar Setup
+
+These credentials allow the app to access Outlook Mail and Microsoft Calendar:
 
 1. Go to [Azure Portal](https://portal.azure.com/)
 2. Navigate to **Azure Active Directory > App registrations**
-3. Click **New registration**
-4. Name your application (e.g., "Flow Desk Desktop")
-5. Choose **Accounts in any organizational directory and personal Microsoft accounts**
-6. Set redirect URI: `http://localhost:8080/oauth/callback` (Public client/native)
-7. After creation, go to **API permissions**
-8. Add Microsoft Graph permissions:
-   - Mail.Read
-   - Mail.Send
-   - IMAP.AccessAsUser.All
-   - SMTP.Send
-   - User.Read
-   - Calendars.ReadWrite (for calendar access)
-9. Add Office 365 Exchange Online permissions:
-   - IMAP.AccessAsUser.All
-   - SMTP.Send
-10. Grant admin consent for the permissions
-11. Go to **Certificates & secrets** and create a new client secret
-12. Copy the Application (client) ID and client secret value to your `.env` file
+3. Click **New registration**:
+   - Name: "Flow Desk Desktop"
+   - Supported accounts: "Personal Microsoft accounts and organizational accounts"
+   - Redirect URI: `http://localhost:8080/oauth/callback` (Web platform)
+4. After creation, go to **API permissions** and add:
+   - **Microsoft Graph**:
+     - `Mail.Read` - Read user mail
+     - `Mail.Send` - Send mail as user
+     - `Calendars.ReadWrite` - Full calendar access
+     - `User.Read` - Read user profile (for email address)
+   - **Office 365 Exchange Online** (for IMAP/SMTP):
+     - `IMAP.AccessAsUser.All`
+     - `SMTP.Send`
+5. Go to **Certificates & secrets**:
+   - Create new client secret
+   - Copy the value (only shown once!)
+6. Copy Application ID and Secret to `.env`
 
-### 3. Testing the Setup
+## User Experience Flow
 
-The system includes built-in testing tools. Run the OAuth2 diagnostic:
+### From the User's Perspective
+
+1. **User Login** (via Clerk):
+   ```
+   User → Login with Clerk → Authenticated
+   ```
+
+2. **Connect Email Account** (via OAuth2):
+   ```
+   User → "Add Gmail Account" → Browser opens → 
+   User grants permission → Tokens stored locally
+   ```
+
+3. **Access Email/Calendar**:
+   ```
+   App uses stored tokens → Fetches emails/events → 
+   Shows in UI
+   ```
+
+### From the Developer's Perspective
 
 ```typescript
-import { oAuth2TestSetup } from './src/main/oauth-test-setup';
+// 1. Check if user is authenticated (Clerk)
+const { userId } = useAuth(); // Clerk hook
+if (!userId) return <SignIn />; // Clerk component
 
-// Run full diagnostic
-const diagnostic = await oAuth2TestSetup.runFullDiagnostic();
-console.log('OAuth2 Health:', diagnostic.overallHealth);
+// 2. Connect email account (OAuth2 for API access)
+const connectGmail = async () => {
+  // This triggers OAuth2 flow for Gmail API access
+  const result = await window.flowDesk.mail.startOAuthFlow('gmail');
+  
+  if (result.success) {
+    // API tokens are now stored, linked to Clerk user ID
+    console.log('Gmail connected:', result.email);
+  }
+};
 
-// Generate setup report
-const report = await oAuth2TestSetup.generateSetupReport();
-console.log(report);
+// 3. Use the connected account
+const fetchEmails = async () => {
+  // Uses stored API tokens to access Gmail
+  const emails = await window.flowDesk.mail.getEmails('gmail');
+};
 ```
 
-## User Authentication Flow
+## Security Model
 
-### 1. Starting OAuth Flow
+### User Authentication Security (Clerk)
+- Handled entirely by Clerk's infrastructure
+- Industry-standard security practices
+- SOC 2 Type II compliant
+- GDPR compliant
+- No passwords stored locally
 
-When a user wants to connect an account:
+### API Token Security (Local)
+- Tokens encrypted with AES-256-GCM
+- Machine-specific encryption keys
+- Tokens linked to Clerk user ID
+- Automatic token refresh
+- Tokens expire after 90 days of inactivity
 
-```typescript
-// From React component
-const result = await window.flowDesk.mail.startOAuthFlow('gmail');
-
-if (result.success) {
-  // Account connected successfully
-  console.log('Connected account:', result.email);
-} else {
-  // Handle error
-  console.error('OAuth failed:', result.error);
-}
+### Data Isolation
+```
+Clerk User ID → Links to → Encrypted API Tokens
+             ↓
+    Each user's tokens are isolated
 ```
 
-### 2. What Happens Behind the Scenes
+## Common Scenarios
 
-1. **Validation** - System checks if provider is configured
-2. **Authorization URL** - Generates secure OAuth2 URL with PKCE
-3. **User Authorization** - Opens browser for user consent
-4. **Callback Handling** - Local server captures authorization code
-5. **Token Exchange** - Exchanges code for access/refresh tokens
-6. **Secure Storage** - Stores encrypted tokens in Rust engine
-7. **Account Creation** - Creates mail account with OAuth credentials
+### Scenario 1: New User Signup
+1. User signs up via Clerk
+2. Clerk creates user account
+3. User is prompted to connect email accounts
+4. OAuth2 flow gets API permissions
+5. Tokens stored locally, linked to Clerk user
 
-### 3. Automatic Token Management
+### Scenario 2: Existing User, New Device
+1. User logs in via Clerk on new device
+2. No email accounts connected (tokens are local)
+3. User re-authorizes email accounts
+4. New tokens stored on this device
 
-The system automatically:
-
-- **Refreshes tokens** before they expire (5 minutes before expiry)
-- **Validates tokens** before each API call
-- **Retries refresh** up to 3 times on failure
-- **Stores tokens securely** using Rust encryption
-- **Revokes tokens** on account removal
-
-## Available Providers
-
-### Currently Supported
-
-- **Gmail** - Full support with Google APIs
-- **Outlook** - Full support with Microsoft Graph
-- **Google Calendar** - Full calendar integration
-- **Microsoft Calendar** - Full calendar integration
-
-### Partially Supported
-
-- **Yahoo Mail** - Basic IMAP/SMTP (OAuth optional)
-
-### Adding New Providers
-
-To add a new OAuth2 provider:
-
-1. **Update Provider Config**:
-```typescript
-// In oauth-provider-config.ts
-this.providers.set('new-provider', {
-  providerId: 'new-provider',
-  name: 'New Provider',
-  clientId: process.env.NEW_PROVIDER_CLIENT_ID || '',
-  clientSecret: process.env.NEW_PROVIDER_CLIENT_SECRET || '',
-  authUrl: 'https://provider.com/oauth2/authorize',
-  tokenUrl: 'https://provider.com/oauth2/token',
-  userInfoUrl: 'https://provider.com/oauth2/userinfo',
-  scopes: ['read', 'write'],
-  redirectUri: 'http://localhost:8080/oauth/callback',
-  supportsRefreshToken: true,
-  requiresClientSecret: true
-});
-```
-
-2. **Add Environment Variables**:
-```env
-NEW_PROVIDER_CLIENT_ID=your_client_id
-NEW_PROVIDER_CLIENT_SECRET=your_client_secret
-```
-
-3. **Update React UI** to include the new provider in the AddAccountModal.
-
-## Security Features
-
-### Token Security
-
-- **Encryption**: All tokens stored using AES-256-GCM encryption
-- **Secure Storage**: Tokens stored in Rust engine with system-derived keys
-- **Memory Protection**: Sensitive data zeroed after use
-- **Key Derivation**: Machine-specific key derivation for token encryption
-
-### OAuth2 Security
-
-- **PKCE**: Proof Key for Code Exchange for all flows
-- **State Parameter**: CSRF protection with cryptographically secure state
-- **Secure Redirect**: Localhost-only redirect URIs
-- **Token Validation**: Regular token validation and automatic refresh
-- **Scope Limitation**: Minimal required scopes for each provider
-
-### Network Security
-
-- **HTTPS Only**: All OAuth2 endpoints use HTTPS
-- **Local Callback**: OAuth callbacks handled by local server only
-- **Timeout Protection**: OAuth flows timeout after 10 minutes
-- **Error Handling**: Comprehensive error handling and logging
+### Scenario 3: Token Refresh
+1. API token expires
+2. System automatically uses refresh token
+3. New access token obtained
+4. User experiences no interruption
 
 ## Troubleshooting
 
-### Common Issues
+### "User not authenticated"
+- **Issue**: Clerk authentication failed
+- **Solution**: Check Clerk keys in `.env`
+- **Not related to**: OAuth2 or email/calendar access
 
-#### 1. "Provider not configured"
-**Solution**: Check your `.env` file has the correct OAuth2 credentials
+### "Gmail/Outlook connection failed"
+- **Issue**: OAuth2 flow for API access failed
+- **Solution**: Check Google/Microsoft credentials in `.env`
+- **Not related to**: User authentication (Clerk)
 
-#### 2. "OAuth client ID not configured"
-**Solution**: Ensure environment variables are set and restart the application
+### "Invalid API credentials"
+- **Issue**: Email/calendar provider credentials incorrect
+- **Solution**: Verify CLIENT_ID and CLIENT_SECRET for the provider
+- **Note**: These are NOT user credentials
 
-#### 3. "Token refresh failed"
-**Solution**: Check if OAuth2 app is still active in provider console
+### "Token expired"
+- **Issue**: API access token needs refresh
+- **Solution**: System should auto-refresh; if not, user needs to re-authorize
+- **Not related to**: User session (managed by Clerk)
 
-#### 4. "Invalid redirect URI"
-**Solution**: Ensure `http://localhost:8080/oauth/callback` is added to your OAuth2 app
+## Testing the Setup
 
-### Diagnostic Tools
-
-Run the diagnostic tool to check system health:
-
+### Test User Authentication (Clerk)
 ```typescript
-import { oAuth2TestSetup } from './src/main/oauth-test-setup';
-
-// Check specific provider
-const providerStatus = await oAuth2TestSetup.testProvider('gmail');
-
-// Full system test
-const systemStatus = await oAuth2TestSetup.runSystemTest();
-
-// Generate detailed report
-const report = await oAuth2TestSetup.generateSetupReport();
+// Check if Clerk is configured
+const { isLoaded, isSignedIn } = useAuth();
+console.log('Clerk loaded:', isLoaded);
+console.log('User signed in:', isSignedIn);
 ```
 
-### Debug Logging
-
-Enable detailed OAuth2 logging:
-
+### Test Email API Access (OAuth2)
 ```typescript
-// Set log level
-import log from 'electron-log';
-log.transports.file.level = 'debug';
-log.transports.console.level = 'debug';
-
-// OAuth2 operations will now log detailed information
-```
-
-## Production Deployment
-
-### Environment Variables
-
-For production, ensure all OAuth2 credentials are properly set:
-
-```env
-NODE_ENV=production
-
-# Production OAuth2 credentials
-GOOGLE_CLIENT_ID=prod_google_client_id
-GOOGLE_CLIENT_SECRET=prod_google_client_secret
-MICROSOFT_CLIENT_ID=prod_microsoft_client_id
-MICROSOFT_CLIENT_SECRET=prod_microsoft_client_secret
-
-# Strong encryption key for production
-OAUTH_ENCRYPTION_KEY=very_secure_encryption_key_32_chars_min
-```
-
-### Security Checklist
-
-- [ ] OAuth2 apps configured with production domains
-- [ ] Client secrets rotated regularly (every 90 days recommended)
-- [ ] Minimal scopes requested for each provider
-- [ ] Token encryption keys are unique per deployment
-- [ ] OAuth2 apps have proper branding and privacy policy
-- [ ] Rate limiting configured for OAuth2 endpoints
-- [ ] Monitoring set up for OAuth2 failures
-
-### Performance Optimization
-
-- **Token Caching**: Tokens cached in memory for performance
-- **Batch Operations**: Multiple account operations batched
-- **Background Refresh**: Tokens refreshed in background threads
-- **Connection Pooling**: HTTP connections reused for token operations
-
-## API Reference
-
-### OAuth2 IPC Methods
-
-```typescript
-// Start OAuth flow
-const result = await ipcRenderer.invoke('oauth:start-flow', 'gmail');
-
-// Get provider status
-const status = await ipcRenderer.invoke('oauth:get-provider-status', 'gmail');
-
-// Refresh token
-const refreshResult = await ipcRenderer.invoke('oauth:refresh-token', accountId, 'gmail');
-
-// Get token status
-const tokenStatus = await ipcRenderer.invoke('oauth:get-token-status', accountId, 'gmail');
-```
-
-### React Components
-
-```typescript
-// Use in React components
-const handleConnectGmail = async () => {
-  const result = await window.flowDesk.mail.startOAuthFlow('gmail');
-  if (result.success) {
-    // Handle successful connection
+// Test OAuth2 configuration
+const testEmailConnection = async () => {
+  try {
+    const result = await window.flowDesk.mail.startOAuthFlow('gmail');
+    console.log('OAuth2 test:', result);
+  } catch (error) {
+    console.error('OAuth2 failed:', error);
   }
 };
 ```
 
-## Support and Maintenance
+## Production Deployment
 
-### Regular Tasks
+### Checklist
+- [ ] **Clerk Production Keys**: Update `CLERK_*` environment variables
+- [ ] **Strong Encryption Key**: Generate with `openssl rand -base64 32`
+- [ ] **API Credentials**: Use production OAuth2 apps (not test apps)
+- [ ] **Redirect URIs**: Update for production domain
+- [ ] **HTTPS**: Ensure all callbacks use HTTPS in production
+- [ ] **Token Rotation**: Plan for regular credential rotation
+- [ ] **Monitoring**: Set up alerts for OAuth2 failures
 
-1. **Monitor OAuth2 health** using diagnostic tools
-2. **Rotate client secrets** every 90 days
-3. **Update provider configurations** as APIs change
-4. **Review token usage** and clean up unused tokens
-5. **Monitor error rates** and success rates
+### Environment Variables
+```env
+# Production example
+NODE_ENV=production
 
-### Debugging
+# Clerk (production keys from dashboard.clerk.com)
+CLERK_PUBLISHABLE_KEY=pk_live_xxxxx
+CLERK_SECRET_KEY=sk_live_xxxxx
 
-- Check application logs for OAuth2 errors
-- Use diagnostic tools for system health checks
-- Verify provider configurations in their respective consoles
-- Test OAuth2 flows in isolation
+# API Token Encryption (generate new for production)
+TOKEN_ENCRYPTION_KEY=<32+ character key from openssl>
 
-For additional support, check the diagnostic output and system logs for detailed error information.
+# Gmail/Google (production OAuth2 app)
+GOOGLE_CLIENT_ID=<production_client_id>
+GOOGLE_CLIENT_SECRET=<production_secret>
+
+# Outlook/Microsoft (production OAuth2 app)
+MICROSOFT_CLIENT_ID=<production_client_id>
+MICROSOFT_CLIENT_SECRET=<production_secret>
+```
+
+## FAQ
+
+### Q: Why use Clerk for user auth instead of OAuth2?
+**A**: Clerk provides a complete user management solution with MFA, SSO, compliance, and more. OAuth2 alone would only provide basic authentication without user management features.
+
+### Q: Why not use Clerk for email/calendar access too?
+**A**: Clerk manages user identities, not third-party API access. OAuth2 is the standard for obtaining API permissions from providers like Google and Microsoft.
+
+### Q: Where are API tokens stored?
+**A**: Encrypted locally on the user's device, linked to their Clerk user ID. They are never sent to external servers.
+
+### Q: What happens when a user logs out?
+**A**: Clerk session ends, but API tokens remain stored (encrypted). When the user logs back in, their email/calendar connections are still available.
+
+### Q: Can users share API tokens between devices?
+**A**: No, tokens are device-specific. Users must authorize email/calendar access on each device they use.
+
+## Support
+
+For issues related to:
+- **User authentication**: Check Clerk documentation at https://clerk.com/docs
+- **Email/Calendar API access**: Review OAuth2 configuration above
+- **Token encryption**: Ensure `TOKEN_ENCRYPTION_KEY` is properly set
+
+Remember: Clerk handles WHO the user is, OAuth2 handles WHAT they can access.
