@@ -92,6 +92,14 @@ pub struct MailAccount {
     pub provider_config: ProviderAccountConfig,
     pub config: ProviderAccountConfig,
     pub sync_status: Option<MailSyncStatus>,
+    /// Display name for the account
+    pub display_name: String,
+    /// OAuth tokens for the account
+    pub oauth_tokens: Option<OAuthTokens>,
+    /// IMAP configuration
+    pub imap_config: Option<ImapConfig>,
+    /// SMTP configuration
+    pub smtp_config: Option<SmtpConfig>,
 }
 
 /// Provider-specific account configuration
@@ -688,6 +696,8 @@ pub struct OAuthTokens {
     pub access_token: String,
     pub refresh_token: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
+    pub token_type: Option<String>,
+    pub scope: Option<String>,
 }
 
 /// IMAP configuration

@@ -23,6 +23,7 @@ pub use detection::{ProviderDetector, DetectionResult, AutoDetectedConfig};
 
 use async_trait::async_trait;
 use std::collections::HashMap;
+use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -39,30 +40,80 @@ use crate::calendar::{
 pub struct CalendarProviderFactory;
 
 impl CalendarProviderFactory {
-    /// Create a provider instance for the given account
-    pub fn create_provider(account: &CalendarAccount) -> CalendarResult<Box<dyn CalendarProviderTrait>> {
+    /// Create a boxed provider instance for the given account
+    pub fn create_boxed_provider(account: &CalendarAccount) -> CalendarResult<Box<dyn CalendarProviderTrait>> {
         match account.provider {
             CalendarProvider::Google => {
                 let config = match &account.config {
                     crate::calendar::CalendarAccountConfig::Google(config) => config,
                     _ => return Err(CalendarError::ValidationError {
                         message: "Invalid config type for Google provider".to_string(),
+                        provider: Some(CalendarProvider::Google),
+                        account_id: Some(account.id.to_string()),
                         field: Some("config".to_string()),
                         value: None,
-                        constraint: "type_match".to_string(),
+                        constraint: Some("type_match".to_string()),
                     }),
                 };
                 
                 // Extract credentials from account config
                 let credentials = config.oauth_tokens.clone().unwrap_or_else(|| {
                     crate::calendar::CalendarAccountCredentials {
-                        access_token: String::new(),
-                        refresh_token: None,
+                        access_token: config.access_token.clone(),
+                        refresh_token: config.refresh_token.clone(),
                         expires_at: None,
+                        auth_type: Some("oauth2".to_string()),
+                        username: None,
+                        password: None,
                     }
                 });
                 
                 Ok(Box::new(GoogleCalendarProvider::new(
+                    account.id.to_string(),
+                    config.clone(),
+                    Some(credentials),
+                )?))
+            },
+            _ => Err(CalendarError::ValidationError {
+                message: format!("Unsupported provider: {:?}", account.provider),
+                provider: Some(account.provider.clone()),
+                account_id: Some(account.id.to_string()),
+                field: Some("provider".to_string()),
+                value: Some(format!("{:?}", account.provider)),
+                constraint: Some("supported_provider".to_string()),
+            }),
+        }
+    }
+
+    /// Create a provider instance for the given account
+    pub fn create_provider(account: &CalendarAccount) -> CalendarResult<Arc<dyn CalendarProviderTrait>> {
+        match account.provider {
+            CalendarProvider::Google => {
+                let config = match &account.config {
+                    crate::calendar::CalendarAccountConfig::Google(config) => config,
+                    _ => return Err(CalendarError::ValidationError {
+                        message: "Invalid config type for Google provider".to_string(),
+                        provider: Some(CalendarProvider::Google),
+                        account_id: Some(account.id.to_string()),
+                        field: Some("config".to_string()),
+                        value: None,
+                        constraint: Some("type_match".to_string()),
+                    }),
+                };
+                
+                // Extract credentials from account config
+                let credentials = config.oauth_tokens.clone().unwrap_or_else(|| {
+                    crate::calendar::CalendarAccountCredentials {
+                        access_token: config.access_token.clone(),
+                        refresh_token: config.refresh_token.clone(),
+                        expires_at: None,
+                        auth_type: Some("oauth2".to_string()),
+                        username: None,
+                        password: None,
+                    }
+                });
+                
+                Ok(Arc::new(GoogleCalendarProvider::new(
                     account.id.to_string(),
                     config.clone(),
                     Some(credentials),
@@ -73,22 +124,27 @@ impl CalendarProviderFactory {
                     crate::calendar::CalendarAccountConfig::Outlook(config) => config,
                     _ => return Err(CalendarError::ValidationError {
                         message: "Invalid config type for Outlook provider".to_string(),
+                        provider: Some(CalendarProvider::Outlook),
+                        account_id: Some(account.id.to_string()),
                         field: Some("config".to_string()),
                         value: None,
-                        constraint: "type_match".to_string(),
+                        constraint: Some("type_match".to_string()),
                     }),
                 };
                 
                 // Extract credentials from account config
                 let credentials = config.oauth_tokens.clone().unwrap_or_else(|| {
                     crate::calendar::CalendarAccountCredentials {
-                        access_token: String::new(),
-                        refresh_token: None,
+                        access_token: config.access_token.clone(),
+                        refresh_token: config.refresh_token.clone(),
                         expires_at: None,
+                        auth_type: Some("oauth2".to_string()),
+                        username: None,
+                        password: None,
                     }
                 });
                 
-                Ok(Box::new(OutlookCalendarProvider::new(
+                Ok(Arc::new(OutlookCalendarProvider::new(
                     account.id.to_string(),
                     config.clone(),
                     Some(credentials),
@@ -99,9 +155,11 @@ impl CalendarProviderFactory {
                     crate::calendar::CalendarAccountConfig::CalDav(config) => config,
                     _ => return Err(CalendarError::ValidationError {
                         message: "Invalid config type for CalDAV provider".to_string(),
+                        provider: Some(account.provider.clone()),
+                        account_id: Some(account.id.to_string()),
                         field: Some("config".to_string()),
                         value: None,
-                        constraint: "type_match".to_string(),
+                        constraint: Some("type_match".to_string()),
                     }),
                 };
                 
@@ -111,10 +169,13 @@ impl CalendarProviderFactory {
                         access_token: String::new(),
                         refresh_token: None,
                         expires_at: None,
+                        auth_type: Some("basic".to_string()),
+                        username: Some(config.username.clone()),
+                        password: Some(config.password.clone()),
                     }
                 });
                 
-                Ok(Box::new(CalDavProvider::new(
+                Ok(Arc::new(CalDavProvider::new(
                     account.id.to_string(),
                     config.clone(),
                     Some(credentials),

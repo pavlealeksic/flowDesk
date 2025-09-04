@@ -99,10 +99,13 @@ pub enum CalendarError {
     #[error("Sync error: {message}")]
     SyncError {
         message: String,
+        provider: Option<CalendarProvider>,
         account_id: String,
         calendar_id: Option<String>,
-        sync_type: String, // full, incremental, privacy
-        operation: String,  // create, update, delete
+        event_id: Option<String>,
+        context: Option<String>,
+        sync_type: Option<String>, // full, incremental, privacy
+        operation: Option<String>,  // create, update, delete
         sync_token: Option<String>,
     },
 
@@ -113,6 +116,7 @@ pub enum CalendarError {
         operation: String, // insert, update, delete, select
         table: Option<String>,
         constraint_violation: bool,
+        source_description: Option<String>,
     },
 
     /// Network/connection errors
@@ -130,9 +134,11 @@ pub enum CalendarError {
     #[error("Validation error: {message}")]
     ValidationError {
         message: String,
+        provider: Option<CalendarProvider>,
+        account_id: Option<String>,
         field: Option<String>,
         value: Option<String>,
-        constraint: String, // required, format, range, etc.
+        constraint: Option<String>, // required, format, range, etc.
     },
 
     /// Serialization/deserialization errors
@@ -200,8 +206,12 @@ pub enum CalendarError {
     },
 
     /// Parse errors for various formats
-    #[error("Parse error: {0}")]
-    ParseError(String),
+    #[error("Parse error: {message}")]
+    ParseError {
+        message: String,
+        data_type: Option<String>,
+        input: Option<String>,
+    },
 }
 
 /// Types of calendar conflicts
@@ -454,6 +464,7 @@ impl From<sqlx::Error> for CalendarError {
             operation: "unknown".to_string(),
             table: None,
             constraint_violation,
+            source_description: Some(error.to_string()),
         }
     }
 }

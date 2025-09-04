@@ -87,28 +87,28 @@ impl TemplateEngine {
     /// Register default formatters
     fn register_default_formatters(&mut self) {
         // Date formatters
-        self.register_formatter("date", Box::new(|value, args| {
+        self.register_formatter("date", Box::new(|value: &str, args: &[&str]| {
             let format = args.get(0).unwrap_or(&"%Y-%m-%d");
             // Implementation would parse date and format
             Ok(format!("formatted_date_{}", value))
         }));
         
         // Text formatters
-        self.register_formatter("upper", Box::new(|value, _| {
+        self.register_formatter("upper", Box::new(|value: &str, _: &[&str]| {
             Ok(value.to_uppercase())
         }));
         
-        self.register_formatter("lower", Box::new(|value, _| {
+        self.register_formatter("lower", Box::new(|value: &str, _: &[&str]| {
             Ok(value.to_lowercase())
         }));
         
-        self.register_formatter("title", Box::new(|value, _| {
+        self.register_formatter("title", Box::new(|value: &str, _: &[&str]| {
             Ok(value.split_whitespace()
                 .map(|word| {
                     let mut chars = word.chars();
                     match chars.next() {
                         None => String::new(),
-                        Some(first) => first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase(),
+                        Some(first) => format!("{}{}", first.to_uppercase().collect::<String>(), chars.as_str().to_lowercase()),
                     }
                 })
                 .collect::<Vec<_>>()
@@ -116,12 +116,12 @@ impl TemplateEngine {
         }));
         
         // Number formatters
-        self.register_formatter("currency", Box::new(|value, args| {
+        self.register_formatter("currency", Box::new(|value: &str, args: &[&str]| {
             let currency = args.get(0).unwrap_or(&"USD");
             Ok(format!("{} {}", currency, value))
         }));
         
-        self.register_formatter("percentage", Box::new(|value, _| {
+        self.register_formatter("percentage", Box::new(|value: &str, _: &[&str]| {
             Ok(format!("{}%", value))
         }));
     }

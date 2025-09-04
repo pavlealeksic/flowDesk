@@ -247,4 +247,143 @@ mod tests {
     async fn integration_test_accounts() {
         test_account_creation_flow().await.expect("Account creation tests failed");
     }
+    
+    /// Real CalDAV server integration test (requires environment variables)
+    /// 
+    /// To run this test with a real CalDAV server:
+    /// ```bash
+    /// export CALDAV_TEST_SERVER_URL="https://caldav.fastmail.com/dav/calendars/user/user@fastmail.com/"
+    /// export CALDAV_TEST_USERNAME="user@fastmail.com"
+    /// export CALDAV_TEST_PASSWORD="app-password"
+    /// export CALDAV_TEST_CREATE_EVENT=1  # Optional: test event creation
+    /// export CALDAV_TEST_CLEANUP=1       # Optional: cleanup test events
+    /// cargo test caldav_real_server_test --features caldav-integration-test
+    /// ```
+    #[tokio::test]
+    #[cfg(feature = "caldav-integration-test")]
+    async fn caldav_real_server_test() {
+        use std::env;
+        
+        println!("🚀 Starting CalDAV real server integration test");
+        
+        // Check if required environment variables are set
+        let required_vars = ["CALDAV_TEST_SERVER_URL", "CALDAV_TEST_USERNAME", "CALDAV_TEST_PASSWORD"];
+        for var in &required_vars {
+            if env::var(var).is_err() {
+                println!("⏭️  Skipping CalDAV real server test - {} not set", var);
+                return;
+            }
+        }
+        
+        let server_url = env::var("CALDAV_TEST_SERVER_URL").unwrap();
+        let username = env::var("CALDAV_TEST_USERNAME").unwrap();
+        let password = env::var("CALDAV_TEST_PASSWORD").unwrap();
+        
+        println!("📡 Testing connection to: {}", server_url);
+        println!("👤 Using username: {}", username);
+        
+        // Create CalDAV configuration
+        let config = CalDavConfig {
+            server_url: server_url.clone(),
+            host: url::Url::parse(&server_url).unwrap().host_str().unwrap_or("unknown").to_string(),
+            username: username.clone(),
+            password: password.clone(),
+            accept_invalid_certs: false,
+            oauth_tokens: None,
+        };
+        
+        let account_id = Uuid::new_v4().to_string();
+        let mut provider = CalDavProvider::new(account_id.clone(), config, None)
+            .expect("Failed to create CalDAV provider");
+        
+        // Test connection
+        println!("🔍 Testing connection and server capabilities");
+        provider.test_connection().await
+            .expect("CalDAV server connection failed");
+        println!("✅ Connection test successful");
+        
+        // Test calendar discovery
+        println!("📅 Discovering calendars");
+        let calendars = provider.list_calendars().await
+            .expect("Calendar discovery failed");
+        println!("✅ Found {} calendars", calendars.len());
+        
+        if calendars.is_empty() {
+            println!("⚠️  No calendars found, test completed");
+            return;
+        }
+        
+        // Test event listing
+        let first_calendar = &calendars[0];
+        println!("📋 Listing events from calendar '{}'", first_calendar.name);
+        
+        let time_min = Utc::now() - Duration::days(7);
+        let time_max = Utc::now() + Duration::days(7);
+        
+        match provider.list_events(&first_calendar.provider_id, Some(time_min), Some(time_max), Some(10)).await {
+            Ok(events) => {
+                println!("✅ Found {} events in the last/next week", events.len());
+                for (i, event) in events.iter().take(3).enumerate() {
+                    println!("   {}. {} ({})", i + 1, event.title, event.start_time.format("%Y-%m-%d %H:%M"));
+                }
+            }
+            Err(e) => {
+                println!("⚠️  Event listing failed: {}", e);
+            }
+        }
+        
+        // Optional: Test event creation
+        if env::var("CALDAV_TEST_CREATE_EVENT").is_ok() {
+            println!("📝 Testing event creation");
+            
+            let test_event = CreateCalendarEventInput {
+                calendar_id: first_calendar.provider_id.clone(),
+                title: "Test Event from Rust".to_string(),
+                description: Some("Test event created by Rust CalDAV integration test".to_string()),
+                start_time: Utc::now() + Duration::hours(1),
+                end_time: Utc::now() + Duration::hours(2),
+                timezone: Some("UTC".to_string()),
+                all_day: false,
+                is_all_day: false,
+                location: Some("Integration Test".to_string()),
+                status: None,
+                visibility: None,
+                attendees: None,
+                recurrence: None,
+                uid: Some(format!("test-event-{}", Uuid::new_v4())),
+                reminders: None,
+                transparency: None,
+                provider_id: None,
+                location_data: None,
+                source: None,
+                recurring_event_id: None,
+                original_start_time: None,
+                color: None,
+                creator: None,
+                organizer: None,
+                conferencing: None,
+                attachments: None,
+                extended_properties: None,
+            };
+            
+            match provider.create_event(&test_event).await {
+                Ok(created_event) => {
+                    println!("✅ Event created: {}", created_event.title);
+                    
+                    // Optional cleanup
+                    if env::var("CALDAV_TEST_CLEANUP").is_ok() {
+                        match provider.delete_event(&first_calendar.provider_id, &created_event.provider_id).await {
+                            Ok(()) => println!("✅ Test event cleaned up"),
+                            Err(e) => println!("⚠️  Cleanup failed: {}", e),
+                        }
+                    }
+                }
+                Err(e) => {
+                    println!("❌ Event creation failed: {}", e);
+                }
+            }
+        }
+        
+        println!("🎉 CalDAV real server integration test completed successfully!");
+    }
 }

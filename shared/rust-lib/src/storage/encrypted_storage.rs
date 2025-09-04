@@ -44,6 +44,7 @@ pub struct KeyRotationInfo {
 }
 
 /// Encrypted storage wrapper
+#[derive(Debug)]
 pub struct EncryptedStorage {
     /// Underlying storage implementation
     inner: LocalStorage,

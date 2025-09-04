@@ -17,7 +17,15 @@ pub struct AuthManager {
 }
 
 impl AuthManager {
-    pub async fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn new() -> Self {
+        Self {
+            clients: HashMap::new(),
+            token_storage: Arc::new(TokenStorage::default()),
+            pkce_verifiers: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    pub async fn new_with_storage() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let token_storage = Arc::new(TokenStorage::new().await?);
         Ok(Self {
             clients: HashMap::new(),
@@ -151,6 +159,8 @@ impl AuthManager {
             access_token,
             refresh_token,
             expires_at,
+            token_type: Some("Bearer".to_string()),
+            scope: None,
         })
     }
 
@@ -181,6 +191,8 @@ impl AuthManager {
             access_token,
             refresh_token: Some(new_refresh_token),
             expires_at,
+            token_type: Some("Bearer".to_string()),
+            scope: None,
         })
     }
 
@@ -252,6 +264,8 @@ impl AuthManager {
             access_token,
             refresh_token,
             expires_at,
+            token_type: Some("Bearer".to_string()),
+            scope: None,
         })
     }
 

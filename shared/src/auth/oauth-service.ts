@@ -453,7 +453,7 @@ export class OAuthService {
     // Use custom token exchange if provided
     if (provider.customTokenExchange) {
       const codeVerifier = await this.getCodeVerifier(providerId);
-      const tokens = await provider.customTokenExchange(code, config, codeVerifier);
+      const tokens = await provider.customTokenExchange(code, config, codeVerifier || undefined);
       await this.storeTokens(providerId, tokens, provider);
       return tokens;
     }

@@ -33,7 +33,7 @@ pub use types::{
     UpdateCalendarEventInput, CreateCalendarAccountInput,
     UpdateCalendarAccountInput, CalendarPrivacySync,
     FreeBusySlot, CalendarSyncStatus, EventAttendee, 
-    RecurrenceRule, ConferencingInfo, EventAttachment, 
+    RecurrenceRule, EventRecurrence, ConferencingInfo, EventAttachment, 
     EventReminder, AttendeeResponseStatus, EventStatus,
     EventVisibility, CalendarAccessLevel, CalendarType,
     CalendarAccountStatus, CalendarAccountConfig,
@@ -49,7 +49,7 @@ pub use types::{
 // Provider-specific re-exports
 pub use providers::{
     CalendarProviderTrait, GoogleCalendarProvider, 
-    OutlookCalendarProvider, CalDavProvider
+    OutlookCalendarProvider, CalDavProvider, SyncStatus
 };
 
 // Privacy sync re-exports

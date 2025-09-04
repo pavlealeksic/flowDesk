@@ -39,7 +39,7 @@ pub use error::{MailError, MailResult};
 pub use production_account_manager::{ProductionAccountManager, EmailCredentials, AccountSetupResult, ValidationResult};
 pub use production_engine::{ProductionEmailEngine, SyncResult as ProductionSyncResult, ConnectionStatus};
 pub use providers::{
-    gmail::GmailProvider, imap::ImapProvider, outlook::OutlookProvider, MailProvider,
+    gmail::GmailProvider, imap::ImapProvider, outlook::OutlookProvider, MailProviderTrait,
     ProviderCapabilities,
 };
 pub use sync::{SyncEngine, SyncProgress, SyncResult};
@@ -54,7 +54,7 @@ pub async fn init_mail_engine(config: MailEngineConfig) -> MailResult<MailEngine
     tracing::info!("Initializing Flow Desk Mail Engine");
 
     let database = MailDatabase::new(&config.database_path).await?;
-    let auth_manager = AuthManager::new().await.map_err(|e| MailError::configuration(&format!("Failed to create auth manager: {}", e)))?;
+    let auth_manager = AuthManager::new();
     let sync_engine = SyncEngine::new(Arc::new(database.clone()));
     let threading_engine = ThreadingEngine::new();
 

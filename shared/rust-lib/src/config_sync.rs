@@ -4,9 +4,8 @@
 //! end-to-end encryption, and support for multiple transport methods.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
@@ -15,7 +14,6 @@ use crate::crypto::*;
 use crate::vector_clock::*;
 
 /// Configuration synchronization engine
-#[derive(Debug)]
 pub struct ConfigSyncEngine {
     /// Device information
     device_info: DeviceInfo,
@@ -35,6 +33,22 @@ pub struct ConfigSyncEngine {
     event_listeners: Arc<RwLock<Vec<Box<dyn SyncEventListener + Send + Sync>>>>,
     /// Configuration for sync behavior
     sync_config: SyncConfiguration,
+}
+
+impl std::fmt::Debug for ConfigSyncEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConfigSyncEngine")
+            .field("device_info", &self.device_info)
+            .field("device_keypair", &"<keypair>")
+            .field("workspace_sync_key", &"<sync_key>")
+            .field("transports", &format!("{} transport(s)", self.transports.try_read().map(|t| t.len()).unwrap_or(0)))
+            .field("storage", &"<storage>")
+            .field("current_config", &"<config>")
+            .field("sync_state", &self.sync_state)
+            .field("event_listeners", &format!("{} listener(s)", self.event_listeners.try_read().map(|l| l.len()).unwrap_or(0)))
+            .field("sync_config", &self.sync_config)
+            .finish()
+    }
 }
 
 /// Device information for sync identification
@@ -110,6 +124,18 @@ pub enum SyncStatus {
     Error,
     Paused,
     Conflict,
+}
+
+/// Conflict detection result for VersionedConfig
+#[derive(Debug, Clone)]
+pub enum ConfigConflictResult {
+    /// No conflict - one version is clearly newer
+    NoConflict(VersionedConfig),
+    /// Conflict detected - both versions are concurrent
+    Conflict {
+        local: VersionedConfig,
+        remote: VersionedConfig,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -261,7 +287,7 @@ pub struct TransportStatus {
 
 /// Configuration storage trait
 #[async_trait::async_trait]
-pub trait ConfigStorage {
+pub trait ConfigStorage: std::fmt::Debug {
     /// Save configuration to local storage
     async fn save_config(&self, config: &VersionedConfig) -> Result<()>;
     
@@ -524,15 +550,16 @@ impl ConfigSyncEngine {
         if let Some(remote_config) = transport.pull_config().await? {
             if let Some(local_config) = &current_config {
                 // Check for conflicts
-                match detect_conflict(local_config.clone(), remote_config.clone()) {
-                    ConflictResult::NoConflict(winner) => {
+                let conflict_result = self.detect_config_conflict(local_config, &remote_config);
+                match conflict_result {
+                    ConfigConflictResult::NoConflict(winner) => {
                         if winner.vector_clock != local_config.vector_clock {
                             // Remote version is newer, update local
                             self.storage.save_config(&winner).await?;
                             *self.current_config.write().await = Some(winner);
                         }
                     }
-                    ConflictResult::Conflict { local, remote } => {
+                    ConfigConflictResult::Conflict { local, remote } => {
                         // Handle conflict
                         let conflict = ConfigConflict {
                             id: generate_id(),
@@ -566,6 +593,24 @@ impl ConfigSyncEngine {
         
         // Return estimated bytes transferred (simplified)
         Ok(1024) // Placeholder
+    }
+    
+    /// Detect conflicts between VersionedConfig instances
+    fn detect_config_conflict(&self, local: &VersionedConfig, remote: &VersionedConfig) -> ConfigConflictResult {
+        match local.vector_clock.compare(&remote.vector_clock) {
+            ClockComparison::Equal | ClockComparison::Before => {
+                ConfigConflictResult::NoConflict(remote.clone())
+            }
+            ClockComparison::After => {
+                ConfigConflictResult::NoConflict(local.clone())
+            }
+            ClockComparison::Concurrent => {
+                ConfigConflictResult::Conflict {
+                    local: local.clone(),
+                    remote: remote.clone(),
+                }
+            }
+        }
     }
     
     /// Resolve a configuration conflict

@@ -254,10 +254,16 @@ impl LocalFilesProvider {
         let last_modified = DateTime::from(metadata.modified()?);
         
         let doc_metadata = DocumentMetadata {
+            author: None,
+            created_at: Some(created_at),
+            modified_at: Some(last_modified),
+            file_size: Some(metadata.len()),
             size: Some(metadata.len()),
             file_type: file_extension.clone(),
             mime_type: self.get_mime_type(path),
             language: None,
+            tags: Vec::new(),
+            custom_fields: HashMap::new(),
             location: Some(LocationInfo {
                 path: Some(path.to_string_lossy().to_string()),
                 folder: path.parent().map(|p| p.to_string_lossy().to_string()),
@@ -286,6 +292,8 @@ impl LocalFilesProvider {
             content_type,
             provider_id: self.base.info.id.clone(),
             provider_type: ProviderType::LocalFiles,
+            account_id: None,
+            file_path: Some(path.to_string_lossy().to_string()),
             url: Some(format!("file://{}", path.display())),
             icon: None,
             thumbnail: None,

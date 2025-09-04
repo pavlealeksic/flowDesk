@@ -177,6 +177,21 @@ impl MailSyncManager {
             Ok(crate::mail::types::MailAccountStatus::Active)
         }
     }
+
+    pub async fn get_current_operation(&self) -> Option<String> {
+        // TODO: Track current operation per account
+        None
+    }
+
+    pub async fn get_last_error(&self) -> Option<String> {
+        // TODO: Track last error per account  
+        None
+    }
+
+    pub async fn shutdown(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.stop_all_syncs();
+        Ok(())
+    }
 }
 
 // Type alias for compatibility

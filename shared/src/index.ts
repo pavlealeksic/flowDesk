@@ -6,7 +6,7 @@
 
 // Re-export everything from sub-modules
 export * from './types'
-export * from './crypto'
+// export * from './crypto' // Temporarily disabled due to TypeScript compatibility issues
 export * from './utils'
 
 // Version information

@@ -5,7 +5,7 @@ use crate::mail::{
     config::MailEngineConfig,
     database::MailDatabase,
     error::{MailError, MailResult},
-    providers::{MailProvider as ProviderTrait, ProviderFactory, SyncResult},
+    providers::{MailProviderTrait, ProviderFactory, SyncResult},
     sync::SyncEngine,
     threading::ThreadingEngine,
     types::*,
@@ -14,6 +14,7 @@ use crate::mail::{
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 use uuid::Uuid;
+use chrono::Utc;
 
 /// Main mail engine that coordinates all mail operations
 pub struct MailEngine {
@@ -23,7 +24,7 @@ pub struct MailEngine {
     sync_engine: SyncEngine,
     threading_engine: Arc<tokio::sync::Mutex<ThreadingEngine>>,
     /// Active provider instances keyed by account ID
-    providers: Arc<RwLock<HashMap<Uuid, Arc<dyn ProviderTrait>>>>,
+    providers: Arc<RwLock<HashMap<Uuid, Arc<dyn MailProviderTrait>>>>,
     /// Shutdown signal
     shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
 }
@@ -160,20 +161,7 @@ impl MailEngine {
             .await
             .map_err(|e| MailError::authentication(&format!("OAuth callback failed: {}", e)))?;
 
-        // Convert OAuthTokens to AuthCredentials
-        let credentials = AuthCredentials {
-            access_token: tokens.access_token,
-            refresh_token: tokens.refresh_token,
-            token_type: "Bearer".to_string(),
-            expires_at: tokens.expires_at,
-            scopes: vec![], // Would need to be populated from the original request
-            provider,
-            account_id,
-            created_at: chrono::Utc::now(),
-            updated_at: chrono::Utc::now(),
-        };
-
-        // Store the credentials in token storage
+        // Store the credentials in token storage first
         let scopes = match provider {
             MailProvider::Gmail => vec![
                 "https://www.googleapis.com/auth/gmail.readonly".to_string(),
@@ -196,6 +184,19 @@ impl MailEngine {
         ).await {
             tracing::warn!("Failed to store credentials: {}", e);
         }
+
+        // Convert OAuthTokens to AuthCredentials after storing
+        let credentials = AuthCredentials {
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
+            token_type: "Bearer".to_string(),
+            expires_at: tokens.expires_at,
+            scopes: vec![], // Would need to be populated from the original request
+            provider,
+            account_id,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        };
 
         // Initialize provider now that we have credentials
         if let Some(account) = self.get_account(account_id).await? {
@@ -301,38 +302,8 @@ impl MailEngine {
             .await
             .map_err(|e| MailError::database(&e.to_string()))?;
 
-        // Convert MailMessage to EmailMessage (they should be the same type, but handling conversion)
-        let email_messages: Vec<EmailMessage> = mail_messages
-            .into_iter()
-            .map(|msg| EmailMessage {
-                id: msg.id,
-                account_id: msg.account_id,
-                provider_id: msg.provider_id,
-                folder: msg.folder,
-                thread_id: msg.thread_id,
-                subject: msg.subject,
-                from_address: msg.from_address,
-                from_name: msg.from_name,
-                to_addresses: msg.to_addresses,
-                cc_addresses: msg.cc_addresses,
-                bcc_addresses: msg.bcc_addresses,
-                reply_to: msg.reply_to,
-                body_text: msg.body_text,
-                body_html: msg.body_html,
-                is_read: msg.is_read,
-                is_starred: msg.is_starred,
-                is_important: msg.is_important,
-                has_attachments: msg.has_attachments,
-                received_at: msg.received_at,
-                sent_at: msg.sent_at,
-                labels: msg.labels,
-                message_id: msg.message_id,
-                in_reply_to: msg.in_reply_to,
-                references: msg.references,
-                created_at: msg.created_at,
-                updated_at: msg.updated_at,
-            })
-            .collect();
+        // MailMessage is just a type alias for EmailMessage, so no conversion needed
+        let email_messages: Vec<EmailMessage> = mail_messages;
 
         Ok(email_messages)
     }
@@ -473,9 +444,19 @@ impl MailEngine {
                     _ => SyncStatus::Idle,
                 },
                 last_sync_at: account.last_sync_at,
-                current_operation: self.sync_engine.get_current_operation().await,
+                current_operation: self.sync_engine.get_current_operation().await.map(|op| SyncOperation {
+                    operation_type: SyncOperationType::FullSync, // Default operation type
+                    folder: None,
+                    progress: 0.0,
+                    started_at: Utc::now(),
+                }),
                 stats: SyncStats::default(),
-                last_error: self.sync_engine.get_last_error().await,
+                last_error: self.sync_engine.get_last_error().await.map(|err| SyncError {
+                    message: err,
+                    code: "SYNC_ERROR".to_string(),
+                    timestamp: Utc::now(),
+                    details: None,
+                }),
             };
             statuses.push(sync_status);
         }
@@ -555,7 +536,7 @@ impl MailEngine {
     }
 
     /// Get provider for account
-    async fn get_provider(&self, account_id: Uuid) -> MailResult<Arc<dyn ProviderTrait>> {
+    async fn get_provider(&self, account_id: Uuid) -> MailResult<Arc<dyn MailProviderTrait>> {
         let providers = self.providers.read().await;
         providers
             .get(&account_id)

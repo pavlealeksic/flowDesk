@@ -24,6 +24,7 @@ use crate::calendar::{
     GoogleCalendarConfig, CalendarAccountCredentials, EventLocation,
     CalendarAccessLevel, CalendarType
 };
+use crate::calendar::types::EventRecurrence;
 use oauth2::{basic::BasicClient, ClientId, AuthUrl, TokenUrl, RefreshToken, TokenResponse};
 
 use super::{
@@ -127,9 +128,11 @@ impl GoogleCalendarProvider {
             "DELETE" => self.client.delete(&url).headers(headers),
             _ => return Err(CalendarError::ValidationError {
                 message: format!("Unsupported HTTP method: {}", method),
+                provider: Some(CalendarProvider::Google),
+                account_id: Some(self.account_id.clone()),
                 field: Some("method".to_string()),
                 value: Some(method.to_string()),
-                constraint: "supported_methods".to_string(),
+                constraint: Some("supported_methods".to_string()),
             }),
         };
 
@@ -261,6 +264,9 @@ impl GoogleCalendarProvider {
             is_selected: google_cal.selected.unwrap_or(true),
             sync_status: None,
             location_data: None,
+            is_being_synced: false,
+            last_sync_at: None,
+            sync_error: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         })
@@ -314,9 +320,11 @@ impl GoogleCalendarProvider {
         } else {
             return Err(CalendarError::ValidationError {
                 message: "Event has neither dateTime nor date".to_string(),
+                provider: Some(CalendarProvider::Google),
+                account_id: Some(self.account_id.clone()),
                 field: Some("start".to_string()),
                 value: None,
-                constraint: "required".to_string(),
+                constraint: Some("required".to_string()),
             });
         };
 
@@ -434,14 +442,9 @@ impl GoogleCalendarProvider {
             // creator and organizer are handled separately
             attendees,
             recurrence: google_event.recurrence.as_ref().map(|rules| {
-                crate::calendar::RecurrenceRule {
-                    frequency: crate::calendar::RecurrenceFrequency::Daily, // Default
-                    interval: 1,
-                    until: None,
-                    count: None,
-                    by_day: None,
-                    by_month_day: None,
-                    by_month: None,
+                crate::calendar::types::EventRecurrence {
+                    rule: rules.first().unwrap_or(&String::new()).clone(),
+                    exceptions: Vec::new(), // Google Calendar doesn't provide exception dates directly
                 }
             }),
             recurring_event_id: google_event.recurring_event_id.clone(),
@@ -451,6 +454,14 @@ impl GoogleCalendarProvider {
                 .and_then(|props| serde_json::to_value(props.private.clone()).ok()),
             color: google_event.color_id.clone(),
             uid: Some(google_event.i_cal_uid.clone()),
+            created_at: google_event.created.as_ref()
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(|| Utc::now()),
+            updated_at: google_event.updated.as_ref()
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(|| Utc::now()),
         })
     }
 }
@@ -533,6 +544,9 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
             access_token: new_access_token.clone(),
             refresh_token: Some(new_refresh_token),
             expires_at,
+            auth_type: Some("oauth2".to_string()),
+            username: None,
+            password: None,
         });
 
         // Update access token for immediate use
@@ -883,7 +897,11 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         let json: serde_json::Value = response
             .json()
             .await
-            .map_err(|e| CalendarError::ParseError(e.to_string()))?;
+            .map_err(|e| CalendarError::ParseError { 
+                message: e.to_string(), 
+                data_type: Some("datetime".to_string()), 
+                input: None 
+            })?;
             
         Ok(json.get("nextSyncToken").and_then(|v| v.as_str()).map(String::from))
     }
@@ -955,7 +973,11 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         let events_response: GoogleEventsResponse = response
             .json()
             .await
-            .map_err(|e| CalendarError::ParseError(e.to_string()))?;
+            .map_err(|e| CalendarError::ParseError { 
+                message: e.to_string(), 
+                data_type: Some("datetime".to_string()), 
+                input: None 
+            })?;
             
         let events: Result<Vec<CalendarEvent>, CalendarError> = events_response.items.into_iter()
             .map(|google_event| self.convert_google_event(&google_event, calendar_id))
@@ -1002,7 +1024,11 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         let updated_event: GoogleEventData = response
             .json()
             .await
-            .map_err(|e| CalendarError::ParseError(e.to_string()))?;
+            .map_err(|e| CalendarError::ParseError { 
+                message: e.to_string(), 
+                data_type: Some("datetime".to_string()), 
+                input: None 
+            })?;
             
         self.convert_google_event(&updated_event, calendar_id)
     }
@@ -1225,7 +1251,11 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         let json: serde_json::Value = response
             .json()
             .await
-            .map_err(|e| CalendarError::ParseError(e.to_string()))?;
+            .map_err(|e| CalendarError::ParseError { 
+                message: e.to_string(), 
+                data_type: Some("datetime".to_string()), 
+                input: None 
+            })?;
             
         // Parse the free/busy response
         let busy_times = json
@@ -1258,7 +1288,9 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
             errors: None,
         })
     }
-    
+}
+
+impl GoogleCalendarProvider {
     /// Convert UpdateCalendarEventInput to Google Event JSON format
     fn convert_updates_to_google_event(&self, updates: &UpdateCalendarEventInput) -> CalendarResult<serde_json::Value> {
         let mut google_event = serde_json::Map::new();
@@ -1353,7 +1385,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
                 };
                 google_attendee.insert("responseStatus".to_string(), serde_json::Value::String(response_status.to_string()));
                 
-                if attendee.is_optional {
+                if attendee.optional {
                     google_attendee.insert("optional".to_string(), serde_json::Value::Bool(true));
                 }
                 
@@ -1402,7 +1434,7 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
     }
     
     /// Convert EventRecurrence to RecurrenceRule
-    fn convert_event_recurrence_to_rule(&self, recurrence: &crate::calendar::EventRecurrence) -> crate::calendar::RecurrenceRule {
+    fn convert_event_recurrence_to_rule(&self, recurrence: &EventRecurrence) -> crate::calendar::RecurrenceRule {
         // Parse the RRULE string to extract frequency and interval
         let rule_str = &recurrence.rule;
         
@@ -1464,6 +1496,9 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
             interval,
             count,
             until,
+            by_day: None,
+            by_month: None,
+            by_month_day: None,
         }
     }
     
@@ -1496,6 +1531,63 @@ impl CalendarProviderTrait for GoogleCalendarProvider {
         }
         
         Ok(format!("RRULE:{}", rrule_parts.join(";")))
+    }
+
+    /// Parse RRULE string into RecurrenceRule
+    fn parse_rrule_string(&self, rrule: &str) -> Option<crate::calendar::RecurrenceRule> {
+        if !rrule.starts_with("RRULE:") {
+            return None;
+        }
+        
+        let rule_parts = &rrule[6..]; // Remove "RRULE:" prefix
+        let mut frequency = crate::calendar::RecurrenceFrequency::Daily;
+        let mut interval = 1;
+        let mut count = None;
+        let mut until = None;
+        
+        for part in rule_parts.split(';') {
+            if let Some((key, value)) = part.split_once('=') {
+                match key {
+                    "FREQ" => {
+                        frequency = match value {
+                            "WEEKLY" => crate::calendar::RecurrenceFrequency::Weekly,
+                            "MONTHLY" => crate::calendar::RecurrenceFrequency::Monthly,
+                            "YEARLY" => crate::calendar::RecurrenceFrequency::Yearly,
+                            _ => crate::calendar::RecurrenceFrequency::Daily,
+                        };
+                    },
+                    "INTERVAL" => {
+                        if let Ok(parsed_interval) = value.parse::<i32>() {
+                            interval = parsed_interval;
+                        }
+                    },
+                    "COUNT" => {
+                        if let Ok(parsed_count) = value.parse::<i32>() {
+                            count = Some(parsed_count);
+                        }
+                    },
+                    "UNTIL" => {
+                        // Parse UNTIL date (format: YYYYMMDDTHHMMSSZ)
+                        if let Ok(parsed_until) = chrono::DateTime::parse_from_str(value, "%Y%m%dT%H%M%SZ") {
+                            until = Some(parsed_until.with_timezone(&Utc));
+                        } else if let Ok(parsed_date) = chrono::NaiveDate::parse_from_str(value, "%Y%m%d") {
+                            until = Some(parsed_date.and_hms_opt(0, 0, 0).unwrap().and_utc());
+                        }
+                    },
+                    _ => {} // Ignore other fields for now
+                }
+            }
+        }
+        
+        Some(crate::calendar::RecurrenceRule {
+            frequency,
+            interval,
+            count,
+            until,
+            by_day: None,
+            by_month: None,
+            by_month_day: None,
+        })
     }
 }
 
@@ -1542,6 +1634,7 @@ struct GoogleEventData {
     attendees: Option<Vec<GoogleEventAttendee>>,
     #[serde(rename = "recurringEventId")]
     recurring_event_id: Option<String>,
+    recurrence: Option<Vec<String>>,
     reminders: Option<GoogleEventReminders>,
     #[serde(rename = "conferenceData")]
     conference_data: Option<GoogleConferenceData>,

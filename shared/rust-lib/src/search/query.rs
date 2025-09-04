@@ -472,10 +472,16 @@ impl QueryProcessor {
         // Parse metadata
         let metadata: DocumentMetadata = if metadata_json.is_empty() {
             DocumentMetadata {
+                author: None,
+                created_at: None,
+                modified_at: None,
+                file_size: None,
                 size: None,
                 file_type: None,
                 mime_type: None,
                 language: None,
+                tags: Vec::new(),
+                custom_fields: HashMap::new(),
                 location: None,
                 collaboration: None,
                 activity: None,

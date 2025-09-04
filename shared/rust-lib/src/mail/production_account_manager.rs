@@ -66,7 +66,7 @@ impl ProductionAccountManager {
     /// Create a new production account manager
     pub async fn new(app_name: String) -> Result<Self> {
         let keychain = KeychainManager::new(app_name.clone())?;
-        let auth_manager = AuthManager::new().await?;
+        let auth_manager = AuthManager::new();
         
         Ok(Self {
             keychain,
@@ -121,11 +121,15 @@ impl ProductionAccountManager {
         self.store_account_credentials(account_id, &credentials).await?;
 
         // 6. Create the mail account
+        let email_address = credentials.email.clone();
+        let display_name = credentials.display_name.clone().unwrap_or_else(|| email_address.clone());
+        let provider_config = self.create_provider_config(&server_config, &credentials)?;
+        
         let mail_account = MailAccount {
             id: account_id,
             user_id,
-            name: credentials.display_name.unwrap_or_else(|| credentials.email.clone()),
-            email: credentials.email.clone(),
+            name: display_name.clone(),
+            email: email_address.clone(),
             provider,
             status: MailAccountStatus::Active,
             last_sync_at: None,
@@ -134,16 +138,20 @@ impl ProductionAccountManager {
             is_enabled: true,
             created_at: Utc::now(),
             updated_at: Utc::now(),
-            provider_config: self.create_provider_config(&server_config, &credentials)?,
-            config: self.create_provider_config(&server_config, &credentials)?,
+            provider_config: provider_config.clone(),
+            config: provider_config,
             sync_status: None,
+            display_name: display_name.clone(),
+            oauth_tokens: None,
+            imap_config: None,
+            smtp_config: None,
         };
 
-        info!("Successfully set up email account: {} ({})", credentials.email, account_id);
+        info!("Successfully set up email account: {} ({})", email_address, account_id);
         
         Ok(AccountSetupResult {
             account_id,
-            email: credentials.email.clone(),
+            email: email_address,
             provider: provider.as_str().to_string(),
             display_name: mail_account.name,
             server_config,

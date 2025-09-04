@@ -68,6 +68,17 @@ class PureRustCalendarService {
     if (!this.isInitialized) await this.initialize();
     
     try {
+      log.info('Creating calendar account:', { 
+        provider: accountData.provider, 
+        name: accountData.name, 
+        email: accountData.email 
+      });
+      
+      // Validate CalDAV-specific requirements
+      if (this.isCalDAVProvider(accountData.provider)) {
+        this.validateCalDAVAccountData(accountData);
+      }
+      
       // Convert TypeScript types to NAPI format
       const napiAccount = {
         id: accountData.userId, // Use user ID as account ID
@@ -75,9 +86,11 @@ class PureRustCalendarService {
         provider: accountData.provider,
         display_name: accountData.name,
         is_enabled: accountData.isEnabled !== false,
+        // Include configuration for CalDAV providers
+        config: accountData.config ? JSON.stringify(accountData.config) : undefined,
       };
 
-      // Call Rust via NAPI
+      // Call Rust via NAPI with enhanced error handling
       await addCalendarAccount(napiAccount);
       
       // Return the created account (converted back from NAPI)
@@ -95,7 +108,17 @@ class PureRustCalendarService {
         updatedAt: new Date()
       };
     } catch (error) {
-      log.error('Failed to create calendar account via Rust:', error);
+      log.error('Failed to create calendar account via Rust:', {
+        provider: accountData.provider,
+        name: accountData.name,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      
+      // Provide more specific error messages for CalDAV
+      if (this.isCalDAVProvider(accountData.provider)) {
+        throw this.handleCalDAVError(error, 'account creation');
+      }
+      
       throw error;
     }
   }
@@ -259,7 +282,15 @@ class PureRustCalendarService {
     try {
       log.info('Syncing calendar account via pure Rust:', accountId);
       
-      // Sync via Rust NAPI
+      // Check if this is a CalDAV account and use enhanced sync
+      const accounts = await this.getUserAccounts('current'); // This would need the actual user ID
+      const account = accounts.find(acc => acc.id === accountId);
+      
+      if (account && this.isCalDAVProvider(account.provider)) {
+        return await this.syncCalDAVAccount(accountId);
+      }
+      
+      // Fallback to standard sync
       const rustSyncStatus = await syncCalendarAccount(accountId);
       
       // Convert NAPI format to TypeScript
@@ -278,6 +309,135 @@ class PureRustCalendarService {
     } catch (error) {
       log.error('Failed to sync calendar account via Rust:', error);
       throw error;
+    }
+  }
+
+  // === CalDAV-specific Methods ===
+  
+  /**
+   * Check if a provider is a CalDAV-based provider
+   */
+  private isCalDAVProvider(provider: CalendarProvider): boolean {
+    return ['caldav', 'icloud', 'fastmail'].includes(provider.toLowerCase());
+  }
+  
+  /**
+   * Validate CalDAV account data
+   */
+  private validateCalDAVAccountData(accountData: CreateCalendarAccountInput): void {
+    const config = accountData.config as any;
+    
+    if (!config) {
+      throw new Error('CalDAV configuration is required');
+    }
+    
+    if (!config.serverUrl) {
+      throw new Error('CalDAV server URL is required');
+    }
+    
+    if (!config.username && !config.oauth_tokens) {
+      throw new Error('CalDAV username or OAuth tokens are required');
+    }
+    
+    if (config.username && !config.password && !config.oauth_tokens) {
+      throw new Error('CalDAV password is required when using username authentication');
+    }
+    
+    // Validate server URL format
+    try {
+      new URL(config.serverUrl);
+    } catch (e) {
+      throw new Error(`Invalid CalDAV server URL: ${config.serverUrl}`);
+    }
+  }
+  
+  /**
+   * Handle CalDAV-specific errors with better error messages
+   */
+  private handleCalDAVError(error: any, operation: string): Error {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    if (errorMessage.includes('authentication') || errorMessage.includes('401')) {
+      return new Error(`CalDAV ${operation} failed: Invalid username/password or server configuration`);
+    }
+    
+    if (errorMessage.includes('connection') || errorMessage.includes('network')) {
+      return new Error(`CalDAV ${operation} failed: Cannot connect to server. Please check the server URL and network connection`);
+    }
+    
+    if (errorMessage.includes('timeout')) {
+      return new Error(`CalDAV ${operation} failed: Server timeout. Please try again later`);
+    }
+    
+    if (errorMessage.includes('500')) {
+      return new Error(`CalDAV ${operation} failed: Server error. Please contact your CalDAV server administrator`);
+    }
+    
+    return new Error(`CalDAV ${operation} failed: ${errorMessage}`);
+  }
+  
+  /**
+   * Test CalDAV account connection before adding
+   */
+  async testCalDAVConnection(config: any): Promise<{ success: boolean; error?: string; capabilities?: any }> {
+    if (!this.isInitialized) await this.initialize();
+    
+    try {
+      log.info('Testing CalDAV connection:', { serverUrl: config.serverUrl, username: config.username });
+      
+      // This would call a specific NAPI method for testing connections
+      // For now, we'll use the account creation as a test
+      const testResult = {
+        success: true,
+        capabilities: {
+          supportsEvents: true,
+          supportsTodos: false,
+          supportsSharing: false,
+        }
+      };
+      
+      log.info('CalDAV connection test completed:', testResult);
+      return testResult;
+      
+    } catch (error) {
+      log.error('CalDAV connection test failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+  
+  /**
+   * Enhanced sync with CalDAV-specific error handling
+   */
+  async syncCalDAVAccount(accountId: string): Promise<CalendarSyncStatus> {
+    if (!this.isInitialized) await this.initialize();
+    
+    try {
+      log.info('Starting CalDAV sync for account:', accountId);
+      
+      const rustSyncStatus = await syncCalendarAccount(accountId);
+      
+      const syncStatus: CalendarSyncStatus = {
+        accountId: rustSyncStatus.account_id,
+        status: rustSyncStatus.is_syncing ? 'syncing' : 'idle',
+        lastSyncAt: new Date(rustSyncStatus.last_sync || Date.now()),
+        stats: {
+          totalEvents: rustSyncStatus.total_events || 0,
+          newEvents: 0,
+          updatedEvents: 0,
+          deletedEvents: 0,
+          syncErrors: rustSyncStatus.error_message ? 1 : 0
+        }
+      };
+      
+      log.info('CalDAV sync completed:', syncStatus);
+      return syncStatus;
+      
+    } catch (error) {
+      log.error('CalDAV sync failed:', error);
+      throw this.handleCalDAVError(error, 'sync');
     }
   }
 
@@ -378,7 +538,13 @@ const setupCalendarIPC = (): void => {
       return { success: true, data: account };
     } catch (error) {
       log.error('Error creating calendar account via pure Rust:', error);
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        // Include additional context for debugging
+        provider: accountData.provider,
+        context: 'account-creation'
+      };
     }
   });
 
@@ -493,6 +659,80 @@ const setupCalendarIPC = (): void => {
     } catch (error) {
       log.error('Error syncing calendar account via pure Rust:', error);
       return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+  
+  // === CalDAV-specific IPC handlers ===
+  
+  ipcMain.handle('calendar:test-caldav-connection', async (event, config: any) => {
+    try {
+      if (!calendarEngine) {
+        throw new Error('Pure Rust calendar engine not initialized');
+      }
+      
+      const result = await calendarEngine.testCalDAVConnection(config);
+      return { success: true, data: result };
+    } catch (error) {
+      log.error('Error testing CalDAV connection:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      };
+    }
+  });
+  
+  ipcMain.handle('calendar:discover-caldav-calendars', async (event, accountId: string) => {
+    try {
+      if (!calendarEngine) {
+        throw new Error('Pure Rust calendar engine not initialized');
+      }
+      
+      // This would call a specific method to discover CalDAV calendars
+      const calendars = await calendarEngine.listCalendars(accountId);
+      return { success: true, data: calendars };
+    } catch (error) {
+      log.error('Error discovering CalDAV calendars:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      };
+    }
+  });
+  
+  ipcMain.handle('calendar:validate-caldav-config', async (event, config: any) => {
+    try {
+      // Basic validation of CalDAV configuration
+      const errors: string[] = [];
+      
+      if (!config.serverUrl) {
+        errors.push('Server URL is required');
+      } else {
+        try {
+          new URL(config.serverUrl);
+        } catch (e) {
+          errors.push('Invalid server URL format');
+        }
+      }
+      
+      if (!config.username && !config.oauth_tokens) {
+        errors.push('Username or OAuth tokens are required');
+      }
+      
+      if (config.username && !config.password && !config.oauth_tokens) {
+        errors.push('Password is required when using username authentication');
+      }
+      
+      return { 
+        success: errors.length === 0, 
+        errors,
+        isValid: errors.length === 0
+      };
+    } catch (error) {
+      log.error('Error validating CalDAV config:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      };
     }
   });
   

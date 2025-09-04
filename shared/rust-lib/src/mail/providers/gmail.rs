@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use crate::mail::{OAuthTokens, MailMessage, MailFolder, MailFolderType, AuthManager, EmailMessage, EmailAddress, EmailFlags, MessageImportance, MessagePriority, FolderSyncStatus, MailAccount, NewMessage, MessageFlags, EmailAttachment};
+use crate::mail::{OAuthTokens, MailMessage, MailFolder, MailFolderType, AuthManager, EmailMessage, EmailAddress, EmailFlags, MessageImportance, MessagePriority, FolderSyncStatus, MailAccount, NewMessage, MessageFlags, EmailAttachment, BulkEmailOperation, BulkOperationResult, EmailFilter, EmailThread};
 use crate::mail::providers::traits::ImapProvider;
-use crate::mail::providers::{MailProvider, ProviderCapabilities};
-use crate::mail::error::MailResult;
+use crate::mail::providers::{MailProviderTrait, ProviderCapabilities, SyncResult};
+use crate::mail::error::{MailResult, MailError};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use reqwest::Client;
@@ -18,15 +18,19 @@ pub struct GmailProvider {
 
 impl GmailProvider {
     pub fn new(config: crate::mail::types::ProviderAccountConfig) -> crate::mail::error::MailResult<Self> {
-        use crate::mail::error::MailError;
         
-        // Extract OAuth tokens from config
+        // For now, we'll use default empty tokens - OAuth tokens should be managed separately
         let tokens = match config {
-            crate::mail::types::ProviderAccountConfig::Gmail(gmail_config) => {
-                if let Some(oauth_tokens) = gmail_config.oauth_tokens {
-                    oauth_tokens
-                } else {
-                    return Err(MailError::invalid("Missing OAuth tokens for Gmail"));
+            crate::mail::types::ProviderAccountConfig::Gmail { 
+                client_id, scopes, enable_push_notifications, history_id 
+            } => {
+                // OAuth tokens would be injected separately during authentication
+                crate::mail::types::OAuthTokens {
+                    access_token: String::new(),
+                    refresh_token: None,
+                    expires_at: None,
+                    token_type: Some("Bearer".to_string()),
+                    scope: Some(scopes.join(" ")),
                 }
             }
             _ => return Err(MailError::invalid("Invalid provider config for Gmail")),
@@ -494,7 +498,7 @@ impl GmailProvider {
 
 // Implement MailProvider trait for GmailProvider  
 #[async_trait]
-impl MailProvider for GmailProvider {
+impl MailProviderTrait for GmailProvider {
     fn provider_name(&self) -> &'static str {
         "gmail"
     }
@@ -514,13 +518,34 @@ impl MailProvider for GmailProvider {
         // TODO: Implement actual account info retrieval
         Ok(MailAccount {
             id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
+            name: "Gmail Account".to_string(),
             email: "user@gmail.com".to_string(),
             provider: crate::mail::types::MailProvider::Gmail,
+            status: crate::mail::types::MailAccountStatus::Active,
+            last_sync_at: None,
+            next_sync_at: None,
+            sync_interval_minutes: 15,
+            is_enabled: true,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            provider_config: crate::mail::types::ProviderAccountConfig::Gmail {
+                client_id: String::new(),
+                scopes: vec!["https://www.googleapis.com/auth/gmail.readonly".to_string()],
+                enable_push_notifications: false,
+                history_id: None,
+            },
+            config: crate::mail::types::ProviderAccountConfig::Gmail {
+                client_id: String::new(),
+                scopes: vec!["https://www.googleapis.com/auth/gmail.readonly".to_string()],
+                enable_push_notifications: false,
+                history_id: None,
+            },
+            sync_status: None,
             display_name: "Gmail Account".to_string(),
             oauth_tokens: None,
             imap_config: None,
             smtp_config: None,
-            status: crate::mail::types::MailAccountStatus::Active,
         })
     }
     
@@ -540,7 +565,12 @@ impl MailProvider for GmailProvider {
                 unread_count: 0,
                 is_selectable: true,
                 can_select: true,
-                sync_status: FolderSyncStatus::Synced,
+                sync_status: FolderSyncStatus {
+                    last_sync_at: Some(chrono::Utc::now()),
+                    is_being_synced: false,
+                    sync_progress: Some(1.0),
+                    sync_error: None,
+                },
             },
         ])
     }
@@ -602,7 +632,9 @@ impl MailProvider for GmailProvider {
     
     async fn send_message(&self, message: &NewMessage) -> MailResult<String> {
         let token = self.ensure_valid_token().await
-            .map_err(|e| crate::mail::error::MailError::Authentication(format!("Token validation failed: {}", e)))?;
+            .map_err(|e| crate::mail::error::MailError::Authentication { 
+                message: format!("Token validation failed: {}", e)
+            })?;
 
         // Create RFC 2822 compliant email message
         let mut email_content = String::new();
@@ -676,8 +708,9 @@ impl MailProvider for GmailProvider {
             .map_err(|e| crate::mail::error::MailError::Api(format!("Failed to send message: {}", e)))?;
 
         if !response.status().is_success() {
+            let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
-            return Err(crate::mail::error::MailError::Api(format!("Gmail API error {}: {}", response.status(), error_text)));
+            return Err(crate::mail::error::MailError::Api(format!("Gmail API error {}: {}", status, error_text)));
         }
 
         let result: serde_json::Value = response.json().await
@@ -819,6 +852,85 @@ impl MailProvider for GmailProvider {
     async fn remove_label(&self, _message_id: &str, _label: &str) -> MailResult<()> {
         // TODO: Implement label removal
         Ok(())
+    }
+
+    async fn mark_important(&self, message_id: &str, is_important: bool) -> MailResult<()> {
+        // TODO: Implement Gmail importance marking
+        Ok(())
+    }
+
+    async fn add_labels(&self, message_id: &str, labels: &[String]) -> MailResult<()> {
+        // TODO: Implement adding multiple labels
+        Ok(())
+    }
+
+    async fn remove_labels(&self, message_id: &str, labels: &[String]) -> MailResult<()> {
+        // TODO: Implement removing multiple labels
+        Ok(())
+    }
+
+    async fn bulk_operation(&self, operation: &BulkEmailOperation) -> MailResult<BulkOperationResult> {
+        // TODO: Implement bulk operations
+        Ok(BulkOperationResult {
+            successful: 0,
+            failed: 0,
+            errors: vec![],
+        })
+    }
+
+    async fn get_thread(&self, thread_id: &str) -> MailResult<EmailThread> {
+        // TODO: Implement thread retrieval
+        Err(MailError::not_supported("get_thread", "Not implemented for Gmail provider"))
+    }
+
+    async fn list_thread_messages(&self, thread_id: &str) -> MailResult<Vec<MailMessage>> {
+        // TODO: Implement thread message listing
+        Ok(vec![])
+    }
+
+    async fn get_sync_changes(&self, since: Option<&str>) -> MailResult<SyncResult> {
+        // TODO: Implement sync changes retrieval
+        Ok(SyncResult {
+            success: true,
+            messages_synced: 0,
+            errors: vec![],
+            changes: vec![],
+        })
+    }
+
+    async fn get_full_sync_token(&self) -> MailResult<String> {
+        // TODO: Implement full sync token retrieval
+        Ok("dummy_token".to_string())
+    }
+
+    async fn setup_push_notifications(&self, webhook_url: &str) -> MailResult<String> {
+        // TODO: Implement push notification setup
+        Ok("dummy_subscription_id".to_string())
+    }
+
+    async fn disable_push_notifications(&self, subscription_id: &str) -> MailResult<()> {
+        // TODO: Implement push notification disabling
+        Ok(())
+    }
+
+    async fn create_filter(&self, filter: &EmailFilter) -> MailResult<String> {
+        // TODO: Implement filter creation
+        Ok("dummy_filter_id".to_string())
+    }
+
+    async fn update_filter(&self, filter_id: &str, filter: &EmailFilter) -> MailResult<()> {
+        // TODO: Implement filter updating
+        Ok(())
+    }
+
+    async fn delete_filter(&self, filter_id: &str) -> MailResult<()> {
+        // TODO: Implement filter deletion
+        Ok(())
+    }
+
+    async fn list_filters(&self) -> MailResult<Vec<EmailFilter>> {
+        // TODO: Implement filter listing
+        Ok(vec![])
     }
 }
 

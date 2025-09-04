@@ -14,10 +14,10 @@ pub mod traits;
 
 // Re-export the real implementations
 pub use gmail::GmailProvider;
-pub use imap::ImapClient;
+pub use imap::{ImapClient, ImapProvider as ImapProviderStruct};
 pub use imap_client::ImapClient as SimpleImapClient;
 pub use smtp_client::SmtpClient as RealSmtpClient;
-pub use traits::{ImapProvider, SmtpProvider};
+pub use traits::{ImapProvider as ImapProviderTrait, SmtpProvider};
 pub use outlook::OutlookProvider;
 
 // Types will be automatically available through direct definition
@@ -44,12 +44,32 @@ impl ProviderFactory {
                 Ok(Arc::new(provider))
             }
             crate::mail::types::MailProvider::Imap => {
-                let provider = ImapProvider::new(config)?;
+                let provider = ImapProviderStruct::new(config)?;
                 Ok(Arc::new(provider))
             }
             crate::mail::types::MailProvider::Exchange => {
                 // Exchange can use Graph API (same as Outlook)
                 let provider = OutlookProvider::new(config)?;
+                Ok(Arc::new(provider))
+            }
+            crate::mail::types::MailProvider::Fastmail => {
+                // Fastmail can use IMAP
+                let provider = ImapProviderStruct::new(config)?;
+                Ok(Arc::new(provider))
+            }
+            crate::mail::types::MailProvider::Proton => {
+                // ProtonMail needs special handling, for now use IMAP
+                let provider = ImapProviderStruct::new(config)?;
+                Ok(Arc::new(provider))
+            }
+            crate::mail::types::MailProvider::Yahoo => {
+                // Yahoo can use IMAP
+                let provider = ImapProviderStruct::new(config)?;
+                Ok(Arc::new(provider))
+            }
+            crate::mail::types::MailProvider::Aol => {
+                // AOL can use IMAP
+                let provider = ImapProviderStruct::new(config)?;
                 Ok(Arc::new(provider))
             }
         }
@@ -102,7 +122,7 @@ impl Default for ProviderCapabilities {
 
 /// Common trait for all mail providers
 #[async_trait]
-pub trait MailProvider: Send + Sync {
+pub trait MailProviderTrait: Send + Sync {
     fn provider_name(&self) -> &'static str;
     fn capabilities(&self) -> ProviderCapabilities;
     async fn test_connection(&self) -> MailResult<bool>;

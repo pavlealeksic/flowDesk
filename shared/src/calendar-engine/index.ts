@@ -14,12 +14,12 @@ import {
 } from '../types/calendar';
 
 // Import the compiled Rust NAPI module
-let calendarEngine: any;
+let rustCalendarEngine: any;
 try {
-  calendarEngine = require('../../rust-lib/index.node');
+  rustCalendarEngine = require('../../rust-lib/index.node');
 } catch (error) {
   console.warn('Calendar engine native module not found, using mock implementation');
-  calendarEngine = null;
+  rustCalendarEngine = null;
 }
 
 /**
@@ -93,7 +93,7 @@ export class CalendarEngine {
 
   constructor() {
     if (calendarEngine) {
-      this.engine = new calendarEngine.CalendarEngineJs();
+      this.engine = new rustCalendarEngine.CalendarEngineJs();
     } else {
       // Mock implementation for development/testing
       this.engine = new MockCalendarEngine();
@@ -387,7 +387,7 @@ export class CalendarEngine {
    */
   static getSupportedProviders(): CalendarProvider[] {
     if (calendarEngine) {
-      const resultJson = calendarEngine.CalendarEngineJs.getSupportedProviders();
+      const resultJson = rustCalendarEngine.CalendarEngineJs.getSupportedProviders();
       return JSON.parse(resultJson);
     }
     return ['google', 'outlook', 'caldav', 'icloud', 'fastmail'];
@@ -398,7 +398,7 @@ export class CalendarEngine {
    */
   static getProviderCapabilities(provider: CalendarProvider) {
     if (calendarEngine) {
-      const resultJson = calendarEngine.CalendarEngineJs.getProviderCapabilities(provider);
+      const resultJson = rustCalendarEngine.CalendarEngineJs.getProviderCapabilities(provider);
       return JSON.parse(resultJson);
     }
     // Mock capabilities for development
@@ -472,7 +472,7 @@ export class CalendarWebhookHandler {
 
   constructor() {
     if (calendarEngine) {
-      this.handler = new calendarEngine.CalendarWebhookHandler();
+      this.handler = new rustCalendarEngine.CalendarWebhookHandler();
     }
   }
 
@@ -533,8 +533,8 @@ class MockCalendarEngine {
       credentials: account.credentials,
       status: account.status,
       defaultCalendarId: account.defaultCalendarId,
-      lastSyncAt: account.lastSyncAt,
-      nextSyncAt: account.nextSyncAt,
+      lastSyncAt: new Date(),
+      nextSyncAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
       syncIntervalMinutes: account.syncIntervalMinutes,
       isEnabled: account.isEnabled,
       createdAt: new Date(),

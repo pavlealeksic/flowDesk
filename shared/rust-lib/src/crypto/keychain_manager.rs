@@ -5,8 +5,8 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info};
+use base64::prelude::*;
 
 #[cfg(target_os = "windows")]
 use winapi::um::{wincred, winbase, winnt};
@@ -17,8 +17,6 @@ use std::os::windows::ffi::OsStringExt;
 #[cfg(target_os = "windows")]
 use std::ptr;
 
-#[cfg(target_os = "macos")]
-use security_framework::passwords::{SecKeychain, SecPassword};
 
 #[cfg(target_os = "linux")]
 use std::process::Command;
@@ -122,11 +120,11 @@ impl KeychainManager {
         let key_data = match algorithm {
             "AES256" => {
                 let key: [u8; 32] = rand::thread_rng().gen();
-                base64::encode(key)
+                base64::prelude::BASE64_STANDARD.encode(key)
             },
             "ChaCha20" => {
                 let key: [u8; 32] = rand::thread_rng().gen();
-                base64::encode(key)
+                base64::prelude::BASE64_STANDARD.encode(key)
             },
             _ => return Err(anyhow::anyhow!("Unsupported encryption algorithm: {}", algorithm)),
         };
@@ -306,33 +304,34 @@ impl KeychainManager {
 
     #[cfg(target_os = "macos")]
     fn store_password_impl(&self, service: &str, account: &str, password: &str) -> Result<()> {
-        use security_framework::item::{ItemClass, ItemSearchOptions};
-
         // Delete existing entry if it exists
         let _ = self.delete_password_impl(service, account);
 
-        // Add new password
-        let keychain = SecKeychain::default()?;
-        keychain.add_generic_password(service, account, password.as_bytes())?;
+        // Add new password using keyring crate for cross-platform compatibility
+        let entry = keyring::Entry::new(service, account)
+            .map_err(|e| anyhow::anyhow!("Failed to create keychain entry: {}", e))?;
+        entry.set_password(password)
+            .map_err(|e| anyhow::anyhow!("Failed to store password: {}", e))?;
         
         Ok(())
     }
 
     #[cfg(target_os = "macos")]
     fn get_password_impl(&self, service: &str, account: &str) -> Result<String> {
-        let keychain = SecKeychain::default()?;
-        let password_data = keychain.find_generic_password(service, account)?;
-        let password = String::from_utf8(password_data.as_ref().to_vec())
-            .context("Invalid UTF-8 in stored password")?;
+        let entry = keyring::Entry::new(service, account)
+            .map_err(|e| anyhow::anyhow!("Failed to create keychain entry: {}", e))?;
+        let password = entry.get_password()
+            .map_err(|e| anyhow::anyhow!("Failed to get password: {}", e))?;
         
         Ok(password)
     }
 
     #[cfg(target_os = "macos")]
     fn delete_password_impl(&self, service: &str, account: &str) -> Result<()> {
-        let keychain = SecKeychain::default()?;
-        let item = keychain.find_generic_password(service, account)?;
-        item.delete();
+        let entry = keyring::Entry::new(service, account)
+            .map_err(|e| anyhow::anyhow!("Failed to create keychain entry: {}", e))?;
+        entry.delete_password()
+            .map_err(|e| anyhow::anyhow!("Failed to delete password: {}", e))?;
         
         Ok(())
     }

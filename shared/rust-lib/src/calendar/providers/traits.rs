@@ -14,13 +14,16 @@ use crate::calendar::{
     CalendarResult, CalendarError, Calendar, CalendarEvent,
     CreateCalendarEventInput, UpdateCalendarEventInput,
     FreeBusyQuery, FreeBusyResponse, EventAttendee,
-    WebhookSubscription, CalendarProvider
+    CalendarProvider
 };
 
 use super::{
     BatchOperationRequest, BatchOperationResult, 
     WebhookNotification, SyncStatus
 };
+
+// Import WebhookSubscription from the parent calendar module
+use super::super::{WebhookSubscription};
 
 /// Main trait that all calendar providers must implement
 #[async_trait]

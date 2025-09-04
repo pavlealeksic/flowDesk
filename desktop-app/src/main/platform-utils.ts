@@ -129,7 +129,7 @@ export function getAppDataDirectory(): string {
  */
 export function getCacheDirectory(): string {
   try {
-    return app.getPath('cache');
+    return app.getPath('temp');
   } catch (error) {
     const platform = process.platform;
     const home = homedir();

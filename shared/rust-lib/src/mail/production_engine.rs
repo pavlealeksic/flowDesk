@@ -29,6 +29,7 @@ use lettre::{
 use mailparse::{parse_mail, MailHeaderMap};
 use std::{collections::HashMap, sync::Arc};
 use tokio::{net::TcpStream, sync::RwLock};
+use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
@@ -62,7 +63,7 @@ pub struct ProductionEmailEngine {
 
 /// IMAP connection wrapper
 pub struct ImapConnection {
-    pub session: ImapSession<TlsStream<TcpStream>>,
+    pub session: ImapSession<TlsStream<tokio_util::compat::Compat<TcpStream>>>,
     pub config: ImapConfig,
     pub status: ConnectionStatus,
     pub last_used: DateTime<Utc>,
@@ -130,9 +131,12 @@ impl ProductionEmailEngine {
         // Connect to IMAP server
         let stream = TcpStream::connect((imap_config.host.as_str(), imap_config.port)).await?;
         
+        // Convert tokio stream to futures-compatible stream
+        let compat_stream = stream.compat();
+        
         let tls_connector = TlsConnector::new();
         let tls_stream = if imap_config.use_tls {
-            tls_connector.connect(&imap_config.host, stream).await?
+            tls_connector.connect(&imap_config.host, compat_stream).await?
         } else {
             return Err(anyhow::anyhow!("Non-TLS connections not supported in production"));
         };
@@ -278,10 +282,14 @@ impl ProductionEmailEngine {
         let connection = connections.get_mut(&account_id)
             .context("IMAP connection not found")?;
 
+        use futures::StreamExt;
+        
         let folder_list = connection.session.list(None, Some("*")).await?;
         let mut folders = Vec::new();
+        let mut folder_stream = Box::pin(folder_list);
 
-        for folder in folder_list.iter() {
+        while let Some(folder_result) = folder_stream.next().await {
+            let folder = folder_result?;
             let folder_type = match folder.name().to_lowercase().as_str() {
                 "inbox" => MailFolderType::Inbox,
                 "sent" | "sent items" => MailFolderType::Sent,
@@ -300,7 +308,7 @@ impl ProductionEmailEngine {
                 folder_type,
                 parent_id: None,
                 path: folder.name().to_string(),
-                attributes: folder.attributes().iter().map(|a| a.to_string()).collect(),
+                attributes: folder.attributes().iter().map(|a| format!("{:?}", a)).collect(),
                 message_count: 0, // Will be updated during sync
                 unread_count: 0,  // Will be updated during sync
                 is_selectable: true,

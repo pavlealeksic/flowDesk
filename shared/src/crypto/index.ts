@@ -24,7 +24,9 @@ export function generateId(): string {
  */
 export async function hashData(data: string | Uint8Array): Promise<ArrayBuffer> {
   const encoder = new TextEncoder()
-  const dataBuffer = typeof data === 'string' ? encoder.encode(data) : data
+  const dataBuffer: BufferSource = typeof data === 'string' 
+    ? encoder.encode(data) 
+    : new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
   
   if (typeof crypto !== 'undefined' && crypto.subtle) {
     return await crypto.subtle.digest('SHA-256', dataBuffer)

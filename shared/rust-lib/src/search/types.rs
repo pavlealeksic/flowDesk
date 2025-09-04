@@ -194,6 +194,12 @@ pub struct SearchDocument {
     /// Provider type
     pub provider_type: ProviderType,
     
+    /// Account ID for the source
+    pub account_id: Option<String>,
+    
+    /// File path (for local files)
+    pub file_path: Option<String>,
+    
     /// Document URL or deep link
     pub url: Option<String>,
     
@@ -228,7 +234,19 @@ pub struct SearchDocument {
 /// Document metadata for additional information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocumentMetadata {
+    /// Document author/creator
+    pub author: Option<String>,
+    
+    /// Document creation timestamp
+    pub created_at: Option<DateTime<Utc>>,
+    
+    /// Last modification timestamp
+    pub modified_at: Option<DateTime<Utc>>,
+    
     /// File size (for files)
+    pub file_size: Option<u64>,
+    
+    /// File size (for files) - alias for backwards compatibility
     pub size: Option<u64>,
     
     /// File type (for files)
@@ -239,6 +257,12 @@ pub struct DocumentMetadata {
     
     /// Language code
     pub language: Option<String>,
+    
+    /// Document tags
+    pub tags: Vec<String>,
+    
+    /// Custom metadata fields
+    pub custom_fields: HashMap<String, String>,
     
     /// Location information
     pub location: Option<LocationInfo>,
@@ -430,6 +454,27 @@ pub struct SearchOptions {
     
     /// Cache TTL in seconds
     pub cache_ttl: Option<u64>,
+    
+    /// Content types to search
+    pub content_types: Option<Vec<ContentType>>,
+    
+    /// Maximum number of results to return
+    pub limit: Option<usize>,
+    
+    /// Offset for pagination
+    pub offset: Option<usize>,
+    
+    /// Sort field
+    pub sort_by: Option<String>,
+    
+    /// Sort order
+    pub sort_order: Option<String>,
+    
+    /// Search filters
+    pub filters: Option<HashMap<String, String>>,
+    
+    /// Enable highlighting (alternative to highlighting field)
+    pub highlight: Option<bool>,
 }
 
 impl Default for SearchOptions {
@@ -445,6 +490,13 @@ impl Default for SearchOptions {
             debug: Some(false),
             use_cache: Some(true),
             cache_ttl: Some(300), // 5 minutes
+            content_types: None,
+            limit: Some(50),
+            offset: Some(0),
+            sort_by: None,
+            sort_order: None,
+            filters: None,
+            highlight: Some(true),
         }
     }
 }

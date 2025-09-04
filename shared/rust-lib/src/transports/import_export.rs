@@ -250,7 +250,7 @@ impl ImportExportTransport {
     }
     
     /// Generate QR code data for device pairing
-    pub fn generate_pairing_qr_data(&self, public_key: &PublicKey) -> Result<String> {
+    pub fn generate_pairing_qr_data(&self, public_key: &X25519PublicKey) -> Result<String> {
         let pairing_data = serde_json::json!({
             "type": "flowdesk_pairing",
             "version": "1.0",
@@ -287,7 +287,7 @@ impl ImportExportTransport {
         
         let mut key_array = [0u8; 32];
         key_array.copy_from_slice(&public_key_bytes);
-        let public_key = PublicKey::from(key_array);
+        let public_key = X25519PublicKey::from(key_array);
         
         Ok(PairingInfo {
             device_id: device_id.to_string(),
@@ -302,7 +302,7 @@ impl ImportExportTransport {
 pub struct PairingInfo {
     pub device_id: String,
     pub device_name: String,
-    pub public_key: PublicKey,
+    pub public_key: X25519PublicKey,
 }
 
 #[async_trait::async_trait]
@@ -336,7 +336,7 @@ impl SyncTransport for ImportExportTransport {
         let filename = format!("flowdesk_config_{}.workosync", timestamp);
         let export_path = self.config.export_location.join(filename);
         
-        self.export_config(config, &export_path, Some("Auto-export")).await?;
+        self.export_config(config, &export_path, Some("Auto-export".to_string())).await?;
         Ok(())
     }
     

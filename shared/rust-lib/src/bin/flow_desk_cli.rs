@@ -115,7 +115,7 @@ async fn get_calendar_database_stats(db: &CalendarDatabase) -> Result<HashMap<St
     let mut stats = HashMap::new();
     
     // Get actual calendar account count from database
-    match db.get_all_calendar_accounts().await {
+    match db.get_user_calendar_accounts("default_user").await {
         Ok(accounts) => {
             stats.insert("calendar_accounts".to_string(), json!(accounts.len()));
             stats.insert("enabled_accounts".to_string(), json!(accounts.iter().filter(|a| a.is_enabled).count()));
@@ -535,15 +535,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Initialize OAuth manager
-    match AuthManager::new().await {
-        Ok(manager) => {
-            let mut oauth_manager = OAUTH_MANAGER.write().await;
-            *oauth_manager = Some(Arc::new(manager));
-        }
-        Err(e) => {
-            eprintln!("Failed to initialize OAuth manager: {}", e);
-        }
-    }
+    let manager = AuthManager::new();
+    let mut oauth_manager = OAUTH_MANAGER.write().await;
+    *oauth_manager = Some(Arc::new(manager));
 
     // Initialize calendar OAuth manager
     let calendar_oauth_manager = CalendarOAuthManager::new();
@@ -711,7 +705,7 @@ fn parse_mail_account_from_args(args: &Value) -> Result<MailAccount, String> {
         id: Uuid::new_v4(),
         user_id: Uuid::new_v4(),
         name,
-        email,
+        email: email.clone(),
         provider,
         status: MailAccountStatus::Active,
         last_sync_at: None,
@@ -723,6 +717,10 @@ fn parse_mail_account_from_args(args: &Value) -> Result<MailAccount, String> {
         provider_config: provider_config.clone(),
         config: provider_config,
         sync_status: None,
+        display_name: email,
+        oauth_tokens: None,
+        imap_config: None,
+        smtp_config: None,
     })
 }
 
@@ -772,6 +770,7 @@ fn parse_calendar_account_from_args(args: &Value) -> Result<CreateCalendarAccoun
                 client_id,
                 access_token,
                 refresh_token,
+                oauth_tokens: None,
             })
         },
         CalendarProvider::Outlook => {
@@ -791,6 +790,7 @@ fn parse_calendar_account_from_args(args: &Value) -> Result<CreateCalendarAccoun
                 client_id,
                 access_token,
                 refresh_token,
+                oauth_tokens: None,
             })
         },
         CalendarProvider::CalDAV => {
@@ -816,6 +816,8 @@ fn parse_calendar_account_from_args(args: &Value) -> Result<CreateCalendarAccoun
                 host,
                 username,
                 password,
+                accept_invalid_certs: false,
+                oauth_tokens: None,
             })
         },
         _ => return Err("Provider configuration not yet implemented".to_string())
@@ -1189,14 +1191,22 @@ async fn process_command(input: &str) -> Value {
                                                             content_type: ContentType::Email,
                                                             provider_id: format!("mail_account_{}", account_id),
                                                             provider_type: ProviderType::LocalMail,
+                                                            account_id: Some(account_id.to_string()),
+                                                            file_path: None,
                                                             url: None,
                                                             icon: None,
                                                             thumbnail: None,
                                                             metadata: DocumentMetadata {
+                                                                author: Some(message.from.address.clone()),
+                                                                created_at: Some(message.date),
+                                                                modified_at: Some(message.date),
+                                                                file_size: Some(message.body_text.as_ref().map(|s| s.len() as u64).unwrap_or(0)),
                                                                 size: Some(message.body_text.as_ref().map(|s| s.len() as u64).unwrap_or(0)),
                                                                 file_type: Some("email".to_string()),
                                                                 mime_type: Some("message/rfc822".to_string()),
                                                                 language: Some("en".to_string()),
+                                                                tags: Vec::new(),
+                                                                custom_fields: HashMap::new(),
                                                                 location: None,
                                                                 collaboration: None,
                                                                 activity: None,
@@ -1471,14 +1481,22 @@ async fn process_command(input: &str) -> Value {
                                                             content_type: ContentType::CalendarEvent,
                                                             provider_id: format!("calendar_account_{}", account_id),
                                                             provider_type: ProviderType::LocalCalendar,
+                                                            account_id: Some(account_id.to_string()),
+                                                            file_path: None,
                                                             url: None, // CalendarEvent doesn't have html_link field
                                                             icon: None,
                                                             thumbnail: None,
                                                             metadata: DocumentMetadata {
+                                                                author: None, // CalendarEvent doesn't have creator field
+                                                                created_at: Some(now), // Use current time as CalendarEvent doesn't have created field
+                                                                modified_at: Some(now), // Use current time as CalendarEvent doesn't have updated field
+                                                                file_size: Some(content.len() as u64),
                                                                 size: Some(content.len() as u64),
                                                                 file_type: Some("calendar_event".to_string()),
                                                                 mime_type: Some("text/calendar".to_string()),
                                                                 language: Some("en".to_string()),
+                                                                tags: Vec::new(),
+                                                                custom_fields: HashMap::new(),
                                                                 location: event.location.as_ref().map(|loc| LocationInfo {
                                                                     path: None,
                                                                     folder: None,
@@ -2023,14 +2041,22 @@ async fn process_command(input: &str) -> Value {
                                         content_type,
                                         provider_id,
                                         provider_type,
+                                        account_id: None,
+                                        file_path: None,
                                         url,
                                         icon: None,
                                         thumbnail: None,
                                         metadata: DocumentMetadata {
+                                            author: author.clone(),
+                                            created_at: Some(now),
+                                            modified_at: Some(now),
+                                            file_size: Some(content.len() as u64),
                                             size: Some(content.len() as u64),
                                             file_type: None,
                                             mime_type: None,
                                             language: Some("en".to_string()),
+                                            tags: Vec::new(),
+                                            custom_fields: std::collections::HashMap::new(),
                                             location: None,
                                             collaboration: None,
                                             activity: None,
@@ -2436,6 +2462,8 @@ async fn process_command(input: &str) -> Value {
                                                 access_token: credentials.access_token.clone(),
                                                 refresh_token: credentials.refresh_token.clone(),
                                                 expires_at: credentials.expires_at,
+                                                token_type: Some("Bearer".to_string()),
+                                                scope: None,
                                             });
                                             
                                             json!({

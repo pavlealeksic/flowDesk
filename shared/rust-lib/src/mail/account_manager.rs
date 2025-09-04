@@ -2,7 +2,8 @@ use crate::mail::{
     server_configs::{get_predefined_configs, get_config_by_domain, ServerConfig, SecurityType},
     error::{MailError, MailResult},
     auth::AuthManager,
-    providers::{imap::{ImapProvider, ImapConfig}, MailProvider as MailProviderTrait},
+    providers::{imap::{ImapProvider, ImapConfig}, MailProviderTrait},
+    types::ProviderAccountConfig,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
@@ -202,8 +203,19 @@ impl AccountManager {
         // Convert to IMAP config
         let imap_config = Self::convert_to_imap_config(&account.server_config, &account.auth_config)?;
         
+        // Wrap in ProviderAccountConfig
+        let provider_config = ProviderAccountConfig::Imap {
+            imap_host: imap_config.imap_host,
+            imap_port: imap_config.imap_port,
+            imap_tls: imap_config.imap_tls,
+            smtp_host: imap_config.smtp_host,
+            smtp_port: imap_config.smtp_port,
+            smtp_tls: imap_config.smtp_tls,
+            folder_mappings: std::collections::HashMap::new(),
+        };
+        
         // Create temporary IMAP provider for testing
-        let imap_provider = ImapProvider::new(imap_config).await?;
+        let imap_provider = ImapProvider::new(provider_config)?;
 
         // Test connection
         imap_provider.test_connection().await?;

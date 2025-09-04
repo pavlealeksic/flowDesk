@@ -1961,7 +1961,9 @@ class FlowDeskApp {
           // Get the updated account information
           let updatedAccount = null;
           try {
-            updatedAccount = await rustEngineIntegration.getMailAccount(accountId);
+            updatedAccount = await rustEngineIntegration.getMailAccounts().then(accounts => 
+              accounts.find(account => account.id === accountId)
+            );
           } catch (getError) {
             log.warn(`Failed to retrieve updated account info: ${getError}`);
           }
@@ -2226,24 +2228,25 @@ class FlowDeskApp {
       try {
         log.info(`Fetching messages for account: ${accountId}, folder: ${folder || 'INBOX'}`);
         const result = await rustEngineIntegration.callRustFunction('fetch_simple_mail_messages', [accountId, folder]);
-        const messages = result.success ? result.result : [];
+        const messages = result.success ? (result.result as any[]) : [];
         
         // Auto-index messages for search
-        if (messages.length > 0) {
+        if (Array.isArray(messages) && messages.length > 0) {
           try {
             const searchService = getSearchService();
             if (searchService.isInitialized()) {
               for (const message of messages.slice(0, 10)) { // Index first 10 messages to avoid overwhelming the system
+                const msgData = message as any;
                 await searchService.indexEmailMessage({
-                  id: message.id || `${accountId}-${Date.now()}`,
+                  id: msgData.id || `${accountId}-${Date.now()}`,
                   accountId: accountId,
-                  subject: message.subject || 'No Subject',
-                  fromAddress: message.from || '',
-                  fromName: message.fromName,
-                  toAddresses: Array.isArray(message.to) ? message.to : [message.to].filter(Boolean),
-                  bodyText: message.body || message.text,
-                  bodyHtml: message.html,
-                  receivedAt: new Date(message.date || message.receivedAt || Date.now()),
+                  subject: msgData.subject || 'No Subject',
+                  fromAddress: msgData.from || '',
+                  fromName: msgData.fromName,
+                  toAddresses: Array.isArray(msgData.to) ? msgData.to : [msgData.to].filter(Boolean),
+                  bodyText: msgData.body || msgData.text,
+                  bodyHtml: msgData.html,
+                  receivedAt: new Date(msgData.date || msgData.receivedAt || Date.now()),
                   folder: folder || 'INBOX'
                 });
               }
@@ -2380,7 +2383,9 @@ class FlowDeskApp {
         // Get updated account info
         let updatedAccount = null;
         try {
-          updatedAccount = await rustEngineIntegration.getCalendarAccount(accountId);
+          updatedAccount = await rustEngineIntegration.getCalendarAccounts().then(accounts => 
+            accounts.find(account => account.id === accountId)
+          );
         } catch (getError) {
           log.warn(`Failed to retrieve updated calendar account: ${getError}`);
         }
@@ -2550,7 +2555,9 @@ class FlowDeskApp {
         // Get the updated event to return complete data
         let updatedEvent = null;
         try {
-          updatedEvent = await rustEngineIntegration.getCalendarEvent(eventId);
+          updatedEvent = await rustEngineIntegration.getCalendarEvents('default').then(events => 
+            events.find(event => event.id === eventId)
+          );
         } catch (getError) {
           log.warn(`Failed to retrieve updated calendar event: ${getError}`);
         }
@@ -2580,7 +2587,9 @@ class FlowDeskApp {
         // Get event info before deletion for confirmation
         let deletedEvent = null;
         try {
-          deletedEvent = await rustEngineIntegration.getCalendarEvent(eventId);
+          deletedEvent = await rustEngineIntegration.getCalendarEvents('default').then(events => 
+            events.find(event => event.id === eventId)
+          );
         } catch (getError) {
           log.warn(`Failed to retrieve event before deletion: ${getError}`);
         }
@@ -2633,12 +2642,12 @@ class FlowDeskApp {
               log.info(`Syncing calendar account: ${account.email || account.id}`);
               const syncResult = await rustEngineIntegration.syncCalendarAccount(account.id);
               
-              if (syncResult && syncResult.success) {
+              if (syncResult) {
                 syncedCount++;
                 log.debug(`Successfully synced calendar account: ${account.email || account.id}`);
               } else {
                 errorCount++;
-                log.warn(`Failed to sync calendar account: ${account.email || account.id}`, syncResult?.error);
+                log.warn(`Failed to sync calendar account: ${account.email || account.id}`);
               }
             } catch (accountError) {
               errorCount++;
@@ -3270,14 +3279,15 @@ class FlowDeskApp {
           return completion;
         } catch (rustError) {
           log.error('Rust engine completion failed:', rustError);
+          const error = rustError as Error;
           // Return fallback response with helpful error message
           return {
             id: 'error_completion_' + Date.now(),
             model: request.model,
-            content: `AI completion failed: ${rustError.message || 'Unknown error'}. Please check your API configuration.`,
+            content: `AI completion failed: ${error.message || 'Unknown error'}. Please check your API configuration.`,
             finishReason: 'error',
             usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-            error: rustError.message || 'AI engine error'
+            error: error.message || 'AI engine error'
           };
         }
       } catch (error) {
@@ -3303,17 +3313,18 @@ class FlowDeskApp {
           return { success: true, streamId };
         } catch (rustError) {
           log.error('Rust engine streaming failed:', rustError);
+          const error = rustError as Error;
           // Send error to stream channel
           if (this.mainWindow) {
             this.mainWindow.webContents.send(streamChannel, {
               id: 'error_stream_' + Date.now(),
               model: request.model,
-              content: `Streaming failed: ${rustError.message || 'Unknown error'}`,
+              content: `Streaming failed: ${error.message || 'Unknown error'}`,
               finishReason: 'error',
               error: true
             });
           }
-          return { success: false, error: rustError.message };
+          return { success: false, error: error.message };
         }
       } catch (error) {
         log.error('Failed to create streaming AI completion:', error);
@@ -3412,26 +3423,23 @@ class FlowDeskApp {
         log.info(`Clearing AI cache for operation type: ${operationType || 'all'}`);
         // Clear AI cache via Rust engine
         try {
-          const success = await rustEngineIntegration.clearCache(operationType);
-          if (success) {
-            log.info(`AI cache cleared successfully for operation: ${operationType || 'all'}`);
-            
-            // Get cache statistics after clearing (if available)
-            let cacheStats = null;
-            try {
-              cacheStats = await rustEngineIntegration.getCacheStats();
-            } catch (statsError) {
-              log.debug(`Failed to get cache stats after clear: ${statsError}`);
-            }
-            
-            return { 
-              success: true,
-              operationType: operationType || 'all',
-              cacheStats,
-              clearedAt: new Date().toISOString()
-            };
+          await rustEngineIntegration.clearCache(operationType);
+          log.info(`AI cache cleared successfully for operation: ${operationType || 'all'}`);
+          
+          // Get cache statistics after clearing (if available)
+          let cacheStats = null;
+          try {
+            cacheStats = await rustEngineIntegration.getCacheStats();
+          } catch (statsError) {
+            log.debug(`Failed to get cache stats after clear: ${statsError}`);
           }
-          throw new Error('Cache clear operation failed');
+          
+          return { 
+            success: true,
+            operationType: operationType || 'all',
+            cacheStats,
+            clearedAt: new Date().toISOString()
+          };
         } catch (rustError) {
           log.error('Failed to clear AI cache:', rustError);
           return { 
@@ -3477,7 +3485,7 @@ class FlowDeskApp {
         try {
           const testResult = await rustEngineIntegration.testProvider(provider);
           log.info(`AI provider test for ${provider}:`, testResult);
-          return testResult.isWorking || false;
+          return testResult || false;
         } catch (rustError) {
           log.error(`AI provider test failed for ${provider}:`, rustError);
           return false;

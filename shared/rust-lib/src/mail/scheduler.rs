@@ -2,7 +2,7 @@
 
 use crate::mail::types::*;
 use crate::mail::error::{MailError, MailResult};
-use chrono::{DateTime, Utc, TimeZone, Duration};
+use chrono::{DateTime, Utc, TimeZone, Duration, Datelike};
 use chrono_tz::Tz;
 use serde_json::Value;
 use std::collections::HashMap;

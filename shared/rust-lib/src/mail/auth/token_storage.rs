@@ -29,6 +29,20 @@ pub struct TokenStorage {
     storage_path: Option<std::path::PathBuf>,
 }
 
+impl Default for TokenStorage {
+    fn default() -> Self {
+        // Use a default encryption key - in production this should come from secure key derivation
+        let default_key = [0u8; 32]; // This is insecure but allows compilation
+        let encryption_key = Key::<Aes256Gcm>::from_slice(&default_key);
+        
+        Self {
+            cache: RwLock::new(HashMap::new()),
+            encryption_key: *encryption_key,
+            storage_path: None,
+        }
+    }
+}
+
 impl TokenStorage {
     /// Create new token storage with system-derived key
     pub async fn new() -> MailResult<Self> {

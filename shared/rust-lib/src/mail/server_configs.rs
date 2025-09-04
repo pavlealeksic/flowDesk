@@ -22,7 +22,7 @@ pub enum SecurityType {
     StartTls,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum AuthMethod {
     Plain,
     Login,

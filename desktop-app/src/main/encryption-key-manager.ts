@@ -439,7 +439,7 @@ export class EncryptionKeyManager {
       log.info('Key rotation completed successfully');
       
       // Emit event for services to re-encrypt data with new keys
-      process.emit('encryption-keys-rotated' as any, { oldKeys, newKeys });
+      (process as any).emit('encryption-keys-rotated', { oldKeys, newKeys });
       
       return true;
     } catch (error) {
@@ -505,7 +505,7 @@ export class EncryptionKeyManager {
       // Save metadata if provided
       if (exportData.metadata) {
         this.metadata = exportData.metadata;
-        await this.saveMetadata(this.metadata);
+        await this.saveMetadata(exportData.metadata);
       }
       
       log.info('Keys imported successfully');

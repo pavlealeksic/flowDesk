@@ -454,7 +454,7 @@ export class ProviderManager {
         resolve(true)
       })
 
-      socket.on('error', (error) => {
+      socket.on('error', (error: Error) => {
         clearTimeout(timeout)
         socket.destroy()
         log.error(`IMAP connection test failed to ${imapServer.host}:${imapServer.port}:`, error)
@@ -485,7 +485,7 @@ export class ProviderManager {
         resolve(true)
       })
 
-      socket.on('error', (error) => {
+      socket.on('error', (error: Error) => {
         clearTimeout(timeout)
         socket.destroy()
         log.error(`SMTP connection test failed to ${smtpServer.host}:${smtpServer.port}:`, error)

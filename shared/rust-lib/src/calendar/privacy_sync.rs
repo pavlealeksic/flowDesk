@@ -130,6 +130,12 @@ pub struct PrivacySyncStats {
     pub error_count: u64,
     /// Sync duration in milliseconds
     pub sync_duration_ms: u64,
+    /// Total events synced
+    pub events_synced: u64,
+    /// Number of conflicts resolved
+    pub conflicts_resolved: u64,
+    /// Timestamp of last full sync
+    pub last_full_sync: Option<DateTime<Utc>>,
 }
 
 impl Default for PrivacySyncState {
@@ -157,6 +163,9 @@ impl Default for PrivacySyncStats {
             conflicts_detected: 0,
             error_count: 0,
             sync_duration_ms: 0,
+            events_synced: 0,
+            conflicts_resolved: 0,
+            last_full_sync: None,
         }
     }
 }
@@ -340,8 +349,21 @@ impl PrivacySyncEngine {
 
         stats.events_processed = source_events.len() as u64;
 
-        // Apply filters to source events (convert Vec<String> to PrivacyFilters)
-        let privacy_filters = rule.config.filters.clone();
+        // Convert Vec<String> filters to PrivacyFilters structure
+        let privacy_filters = if rule.config.filters.is_empty() {
+            None
+        } else {
+            Some(crate::calendar::PrivacyFilters {
+                include_patterns: rule.config.filters.clone(),
+                exclude_patterns: vec![],
+                strip_keywords: vec![],
+                work_hours_only: false,
+                exclude_all_day: false,
+                min_duration_minutes: 0,
+                include_colors: None,
+                exclude_colors: None,
+            })
+        };
         let filtered_events = self.apply_event_filters(&source_events, &privacy_filters);
         
         debug!("Filtered {} events down to {} for rule {}", 
@@ -394,7 +416,7 @@ impl PrivacySyncEngine {
         // Get target calendar provider
         let target_calendar = self.database.get_calendar(target_calendar_id).await?;
         let target_account = self.database.get_calendar_account(&target_calendar.account_id.to_string()).await?;
-        let target_provider = CalendarProviderFactory::create_provider(&target_account)?;
+        let mut target_provider = CalendarProviderFactory::create_boxed_provider(&target_account)?;
 
         // Get existing privacy events in target calendar
         let existing_events = self.get_existing_privacy_events(target_calendar_id, &rule.config.source_calendar_id).await?;
@@ -424,7 +446,7 @@ impl PrivacySyncEngine {
 
             if let Some(existing_event) = existing_event_map.remove(&source_event_id) {
                 // Update existing privacy event
-                match self.update_privacy_event(&target_provider, &existing_event, &privacy_event).await {
+                match self.update_privacy_event(target_provider.as_mut(), &existing_event, &privacy_event).await {
                     Ok(_) => {
                         stats.events_updated += 1;
                         debug!("Updated privacy event for source event {}", source_event_id);
@@ -519,7 +541,7 @@ impl PrivacySyncEngine {
             } else { 
                 Some(source_event.attendees.clone()) 
             },
-            recurrence: source_event.recurrence.clone(), // Use source event recurrence
+            recurrence: None, // TODO: Convert from EventRecurrence to RecurrenceRule
             recurring_event_id: None, // Will be set by provider
             original_start_time: source_event.original_start_time,
             reminders: Some(vec![]), // No reminders for privacy events
@@ -717,7 +739,7 @@ impl PrivacySyncEngine {
         Ok(()) // Placeholder
     }
 
-    async fn update_privacy_event(&self, provider: &Box<dyn CalendarProviderTrait>, existing: &CalendarEvent, updated: &CreateCalendarEventInput) -> CalendarResult<CalendarEvent> {
+    async fn update_privacy_event(&self, provider: &mut dyn CalendarProviderTrait, existing: &CalendarEvent, updated: &CreateCalendarEventInput) -> CalendarResult<CalendarEvent> {
         // Convert CreateCalendarEventInput to UpdateCalendarEventInput
         let update_input = UpdateCalendarEventInput {
             title: Some(updated.title.clone()),

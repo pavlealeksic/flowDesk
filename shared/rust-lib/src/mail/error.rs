@@ -70,6 +70,10 @@ pub enum MailError {
         code: String,
     },
 
+    /// Generic API error
+    #[error("API error: {0}")]
+    Api(String),
+
     /// Account configuration errors
     #[error("Account configuration error: {message}")]
     AccountConfig { message: String },
@@ -318,6 +322,7 @@ impl MailError {
             MailError::RateLimit { .. } => "rate_limit",
             MailError::QuotaExceeded { .. } => "quota",
             MailError::ProviderApi { .. } => "provider_api",
+            MailError::Api(_) => "api",
             MailError::AccountConfig { .. } => "config",
             MailError::Sync { .. } => "sync",
             MailError::Threading { .. } => "threading",
@@ -373,6 +378,14 @@ impl MailError {
     /// Create an encryption error
     pub fn encryption(message: impl Into<String>) -> Self {
         Self::Encryption {
+            message: message.into(),
+        }
+    }
+
+    /// Create an invalid input error (alias for validation)
+    pub fn invalid(message: impl Into<String>) -> Self {
+        Self::Validation {
+            field: "input".to_string(),
             message: message.into(),
         }
     }

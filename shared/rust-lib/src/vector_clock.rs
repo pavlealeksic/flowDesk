@@ -1,7 +1,6 @@
 //! Vector clock implementation for conflict detection in config sync
 
 use std::collections::HashMap;
-use std::cmp::Ordering;
 use serde::{Deserialize, Serialize};
 use anyhow::{Result, anyhow};
 

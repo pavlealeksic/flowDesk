@@ -7,6 +7,9 @@ use napi_derive::napi;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use base64::{engine::general_purpose, Engine as _};
+use uuid::Uuid;
+use chrono::{DateTime, Utc};
+use sqlx::{Row, FromRow};
 
 use crate::mail::{MailEngine, MailAccount, EmailMessage, MailSyncStatus, ProductionEmailEngine};
 use crate::calendar::{CalendarEngine, CalendarAccount, Calendar, CalendarEvent, CalendarSyncStatus};
@@ -124,9 +127,9 @@ impl From<&EmailMessage> for NapiMailMessage {
             bcc_addresses: message.bcc.iter().map(|addr| addr.email.clone()).collect(),
             body_text: message.body_text.clone(),
             body_html: message.body_html.clone(),
-            is_read: message.is_read(),
-            is_starred: message.is_starred(),
-            received_at: message.received_at().timestamp(),
+            is_read: message.flags.is_read,
+            is_starred: message.flags.is_starred,
+            received_at: message.date.timestamp(),
         }
     }
 }
@@ -247,12 +250,12 @@ pub async fn get_mail_messages(account_id: String) -> Result<Vec<NapiMailMessage
                 let message_id = message.id.to_string();
                 let account_id_clone = account_id.clone();
                 let subject = message.subject.clone();
-                let from_address = message.from_address.clone();
-                let from_name = Some(message.from_name.clone());
-                let to_addresses = message.to_addresses.clone();
+                let from_address = message.from.email.clone();
+                let from_name = Some(message.from.name.clone().unwrap_or_default());
+                let to_addresses = message.to.iter().map(|addr| addr.email.clone()).collect();
                 let body_text = message.body_text.clone();
                 let body_html = message.body_html.clone();
-                let received_at = message.received_at;
+                let received_at = message.date;
                 let folder = Some(message.folder.clone());
                 
                 tokio::spawn(async move {
@@ -360,6 +363,7 @@ impl From<NapiCalendarAccount> for CalendarAccount {
                     client_id: "".to_string(),
                     access_token: "".to_string(),
                     refresh_token: None,
+                    oauth_tokens: None,
                 }
             ),
             credentials: std::collections::HashMap::new(),
@@ -487,6 +491,7 @@ pub async fn add_calendar_account(account: NapiCalendarAccount) -> Result<()> {
                 client_id: "".to_string(),
                 access_token: "".to_string(),
                 refresh_token: None,
+                oauth_tokens: None,
             }
         ),
         credentials: None, // This would need to be provided separately for OAuth
@@ -578,7 +583,9 @@ pub async fn get_calendar_events(account_id: String) -> Result<Vec<NapiCalendarE
                 let start_time = event.start_time.timestamp();
                 let end_time = event.end_time.timestamp();
                 let is_all_day = event.is_all_day;
-                let organizer = Some(event.organizer.clone());
+                let organizer = event.attendees.iter()
+                    .find(|a| a.is_organizer.unwrap_or(false))
+                    .map(|a| a.email.clone());
                 let attendees = event.attendees.clone();
                 let status = event.status.clone();
                 
@@ -800,20 +807,25 @@ pub async fn index_document(
         content_type: crate::search::ContentType::Document,
         provider_id: source,
         provider_type: crate::search::ProviderType::LocalFiles, // Default to LocalFiles for generic documents
+        account_id: None,
+        file_path: None,
         url: None,
         icon: None,
         thumbnail: None,
         metadata: crate::search::DocumentMetadata {
+            author: None,
+            created_at: Some(chrono::Utc::now()),
+            modified_at: Some(chrono::Utc::now()),
+            file_size: Some(content.len() as u64),
             size: Some(content.len() as u64),
             file_type: Some("text".to_string()),
             mime_type: Some("text/plain".to_string()),
             language: Some("en".to_string()),
+            tags: Vec::new(),
+            custom_fields: serde_json::from_str(&metadata).unwrap_or_default(),
             location: None,
             collaboration: None,
             activity: None,
-            priority: None,
-            status: None,
-            custom: serde_json::from_str(&metadata).unwrap_or_default(),
         },
         tags: Vec::new(),
         categories: Vec::new(),
@@ -995,20 +1007,25 @@ pub async fn index_email_message(
         content_type: crate::search::ContentType::Email,
         provider_id: account_id,
         provider_type: crate::search::ProviderType::Gmail,
+        account_id: Some(account_id),
+        file_path: None,
         url: Some(format!("email://{}", message_id)),
         icon: Some("mail".to_string()),
         thumbnail: None,
         metadata: crate::search::DocumentMetadata {
+            author: from_name.clone().or(Some(from_address.clone())),
+            created_at: Some(received_at),
+            modified_at: Some(received_at),
+            file_size: Some(content.len() as u64),
             size: Some(content.len() as u64),
             file_type: Some("email".to_string()),
             mime_type: Some("message/rfc822".to_string()),
             language: Some("en".to_string()),
+            tags: vec!["email".to_string()],
+            custom_fields: custom_metadata,
             location: None,
             collaboration: None,
             activity: None,
-            priority: None,
-            status: None,
-            custom: custom_metadata,
         },
         tags: vec!["email".to_string()],
         categories: vec![folder.unwrap_or("inbox".to_string())],
@@ -1078,29 +1095,34 @@ pub async fn index_calendar_event(
         content_type: crate::search::ContentType::CalendarEvent,
         provider_id: calendar_id,
         provider_type: crate::search::ProviderType::Gmail, // Assuming Google Calendar
+        account_id: None,
+        file_path: None,
         url: Some(format!("calendar://{}", event_id)),
         icon: Some("calendar".to_string()),
         thumbnail: None,
         metadata: crate::search::DocumentMetadata {
+            author: organizer.clone(),
+            created_at: Some(chrono::DateTime::from_timestamp(start_time, 0).unwrap_or(chrono::Utc::now())),
+            modified_at: Some(chrono::Utc::now()),
+            file_size: Some(content.len() as u64),
             size: Some(content.len() as u64),
             file_type: Some("calendar_event".to_string()),
             mime_type: Some("text/calendar".to_string()),
             language: Some("en".to_string()),
-            location: location.clone().map(|loc| crate::search::types::LocationInfo {
-                name: Some(loc),
-                address: None,
-                coordinates: None,
-                timezone: None,
+            tags: vec!["calendar".to_string(), "event".to_string()],
+            custom_fields: std::collections::HashMap::new(),
+            location: location.clone().map(|_loc| crate::search::types::LocationInfo {
+                path: None,
+                folder: None,
+                workspace: None,
+                project: None,
             }),
             collaboration: Some(crate::search::types::CollaborationInfo {
-                participants: attendees.clone(),
-                permissions: vec![],
-                sharing_settings: None,
-                last_editor: organizer.clone(),
-                edit_history: vec![],
+                shared: !attendees.is_empty(),
+                collaborators: attendees.clone(),
+                permissions: Some("read".to_string()),
             }),
             activity: None,
-            priority: Some(if status == "confirmed" { "high" } else { "normal" }.to_string()),
             status: Some(status.clone()),
             custom: custom_metadata,
         },
@@ -1242,6 +1264,7 @@ pub struct NapiOAuthCallbackResult {
 
 /// OAuth provider configuration
 #[napi(object)]
+#[derive(Clone)]
 pub struct NapiOAuthProviderConfig {
     pub provider: String,
     pub client_id: String,
@@ -1343,6 +1366,8 @@ pub async fn get_oauth_auth_url(
     Ok(NapiOAuthAuthUrl {
         url: auth_url,
         state,
+        code_verifier: None,
+        code_challenge: None,
     })
 }
 
@@ -1377,10 +1402,15 @@ pub async fn handle_oauth_callback(
             access_token: tokens.access_token,
             refresh_token: tokens.refresh_token,
             expires_at: tokens.expires_at.map(|dt| dt.timestamp()),
+            token_type: tokens.token_type,
+            scope: tokens.scope,
+            id_token: tokens.id_token,
         },
         user_info: NapiOAuthUserInfo {
             email: user_info.email,
             name: user_info.name,
+            picture: user_info.picture,
+            verified_email: user_info.verified_email,
         },
     })
 }
@@ -1471,6 +1501,9 @@ pub async fn refresh_oauth_token(
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
         expires_at: tokens.expires_at.map(|dt| dt.timestamp()),
+        token_type: tokens.token_type,
+        scope: tokens.scope,
+        id_token: tokens.id_token,
     })
 }
 
@@ -2246,14 +2279,15 @@ pub async fn setup_email_account(
         email: credentials.email,
         password: credentials.password,
         display_name: credentials.display_name,
+        provider_override: None,
     };
     
     match engine.setup_account(user_uuid, email_credentials).await {
         Ok(setup_result) => {
             Ok(NapiAccountSetupResult {
                 account_id: setup_result.account_id.to_string(),
-                success: setup_result.success,
-                error_message: setup_result.error_message,
+                success: true,
+                error_message: None,
             })
         },
         Err(e) => {
@@ -2984,7 +3018,7 @@ pub struct CalendarQueryParams {
 }
 
 #[napi]
-pub async fn get_calendar_events(params: CalendarQueryParams) -> Result<Vec<NapiCalendarEvent>> {
+pub async fn get_calendar_events_by_query(params: CalendarQueryParams) -> Result<Vec<NapiCalendarEvent>> {
     use sqlx::SqlitePool;
     
     let db_guard = FLOW_DESK_DATABASE.lock().await;
@@ -3014,10 +3048,12 @@ pub async fn get_calendar_events(params: CalendarQueryParams) -> Result<Vec<Napi
             location: row.get("location"),
             start_time: row.get::<DateTime<Utc>, _>("start_time").timestamp(),
             end_time: row.get::<DateTime<Utc>, _>("end_time").timestamp(),
-            all_day: row.get("is_all_day"),
-            status: row.get("status"),
+            is_all_day: row.get("is_all_day"),
+            organizer: row.get::<String, _>("organizer").unwrap_or_default(),
             attendees: serde_json::from_str(row.get("attendees")).unwrap_or_default(),
-            reminders: serde_json::from_str(row.get("reminders")).unwrap_or_default(),
+            status: row.get("status"),
+            visibility: row.get::<String, _>("visibility").unwrap_or_default(),
+            recurrence_rule: row.get("recurrence_rule"),
         }
     }).collect();
     

@@ -81,7 +81,7 @@ pub struct LANSyncTransport {
 #[derive(Debug, Clone)]
 struct PeerInfo {
     device_id: String,
-    public_key: PublicKey,
+    public_key: X25519PublicKey,
     address: SocketAddr,
     last_seen: DateTime<Utc>,
     capabilities: Vec<String>,

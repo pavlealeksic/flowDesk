@@ -19,7 +19,7 @@ pub mod utils;
 pub use client::ImapClient;
 pub use connection::{ImapConnection, ImapConnectionPool};
 
-use crate::mail::{error::{MailResult, MailError}, providers::{MailProvider, ProviderCapabilities, SyncResult}, types::*};
+use crate::mail::{error::{MailResult, MailError}, providers::{MailProviderTrait, ProviderCapabilities, SyncResult}, types::*};
 use async_trait::async_trait;
 use std::{sync::Arc, collections::HashMap, time::Duration};
 use tokio::sync::{RwLock, Mutex};
@@ -91,16 +91,16 @@ impl ImapProvider {
     pub fn new(config: ProviderAccountConfig) -> MailResult<Self> {
         // Convert ProviderAccountConfig to ImapConfig
         let imap_config = match config {
-            ProviderAccountConfig::Imap(imap_config) => {
+            ProviderAccountConfig::Imap { 
+                imap_host, imap_port, imap_tls, smtp_host, smtp_port, smtp_tls, folder_mappings 
+            } => {
                 ImapConfig {
-                    imap_host: imap_config.imap_host,
-                    imap_port: imap_config.imap_port,
-                    imap_tls: imap_config.imap_tls,
-                    smtp_host: imap_config.smtp_host,
-                    smtp_port: imap_config.smtp_port,
-                    smtp_tls: imap_config.smtp_tls,
-                    username: imap_config.username,
-                    password: secrecy::Secret::new(imap_config.password),
+                    imap_host,
+                    imap_port,
+                    imap_tls,
+                    smtp_host,
+                    smtp_port,
+                    smtp_tls,
                     ..Default::default()
                 }
             }
@@ -176,7 +176,17 @@ impl ImapProvider {
             ..Default::default()
         };
         
-        Self::new(config).await
+        let provider_config = ProviderAccountConfig::Imap {
+            imap_host: config.imap_host.clone(),
+            imap_port: config.imap_port,
+            imap_tls: config.imap_tls,
+            smtp_host: config.smtp_host.clone(),
+            smtp_port: config.smtp_port,
+            smtp_tls: config.smtp_tls,
+            folder_mappings: HashMap::new(),
+        };
+        
+        Self::new(provider_config)
     }
 
     /// Detect server capabilities
@@ -524,7 +534,7 @@ impl ImapProvider {
 }
 
 #[async_trait]
-impl MailProvider for ImapProvider {
+impl MailProviderTrait for ImapProvider {
     fn provider_name(&self) -> &'static str {
         "imap"
     }
@@ -576,6 +586,23 @@ impl MailProvider for ImapProvider {
                 folder_mappings: std::collections::HashMap::new(),
             },
             sync_status: None,
+            display_name: self.config.username.clone(),
+            oauth_tokens: None,
+            imap_config: Some(crate::mail::types::ImapConfig {
+                server: self.config.imap_host.clone(),
+                host: self.config.imap_host.clone(),
+                port: self.config.imap_port,
+                use_tls: self.config.imap_tls,
+                username: self.config.username.clone(),
+                password: None,
+            }),
+            smtp_config: Some(crate::mail::types::SmtpConfig {
+                server: self.config.smtp_host.clone(),
+                port: self.config.smtp_port,
+                use_tls: self.config.smtp_tls,
+                username: self.config.username.clone(),
+                password: None,
+            }),
         })
     }
 

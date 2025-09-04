@@ -37,6 +37,7 @@ pub struct LocalStorageConfig {
 }
 
 /// Local file system storage implementation
+#[derive(Debug)]
 pub struct LocalStorage {
     /// Storage configuration
     config: LocalStorageConfig,
@@ -92,7 +93,7 @@ impl LocalStorage {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                let permissions = async_fs::Permissions::from_mode(self.config.file_permissions);
+                let permissions = std::fs::Permissions::from_mode(self.config.file_permissions);
                 async_fs::set_permissions(&temp_path, permissions).await?;
             }
             
@@ -103,7 +104,7 @@ impl LocalStorage {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                let permissions = async_fs::Permissions::from_mode(self.config.file_permissions);
+                let permissions = std::fs::Permissions::from_mode(self.config.file_permissions);
                 async_fs::set_permissions(path, permissions).await?;
             }
         }

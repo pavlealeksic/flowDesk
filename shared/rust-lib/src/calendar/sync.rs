@@ -10,10 +10,9 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Instant;
-use crate::calendar::{CalendarResult, CalendarError, CalendarEvent, Calendar, CalendarDatabase};
-use uuid::Uuid;
+use crate::calendar::{CalendarResult, CalendarError, CalendarEvent, Calendar, CalendarDatabase, CreateCalendarEventInput};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct SyncManager {
     pub account_id: String,
     pub last_sync_tokens: HashMap<String, String>,
@@ -29,7 +28,7 @@ impl SyncManager {
         }
     }
 
-    pub async fn full_sync(&mut self, provider: Arc<dyn crate::calendar::CalendarProviderTrait>) -> CalendarResult<SyncResult> {
+    pub async fn full_sync(&mut self, mut provider: Box<dyn crate::calendar::CalendarProviderTrait>) -> CalendarResult<SyncResult> {
         let sync_start = Instant::now();
         let mut result = SyncResult::new();
 
@@ -58,7 +57,7 @@ impl SyncManager {
         let local_calendars = self.database.get_calendars_for_account(&self.account_id).await?;
         
         for calendar in local_calendars {
-            match self.sync_calendar_events(&calendar, &provider).await {
+            match self.sync_calendar_events(&calendar, &mut provider).await {
                 Ok(event_result) => {
                     result.events_processed += event_result.events_processed;
                     result.events_created += event_result.events_created;
@@ -78,7 +77,7 @@ impl SyncManager {
         Ok(result)
     }
 
-    pub async fn incremental_sync(&mut self, provider: Arc<dyn crate::calendar::CalendarProviderTrait>, sync_token: Option<String>) -> CalendarResult<SyncResult> {
+    pub async fn incremental_sync(&mut self, mut provider: Box<dyn crate::calendar::CalendarProviderTrait>, sync_token: Option<String>) -> CalendarResult<SyncResult> {
         let sync_start = Instant::now();
         let mut result = SyncResult::new();
 
@@ -87,11 +86,11 @@ impl SyncManager {
         // Use sync token if available, otherwise fall back to timestamp-based sync
         let since_time = if sync_token.is_some() {
             // Provider supports sync tokens - use efficient incremental sync
-            self.sync_with_token(&provider, sync_token).await?
+            self.sync_with_token(&mut provider, sync_token).await?
         } else {
             // Fallback to timestamp-based sync
             let last_sync = self.get_last_sync_time().await.unwrap_or_else(|| Utc::now() - chrono::Duration::hours(24));
-            self.sync_since_timestamp(&provider, last_sync).await?
+            self.sync_since_timestamp(&mut provider, last_sync).await?
         };
 
         result.sync_duration_ms = sync_start.elapsed().as_millis() as u64;
@@ -103,16 +102,16 @@ impl SyncManager {
     async fn sync_calendar(&self, calendar: &Calendar) -> CalendarResult<()> {
         // Check if calendar exists locally
         match self.database.get_calendar(&calendar.id.to_string()).await {
-            Ok(Some(local_calendar)) => {
+            Ok(local_calendar) => {
                 // Update existing calendar if different
                 if local_calendar.updated_at < calendar.updated_at {
-                    self.database.update_calendar(calendar).await?;
-                    tracing::debug!("Updated calendar: {}", calendar.name);
+                    // TODO: Implement calendar update method in database
+                    tracing::debug!("Calendar update needed for: {}", calendar.name);
                 }
             }
-            Ok(None) => {
+            Err(CalendarError::NotFoundError { .. }) => {
                 // Create new calendar
-                self.database.create_calendar(calendar).await?;
+                self.database.create_calendar(calendar.clone()).await?;
                 tracing::debug!("Created new calendar: {}", calendar.name);
             }
             Err(e) => {
@@ -122,6 +121,7 @@ impl SyncManager {
                     operation: "sync_calendar".to_string(),
                     table: Some("calendars".to_string()),
                     constraint_violation: false,
+                    source_description: Some(e.to_string()),
                 });
             }
         }
@@ -129,11 +129,11 @@ impl SyncManager {
         Ok(())
     }
 
-    async fn sync_calendar_events(&self, calendar: &Calendar, provider: &Arc<dyn crate::calendar::CalendarProviderTrait>) -> CalendarResult<SyncResult> {
+    async fn sync_calendar_events(&self, calendar: &Calendar, provider: &mut Box<dyn crate::calendar::CalendarProviderTrait>) -> CalendarResult<SyncResult> {
         let mut result = SyncResult::new();
 
         // Get events from provider for this calendar
-        match provider.list_events(&calendar.provider_id, None, None).await {
+        match provider.list_events(&calendar.provider_id, None, None, None).await {
             Ok(remote_events) => {
                 for remote_event in remote_events {
                     match self.sync_event(&remote_event).await {
@@ -164,20 +164,49 @@ impl SyncManager {
     async fn sync_event(&self, event: &CalendarEvent) -> CalendarResult<SyncAction> {
         // Check if event exists locally
         match self.database.get_calendar_event(&event.id.to_string()).await {
-            Ok(Some(local_event)) => {
+            Ok(local_event) => {
                 // Check if remote event is newer
                 if event.updated_at > local_event.updated_at {
                     // Resolve any conflicts
                     let resolved_event = ConflictResolver::resolve_event_conflict(&local_event, event)?;
-                    self.database.update_calendar_event(&resolved_event).await?;
+                    self.database.update_event(&resolved_event).await?;
                     Ok(SyncAction::Updated)
                 } else {
                     Ok(SyncAction::NoChange)
                 }
             }
-            Ok(None) => {
+            Err(CalendarError::NotFoundError { .. }) => {
                 // Create new event
-                self.database.create_calendar_event(event).await?;
+                let create_input = CreateCalendarEventInput {
+                    title: event.title.clone(),
+                    description: event.description.clone(),
+                    location: event.location.clone(),
+                    start_time: event.start_time,
+                    end_time: event.end_time,
+                    all_day: event.all_day,
+                    is_all_day: event.is_all_day,
+                    calendar_id: event.calendar_id.clone(),
+                    provider_id: Some(event.provider_id.clone()),
+                    location_data: event.location_data.clone(),
+                    timezone: Some(event.timezone.clone()),
+                    status: Some(event.status.clone()),
+                    visibility: Some(event.visibility.clone()),
+                    attendees: Some(event.attendees.clone()),
+                    reminders: None, // CalendarEvent doesn't have reminders field
+                    recurrence: None, // Would need conversion from EventRecurrence to RecurrenceRule
+                    uid: event.uid.clone(),
+                    transparency: None, // CalendarEvent doesn't have transparency field
+                    source: None,
+                    recurring_event_id: event.recurring_event_id.clone(),
+                    original_start_time: event.original_start_time,
+                    color: event.color.clone(),
+                    creator: None,
+                    organizer: None,
+                    conferencing: None,
+                    attachments: Some(event.attachments.clone()),
+                    extended_properties: event.extended_properties.clone(),
+                };
+                self.database.create_calendar_event(create_input).await?;
                 Ok(SyncAction::Created)
             }
             Err(e) => {
@@ -186,12 +215,13 @@ impl SyncManager {
                     operation: "sync_event".to_string(),
                     table: Some("calendar_events".to_string()),
                     constraint_violation: false,
+                    source_description: Some(e.to_string()),
                 })
             }
         }
     }
 
-    async fn sync_with_token(&self, provider: &Arc<dyn crate::calendar::CalendarProviderTrait>, sync_token: Option<String>) -> CalendarResult<SyncResult> {
+    async fn sync_with_token(&self, _provider: &mut Box<dyn crate::calendar::CalendarProviderTrait>, sync_token: Option<String>) -> CalendarResult<SyncResult> {
         // Implementation would use provider-specific sync token APIs
         // This is a simplified version
         let mut result = SyncResult::new();
@@ -204,7 +234,7 @@ impl SyncManager {
         Ok(result)
     }
 
-    async fn sync_since_timestamp(&self, provider: &Arc<dyn crate::calendar::CalendarProviderTrait>, since: DateTime<Utc>) -> CalendarResult<SyncResult> {
+    async fn sync_since_timestamp(&self, provider: &mut Box<dyn crate::calendar::CalendarProviderTrait>, since: DateTime<Utc>) -> CalendarResult<SyncResult> {
         let mut result = SyncResult::new();
         
         tracing::debug!("Syncing changes since: {}", since);
@@ -214,7 +244,7 @@ impl SyncManager {
         
         for calendar in calendars {
             // Get events modified since timestamp
-            if let Ok(events) = provider.list_events(&calendar.provider_id, Some(since), None).await {
+            if let Ok(events) = provider.list_events(&calendar.provider_id, Some(since), None, None).await {
                 for event in events {
                     match self.sync_event(&event).await {
                         Ok(action) => {
@@ -308,7 +338,7 @@ impl ConflictResolver {
             resolved_event = local.clone();
         } else {
             // Use remote event but preserve some local-only fields if needed
-            resolved_event.id = local.id; // Keep local ID
+            resolved_event.id = local.id.clone(); // Keep local ID
         }
 
         // Log conflict resolution

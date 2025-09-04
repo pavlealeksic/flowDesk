@@ -97,6 +97,7 @@ pub struct GoogleCalendarConfig {
     pub client_id: String,
     pub access_token: String,
     pub refresh_token: Option<String>,
+    pub oauth_tokens: Option<CalendarAccountCredentials>,
 }
 
 /// Outlook calendar configuration
@@ -105,6 +106,7 @@ pub struct OutlookCalendarConfig {
     pub client_id: String,
     pub access_token: String,
     pub refresh_token: Option<String>,
+    pub oauth_tokens: Option<CalendarAccountCredentials>,
 }
 
 /// Exchange calendar configuration
@@ -122,6 +124,8 @@ pub struct CalDavConfig {
     pub host: String,
     pub username: String,
     pub password: String,
+    pub accept_invalid_certs: bool,
+    pub oauth_tokens: Option<CalendarAccountCredentials>,
 }
 
 /// Calendar representation
@@ -142,6 +146,9 @@ pub struct Calendar {
     pub can_sync: bool,
     pub sync_status: Option<CalendarSyncStatus>,
     pub location_data: Option<serde_json::Value>,
+    pub last_sync_at: Option<DateTime<Utc>>,
+    pub is_being_synced: bool,
+    pub sync_error: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -196,6 +203,8 @@ pub struct CalendarEvent {
     pub recurrence: Option<EventRecurrence>,
     pub recurring_event_id: Option<String>,
     pub original_start_time: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 impl Default for CalendarEvent {
@@ -224,6 +233,8 @@ impl Default for CalendarEvent {
             recurrence: None,
             recurring_event_id: None,
             original_start_time: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
         }
     }
 }
@@ -243,7 +254,7 @@ pub struct EventAttendee {
 }
 
 /// Attendee response status
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum AttendeeResponseStatus {
     Accepted,
     Declined,
@@ -385,6 +396,9 @@ pub struct RecurrenceRule {
     pub interval: i32,
     pub count: Option<i32>,
     pub until: Option<DateTime<Utc>>,
+    pub by_day: Option<Vec<u8>>,
+    pub by_month: Option<Vec<u8>>,
+    pub by_month_day: Option<Vec<i8>>,
 }
 
 /// Recurrence frequency
@@ -540,6 +554,9 @@ pub struct CalendarAccountCredentials {
     pub access_token: String,
     pub refresh_token: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
+    pub auth_type: Option<String>,
+    pub username: Option<String>,
+    pub password: Option<String>,
 }
 
 /// Free/busy query

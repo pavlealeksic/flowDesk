@@ -137,9 +137,11 @@ impl ProviderDetector {
         let domain = email.split('@').nth(1)
             .ok_or_else(|| CalendarError::ValidationError {
                 message: "Invalid email format".to_string(),
+                provider: None,
+                account_id: None,
                 field: Some("email".to_string()),
                 value: Some(email.to_string()),
-                constraint: "valid_email".to_string(),
+                constraint: Some("valid_email".to_string()),
             })?;
 
         let mut results = Vec::new();
@@ -201,9 +203,11 @@ impl ProviderDetector {
         let url = Url::parse(server_url)
             .map_err(|e| CalendarError::ValidationError {
                 message: format!("Invalid server URL: {}", e),
+                provider: None,
+                account_id: None,
                 field: Some("server_url".to_string()),
                 value: Some(server_url.to_string()),
-                constraint: "valid_url".to_string(),
+                constraint: Some("valid_url".to_string()),
             })?;
 
         // Check if it's a known service
@@ -400,9 +404,11 @@ impl ProviderDetector {
             _ => {
                 Err(CalendarError::ValidationError {
                     message: format!("Unsupported provider: {:?}", detection.provider),
+                    provider: Some(detection.provider.clone()),
+                    account_id: None,
                     field: Some("provider".to_string()),
                     value: None,
-                    constraint: "supported_provider".to_string(),
+                    constraint: Some("supported_provider".to_string()),
                 })
             }
         }

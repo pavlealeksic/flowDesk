@@ -455,6 +455,10 @@ impl MailDatabase {
                     history_id: None,
                 },
                 sync_status: None,
+                display_name: row.get::<String, _>("display_name"),
+                oauth_tokens: None,
+                imap_config: None,
+                smtp_config: None,
             };
             accounts.push(account);
         }
@@ -494,6 +498,10 @@ impl MailDatabase {
                     history_id: None,
                 },
                 sync_status: None,
+                display_name: row.get::<String, _>("display_name"),
+                oauth_tokens: None,
+                imap_config: None,
+                smtp_config: None,
             };
             Ok(Some(account))
         } else {

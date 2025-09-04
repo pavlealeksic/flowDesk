@@ -18,6 +18,7 @@ use crate::calendar::{
     CalendarAccount, CalendarEvent, Calendar, CalendarProvider,
     CalendarPrivacySync, CalendarResult, CalendarError,
     FreeBusySlot, WebhookSubscription, CalendarSyncStatus,
+    CalendarAccessLevel, CalendarType,
     EventAttendee, RecurrenceRule, ConferencingInfo, 
     EventAttachment, EventReminder, CreateCalendarEventInput,
     UpdateCalendarEventInput, CreateCalendarAccountInput,
@@ -25,6 +26,7 @@ use crate::calendar::{
 };
 
 /// Database connection and operations manager
+#[derive(Debug)]
 pub struct CalendarDatabase {
     pool: Arc<SqlitePool>,
 }
@@ -39,6 +41,7 @@ impl CalendarDatabase {
                 operation: "connect".to_string(),
                 table: None,
                 constraint_violation: false,
+                source_description: Some(e.to_string()),
             })?;
 
         let db = Self {
@@ -536,9 +539,11 @@ impl CalendarDatabase {
             "fastmail" => CalendarProvider::Fastmail,
             _ => return Err(CalendarError::ValidationError {
                 message: format!("Invalid provider: {}", provider_str),
+                provider: None,
+                account_id: None,
                 field: Some("provider".to_string()),
-                value: Some(provider_str),
-                constraint: "enum".to_string(),
+                value: Some(provider_str.to_string()),
+                constraint: Some("enum".to_string()),
             }),
         };
 
@@ -571,9 +576,11 @@ impl CalendarDatabase {
             "error" => crate::calendar::CalendarAccountStatus::Error,
             _ => return Err(CalendarError::ValidationError {
                 message: format!("Invalid status: {}", status_str),
+                provider: None,
+                account_id: None,
                 field: Some("status".to_string()),
-                value: Some(status_str),
-                constraint: "enum".to_string(),
+                value: Some(status_str.to_string()),
+                constraint: Some("enum".to_string()),
             }),
         };
 
@@ -647,9 +654,11 @@ impl CalendarDatabase {
             "freeBusyReader" => CalendarAccessLevel::FreeBusyReader,
             _ => return Err(CalendarError::ValidationError {
                 message: format!("Invalid access level: {}", access_level_str),
+                provider: None,
+                account_id: None,
                 field: Some("access_level".to_string()),
-                value: Some(access_level_str),
-                constraint: "enum".to_string(),
+                value: Some(access_level_str.to_string()),
+                constraint: Some("enum".to_string()),
             }),
         };
 
@@ -664,9 +673,11 @@ impl CalendarDatabase {
             "birthdays" => CalendarType::Birthdays,
             _ => return Err(CalendarError::ValidationError {
                 message: format!("Invalid calendar type: {}", type_str),
+                provider: None,
+                account_id: None,
                 field: Some("calendar_type".to_string()),
-                value: Some(type_str),
-                constraint: "enum".to_string(),
+                value: Some(type_str.to_string()),
+                constraint: Some("enum".to_string()),
             }),
         };
 
@@ -698,9 +709,91 @@ impl CalendarDatabase {
                 total_events: 0,
             }),
             location_data: None, // Could be populated from row.get("location_data") if stored
+            is_being_synced: row.get("is_being_synced"),
+            last_sync_at: row.get::<Option<NaiveDateTime>, _>("last_sync_at")
+                .map(|dt| DateTime::from_naive_utc_and_offset(dt, Utc)),
+            sync_error: row.get("sync_error"),
             created_at: DateTime::from_naive_utc_and_offset(row.get("created_at"), Utc),
             updated_at: DateTime::from_naive_utc_and_offset(row.get("updated_at"), Utc),
         })
+    }
+
+    /// Get all calendars for a specific account
+    pub async fn get_calendars_for_account(&self, account_id: &str) -> CalendarResult<Vec<Calendar>> {
+        let rows = sqlx::query(r#"
+            SELECT id, account_id, provider_id, name, description, color, timezone,
+                   is_primary, access_level, is_visible, can_sync, calendar_type,
+                   is_selected, last_sync_at, is_being_synced, sync_error,
+                   created_at, updated_at
+            FROM calendars 
+            WHERE account_id = ?
+            ORDER BY name
+        "#)
+        .bind(account_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| CalendarError::DatabaseError {
+            message: format!("Failed to get calendars for account: {}", e),
+            operation: "select".to_string(),
+            table: Some("calendars".to_string()),
+            constraint_violation: false,
+            source_description: Some(e.to_string()),
+        })?;
+
+        let mut calendars = Vec::new();
+        for row in rows {
+            // Parse access level
+            let access_level_str: String = row.get("access_level");
+            let access_level = match access_level_str.as_str() {
+                "owner" => CalendarAccessLevel::Owner,
+                "editor" => CalendarAccessLevel::Writer,
+                "writer" => CalendarAccessLevel::Writer,
+                "reader" => CalendarAccessLevel::Reader,
+                "read" => CalendarAccessLevel::Read,
+                "write" => CalendarAccessLevel::Write,
+                "freebusyreader" => CalendarAccessLevel::FreeBusyReader,
+                _ => CalendarAccessLevel::Reader,
+            };
+
+            // Parse calendar type
+            let type_str: String = row.get("calendar_type");
+            let calendar_type = match type_str.as_str() {
+                "primary" => CalendarType::Primary,
+                "secondary" => CalendarType::Secondary,
+                "shared" => CalendarType::Shared,
+                "public" => CalendarType::Public,
+                "resource" => CalendarType::Resource,
+                "holiday" => CalendarType::Holiday,
+                "birthdays" => CalendarType::Birthdays,
+                _ => CalendarType::Secondary,
+            };
+
+            calendars.push(Calendar {
+                id: row.get("id"),
+                account_id: row.get("account_id"),
+                provider_id: row.get("provider_id"),
+                name: row.get("name"),
+                description: row.get("description"),
+                color: row.get("color"),
+                timezone: row.get("timezone"),
+                is_primary: row.get("is_primary"),
+                access_level,
+                is_visible: row.get("is_visible"),
+                can_sync: row.get("can_sync"),
+                type_: calendar_type,
+                is_selected: row.get("is_selected"),
+                last_sync_at: row.get::<Option<chrono::NaiveDateTime>, _>("last_sync_at")
+                    .map(|dt| DateTime::from_naive_utc_and_offset(dt, Utc)),
+                is_being_synced: row.get("is_being_synced"),
+                sync_error: row.get("sync_error"),
+                sync_status: None, // TODO: Parse from database if available
+                location_data: None,
+                created_at: DateTime::from_naive_utc_and_offset(row.get("created_at"), Utc),
+                updated_at: DateTime::from_naive_utc_and_offset(row.get("updated_at"), Utc),
+            });
+        }
+
+        Ok(calendars)
     }
 
     // === Event Operations ===
@@ -935,6 +1028,7 @@ impl CalendarDatabase {
                 operation: "get_events_by_calendar".to_string(),
                 table: Some("calendar_events".to_string()),
                 constraint_violation: false,
+                source_description: Some(e.to_string()),
             }
         })?;
 
@@ -1023,6 +1117,7 @@ impl CalendarDatabase {
             operation: "update_event".to_string(),
             table: Some("calendar_events".to_string()),
             constraint_violation: e.to_string().contains("UNIQUE") || e.to_string().contains("constraint"),
+            source_description: Some(e.to_string()),
         })?;
 
         Ok(())
@@ -1039,6 +1134,7 @@ impl CalendarDatabase {
                 operation: "delete_event".to_string(),
                 table: Some("calendar_events".to_string()),
                 constraint_violation: false,
+                source_description: Some(e.to_string()),
             })?;
 
         Ok(())
@@ -1055,6 +1151,7 @@ impl CalendarDatabase {
                 operation: "get_privacy_syncs_by_user".to_string(),
                 table: Some("privacy_sync_rules".to_string()),
                 constraint_violation: false,
+                source_description: Some(e.to_string()),
             })?;
 
         let mut rules = Vec::with_capacity(rows.len());
@@ -1075,6 +1172,7 @@ impl CalendarDatabase {
                         operation: "get_privacy_syncs_by_user".to_string(),
                         table: Some("privacy_sync_rules".to_string()),
                         constraint_violation: false,
+                        source_description: Some(e.to_string()),
                     }
                 })?,
                 time_window: row.get::<Option<String>, _>("time_window")
@@ -1101,6 +1199,7 @@ impl CalendarDatabase {
                 operation: "get_privacy_sync".to_string(),
                 table: Some("privacy_sync_rules".to_string()),
                 constraint_violation: false,
+                source_description: Some(e.to_string()),
             })?;
 
         if let Some(row) = row {
@@ -1120,6 +1219,7 @@ impl CalendarDatabase {
                         operation: "get_privacy_sync".to_string(),
                         table: Some("privacy_sync_rules".to_string()),
                         constraint_violation: false,
+                        source_description: Some(e.to_string()),
                     }
                 })?,
                 time_window: row.get::<Option<String>, _>("time_window")
@@ -1159,6 +1259,7 @@ impl CalendarDatabase {
                 operation: "update_privacy_sync".to_string(),
                 table: Some("privacy_sync_rules".to_string()),
                 constraint_violation: false,
+                source_description: Some(e.to_string()),
             }
         })?)
         .bind(privacy_sync.time_window.as_ref().and_then(|tw| serde_json::to_string(tw).ok()))
@@ -1172,6 +1273,7 @@ impl CalendarDatabase {
             operation: "update_privacy_sync".to_string(),
             table: Some("privacy_sync_rules".to_string()),
             constraint_violation: false,
+            source_description: Some(e.to_string()),
         })?;
 
         Ok(())

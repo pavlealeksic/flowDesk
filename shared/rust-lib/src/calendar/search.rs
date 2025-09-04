@@ -8,7 +8,7 @@
 use std::sync::Arc;
 use std::collections::HashMap;
 use crate::calendar::{CalendarResult, CalendarError, CalendarEvent, Calendar, CalendarDatabase};
-use crate::search::{SearchEngine, SearchDocument, ContentType, DocumentMetadata, LocationInfo};
+use crate::search::{SearchEngine, SearchDocument, ContentType, DocumentMetadata, LocationInfo, ProviderType, IndexingInfo, IndexType};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
@@ -44,16 +44,27 @@ impl CalendarSearchEngine {
                     event.description.as_deref().unwrap_or(""),
                     event.location.as_deref().unwrap_or("")
                 ),
+                summary: event.description.clone(),
                 content_type: ContentType::CalendarEvent,
                 provider_id: event.provider_id.clone(),
+                provider_type: ProviderType::LocalCalendar,
                 account_id: Some(event.account_id.to_string()),
                 url: None,
                 file_path: None,
+                icon: Some("📅".to_string()),
+                thumbnail: None,
+                tags: vec![],
+                categories: vec!["Calendar".to_string()],
+                author: event.attendees.first().map(|att| att.email.clone()),
+                created_at: event.created_at,
+                last_modified: event.updated_at,
                 metadata: DocumentMetadata {
                     author: None,
                     created_at: Some(event.created_at),
                     modified_at: Some(event.updated_at),
                     file_size: None,
+                    size: None,
+                    file_type: None,
                     mime_type: Some("application/calendar".to_string()),
                     language: None,
                     tags: vec![],
@@ -73,14 +84,19 @@ impl CalendarSearchEngine {
                         fields.insert("visibility".to_string(), format!("{:?}", event.visibility));
                         fields
                     },
+                    location: None,
+                    collaboration: None,
+                    activity: None,
+                    priority: None,
+                    status: Some(format!("{:?}", event.status)),
+                    custom: HashMap::new(),
                 },
-                location: event.location.as_ref().map(|loc| LocationInfo {
-                    address: loc.clone(),
-                    coordinates: None,
-                    timezone: event.timezone.clone(),
-                }),
-                permissions: None,
-                indexed_at: Utc::now(),
+                indexing_info: IndexingInfo {
+                    indexed_at: Utc::now(),
+                    version: 1,
+                    checksum: format!("{:x}", md5::compute(format!("{}{}", event.title, event.updated_at.timestamp()))),
+                    index_type: IndexType::Full,
+                },
             };
 
             // Index the document
@@ -88,7 +104,7 @@ impl CalendarSearchEngine {
                 .map_err(|e| CalendarError::InternalError {
                     message: format!("Failed to index calendar event: {}", e),
                     operation: Some("index_event".to_string()),
-                    context: Some(format!("event_id: {}", event.id)),
+                    context: Some(serde_json::json!({"event_id": event.id})),
                 })?;
 
             // Track indexed event
@@ -103,11 +119,11 @@ impl CalendarSearchEngine {
 
     pub async fn remove_event(&self, event_id: &str) -> CalendarResult<()> {
         if let Some(ref search_engine) = self.search_engine {
-            search_engine.remove_document(event_id).await
+            search_engine.delete_document(event_id).await
                 .map_err(|e| CalendarError::InternalError {
                     message: format!("Failed to remove calendar event from index: {}", e),
                     operation: Some("remove_event".to_string()),
-                    context: Some(format!("event_id: {}", event_id)),
+                    context: Some(serde_json::json!({"event_id": event_id})),
                 })?;
 
             // Remove from tracking
@@ -125,29 +141,40 @@ impl CalendarSearchEngine {
             // Search for calendar events specifically
             let search_options = crate::search::SearchOptions {
                 content_types: Some(vec![ContentType::CalendarEvent]),
-                limit: limit.unwrap_or(50),
-                offset: 0,
+                limit: Some(limit.unwrap_or(50)),
+                offset: Some(0),
                 sort_by: Some("start_time".to_string()),
                 sort_order: Some("desc".to_string()),
                 filters: None,
-                facets: None,
                 highlight: Some(true),
+                ..Default::default()
             };
 
-            let search_results = search_engine.search(query, Some(search_options)).await
+            let search_query = crate::search::SearchQuery {
+                query: query.to_string(),
+                content_types: Some(vec![ContentType::CalendarEvent]),
+                provider_ids: None,
+                filters: None,
+                sort: None,
+                limit: Some(limit.unwrap_or(50)),
+                offset: Some(0),
+                options: search_options,
+            };
+            
+            let search_results = search_engine.search(search_query).await
                 .map_err(|e| CalendarError::InternalError {
                     message: format!("Calendar search failed: {}", e),
                     operation: Some("search_events".to_string()),
-                    context: Some(format!("query: {}", query)),
+                    context: Some(serde_json::json!({"query": query})),
                 })?;
 
             // Convert search results back to calendar events
             let mut events = Vec::new();
-            for result in search_results.documents {
+            for result in search_results.results {
                 // Parse event ID from search result
                 if let Ok(event_uuid) = Uuid::parse_str(&result.id) {
                     // Get full event details from database
-                    if let Ok(Some(event)) = self.database.get_calendar_event(&result.id).await {
+                    if let Ok(event) = self.database.get_calendar_event(&result.id).await {
                         events.push(event);
                     }
                 }
@@ -194,7 +221,7 @@ impl CalendarSearchEngine {
             let mut total_indexed = 0;
 
             for calendar in calendars {
-                let events = self.database.get_events_for_calendar(&calendar.id.to_string()).await?;
+                let events = self.database.get_events_by_calendar(&calendar.id.to_string(), None, None).await?;
                 
                 for event in events {
                     if let Err(e) = self.index_event(&event).await {

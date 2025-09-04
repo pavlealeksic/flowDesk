@@ -139,11 +139,15 @@ impl FlowDeskDatabase {
 
     /// Setup required directories
     async fn setup_directories(&self) -> Result<(), DatabaseError> {
+        let mail_db_dir = Path::new(&self.config.mail_db_path).parent().unwrap().to_string_lossy().to_string();
+        let calendar_db_dir = Path::new(&self.config.calendar_db_path).parent().unwrap().to_string_lossy().to_string();
+        let search_index_dir = Path::new(&self.config.search_index_path).parent().unwrap().to_string_lossy().to_string();
+        
         let directories = vec![
-            &self.config.user_data_path,
-            &Path::new(&self.config.mail_db_path).parent().unwrap().to_string_lossy(),
-            &Path::new(&self.config.calendar_db_path).parent().unwrap().to_string_lossy(),
-            &Path::new(&self.config.search_index_path).parent().unwrap().to_string_lossy(),
+            self.config.user_data_path.as_str(),
+            mail_db_dir.as_str(),
+            calendar_db_dir.as_str(),
+            search_index_dir.as_str(),
         ];
 
         for dir in directories {
