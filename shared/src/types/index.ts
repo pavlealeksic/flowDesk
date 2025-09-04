@@ -21,6 +21,7 @@ export type { DeviceInfo } from './security';
 export type {
   WorkspaceConfig,
   WorkspaceMetadata,
+  WorkspacePartitionConfig,
   UserPreferences as ConfigUserPreferences,
   SyncState,
   SyncConflict,

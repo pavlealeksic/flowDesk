@@ -8,6 +8,54 @@
 import { z } from 'zod';
 
 /**
+ * Workspace browser partition configuration for Electron isolation
+ */
+export interface WorkspacePartitionConfig {
+  /** Unique partition identifier */
+  id: string;
+  /** Human-readable partition name */
+  name: string;
+  /** Electron partition string (e.g., 'persist:workspace-123') */
+  partitionId: string;
+  /** Whether the partition is ephemeral (in-memory only) */
+  ephemeral: boolean;
+  /** Permission settings for the partition */
+  permissions: {
+    /** Allow desktop notifications */
+    notifications: boolean;
+    /** Allow geolocation access */
+    geolocation: boolean;
+    /** Allow camera access */
+    camera: boolean;
+    /** Allow microphone access */
+    microphone: boolean;
+    /** Allow clipboard access */
+    clipboard: boolean;
+    /** Allow fullscreen mode */
+    fullscreen: boolean;
+    /** Allow plugins */
+    plugins: boolean;
+    /** Allow popups */
+    popups: boolean;
+  };
+  /** Security settings for the partition */
+  security: {
+    /** Enable web security */
+    webSecurity: boolean;
+    /** Allow insecure content */
+    allowInsecureContent: boolean;
+    /** Enable experimental features */
+    experimentalFeatures: boolean;
+    /** Enable node integration */
+    nodeIntegration: boolean;
+    /** Enable context isolation */
+    contextIsolation: boolean;
+    /** Enable remote module */
+    enableRemoteModule: boolean;
+  };
+}
+
+/**
  * Workspace configuration (the main config object)
  */
 export interface WorkspaceConfig {
