@@ -203,7 +203,7 @@
 use crate::mail::{error::{MailError, MailResult}, types::*};
 use async_imap::{
     types::UnsolicitedResponse,
-    extensions::idle::{IdleResponse},
+    extensions::idle::IdleResponse,
 };
 use std::{
     collections::HashMap,
@@ -624,8 +624,8 @@ impl IdleConnectionManager {
         // Mark connection as being used for IDLE
         conn.set_idle(true);
         
-        // Get session and select folder
-        let session = conn.session()?;
+        // Get session ownership and select folder  
+        let mut session = conn.take_session()?;
         let mailbox = session.select(folder_name).await
             .map_err(|e| MailError::provider_api("IMAP", &format!("Failed to select folder {}: {:?}", folder_name, e), "select_failed"))?;
         
@@ -633,6 +633,8 @@ impl IdleConnectionManager {
         
         // Start IDLE session using the correct async-imap API
         let mut idle_handle = session.idle();
+        
+        // Initialize IDLE
         idle_handle.init().await
             .map_err(|e| MailError::provider_api("IMAP", &format!("Failed to start IDLE: {:?}", e), "idle_start_failed"))?;
         
@@ -658,11 +660,9 @@ impl IdleConnectionManager {
                 break;
             }
             
-            // Wait for IDLE responses using the proper async-imap wait API
-            let (wait_future, _stop_source) = idle_handle.wait();
-            
-            match timeout(Duration::from_secs(30), wait_future).await {
-                Ok(Ok(IdleResponse::NewData(_response_data))) => {
+            // Wait for IDLE responses using the Handle API
+            match idle_handle.wait_with_timeout(Duration::from_secs(30)).await {
+                Ok(IdleResponse::NewData(_response_data)) => {
                     debug!("IDLE: Received response data for folder {} (account {})", folder_name, account_id);
                     
                     // Since ResponseData is private, we'll trigger a general new message event
@@ -680,7 +680,7 @@ impl IdleConnectionManager {
                         *last_activity = Instant::now();
                     }
                 }
-                Ok(Ok(IdleResponse::Timeout)) => {
+                Ok(IdleResponse::Timeout) => {
                     // Timeout occurred - this is normal for keepalive
                     debug!("IDLE timeout for folder {} on account {}, sending keepalive...", folder_name, account_id);
                     
@@ -691,29 +691,18 @@ impl IdleConnectionManager {
                         is_healthy: true,
                     });
                 }
-                Ok(Ok(IdleResponse::ManualInterrupt)) => {
+                Ok(IdleResponse::ManualInterrupt) => {
                     debug!("IDLE manually interrupted for folder {} on account {}", folder_name, account_id);
                     break;
                 }
-                Ok(Err(e)) => {
+                Err(e) => {
                     warn!("IDLE error for folder {} on account {}: {:?}", folder_name, account_id, e);
                     return Err(MailError::provider_api("IMAP", &format!("IDLE error: {:?}", e), "idle_error"));
-                }
-                Err(_) => {
-                    // Timeout occurred during wait - this is normal behavior, continue loop
-                    debug!("IDLE wait timeout for folder {} on account {}, continuing...", folder_name, account_id);
-                    
-                    // Send health check event
-                    let _ = event_sender.send(IdleEvent::HealthCheck {
-                        account_id,
-                        folder: folder_name.clone(),
-                        is_healthy: true,
-                    });
                 }
             }
         }
         
-        // Stop IDLE session gracefully and get the session back
+        // Stop IDLE session gracefully 
         debug!("Stopping IDLE session for folder {} on account {}", folder_name, account_id);
         let _session = idle_handle.done().await
             .map_err(|e| MailError::provider_api("IMAP", &format!("Failed to stop IDLE: {:?}", e), "idle_done_failed"))?;
@@ -772,16 +761,8 @@ impl IdleConnectionManager {
                     uid: *seq,
                 });
             }
-            UnsolicitedResponse::Fetch(seq) => {
-                debug!("IDLE: Message {} updated in folder {} (account {})", seq, folder_name, account_id);
-                let _ = event_sender.send(IdleEvent::MessageFlagsChanged {
-                    account_id,
-                    folder: folder_name.to_string(),
-                    message_id: format!("{}:{}", folder_name, seq),
-                    uid: *seq,
-                    flags: vec![], // Would need to parse actual flags from response
-                });
-            }
+            // Note: FETCH responses for flag changes come through different channels in async-imap
+            // and would need to be handled in the main IDLE response processing loop
             other => {
                 debug!("IDLE: Other response for folder {} (account {}): {:?}", folder_name, account_id, other);
             }

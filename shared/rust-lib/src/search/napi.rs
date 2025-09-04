@@ -313,6 +313,13 @@ pub mod bindings {
                 debug: Some(false),
                 use_cache: Some(true),
                 cache_ttl: Some(300),
+                content_types: content_types.clone(),
+                limit: query.limit.map(|l| l as usize),
+                offset: query.offset.map(|o| o as usize),
+                sort_by: None,
+                sort_order: None,
+                filters: None,
+                highlight: query.highlighting,
             };
 
             Ok(SearchQuery {
@@ -340,10 +347,16 @@ pub mod bindings {
                 })?
             } else {
                 DocumentMetadata {
+                    author: None,
+                    created_at: None,
+                    modified_at: None,
+                    file_size: None,
                     size: None,
                     file_type: None,
                     mime_type: None,
                     language: None,
+                    tags: Vec::new(),
+                    custom_fields: HashMap::new(),
                     location: None,
                     collaboration: None,
                     activity: None,
@@ -361,6 +374,8 @@ pub mod bindings {
                 content_type,
                 provider_id: document.provider_id,
                 provider_type,
+                account_id: None,
+                file_path: None,
                 url: document.url,
                 icon: None,
                 thumbnail: None,

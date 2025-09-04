@@ -23,6 +23,44 @@ pub enum ImapSession {
     Plain(Session<TcpCompatStream>),
 }
 
+/// Enum to handle both TLS and plain IDLE handles
+pub enum IdleHandle {
+    Tls(async_imap::extensions::idle::Handle<TlsCompatStream>),
+    Plain(async_imap::extensions::idle::Handle<TcpCompatStream>),
+}
+
+impl IdleHandle {
+    /// Initialize IDLE session
+    pub async fn init(&mut self) -> Result<(), async_imap::error::Error> {
+        match self {
+            IdleHandle::Tls(handle) => handle.init().await,
+            IdleHandle::Plain(handle) => handle.init().await,
+        }
+    }
+
+    /// Wait for IDLE response with timeout
+    pub async fn wait_with_timeout(&mut self, timeout: std::time::Duration) -> Result<async_imap::extensions::idle::IdleResponse, async_imap::error::Error> {
+        match self {
+            IdleHandle::Tls(handle) => {
+                let (wait_future, _stop_source) = handle.wait_with_timeout(timeout);
+                wait_future.await
+            },
+            IdleHandle::Plain(handle) => {
+                let (wait_future, _stop_source) = handle.wait_with_timeout(timeout);
+                wait_future.await
+            },
+        }
+    }
+
+    /// Stop IDLE session
+    pub async fn done(self) -> Result<(), async_imap::error::Error> {
+        match self {
+            IdleHandle::Tls(handle) => handle.done().await.map(|_| ()),
+            IdleHandle::Plain(handle) => handle.done().await.map(|_| ()),
+        }
+    }
+}
+
 impl ImapSession {
     /// Execute a NOOP command
     pub async fn noop(&mut self) -> Result<(), async_imap::error::Error> {
@@ -119,6 +157,14 @@ impl ImapSession {
         match self {
             ImapSession::Tls(session) => session.run_command(command).await,
             ImapSession::Plain(session) => session.run_command(command).await,
+        }
+    }
+
+    /// Start IDLE session for real-time notifications
+    pub fn idle(self) -> IdleHandle {
+        match self {
+            ImapSession::Tls(session) => IdleHandle::Tls(session.idle()),
+            ImapSession::Plain(session) => IdleHandle::Plain(session.idle()),
         }
     }
 
@@ -324,6 +370,13 @@ impl ImapConnection {
     pub fn session(&mut self) -> MailResult<&mut ImapSession> {
         self.last_used = Instant::now();
         self.session.as_mut()
+            .ok_or_else(|| MailError::connection("No active IMAP session"))
+    }
+
+    /// Take ownership of the session for operations that need it (like IDLE)
+    pub fn take_session(&mut self) -> MailResult<ImapSession> {
+        self.last_used = Instant::now();
+        self.session.take()
             .ok_or_else(|| MailError::connection("No active IMAP session"))
     }
 

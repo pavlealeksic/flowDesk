@@ -583,9 +583,7 @@ pub async fn get_calendar_events(account_id: String) -> Result<Vec<NapiCalendarE
                 let start_time = event.start_time.timestamp();
                 let end_time = event.end_time.timestamp();
                 let is_all_day = event.is_all_day;
-                let organizer = event.attendees.iter()
-                    .find(|a| a.is_organizer.unwrap_or(false))
-                    .map(|a| a.email.clone());
+                let organizer = event.attendees.first().map(|a| a.email.clone());
                 let attendees = event.attendees.clone();
                 let status = event.status.clone();
                 
@@ -826,6 +824,9 @@ pub async fn index_document(
             location: None,
             collaboration: None,
             activity: None,
+            priority: None,
+            status: None,
+            custom: std::collections::HashMap::new(),
         },
         tags: Vec::new(),
         categories: Vec::new(),
@@ -876,6 +877,13 @@ pub async fn search_documents(query: NapiSearchQuery) -> Result<NapiSearchRespon
         debug: Some(false),
         use_cache: Some(true),
         cache_ttl: Some(300),
+        content_types: content_types.clone(),
+        limit: query.limit.map(|l| l as usize),
+        offset: query.offset.map(|o| o as usize),
+        sort_by: None,
+        sort_order: None,
+        filters: None,
+        highlight: query.highlighting,
     };
     
     let search_query = crate::search::SearchQuery {
@@ -1014,8 +1022,8 @@ pub async fn index_email_message(
         thumbnail: None,
         metadata: crate::search::DocumentMetadata {
             author: from_name.clone().or(Some(from_address.clone())),
-            created_at: Some(received_at),
-            modified_at: Some(received_at),
+            created_at: chrono::DateTime::from_timestamp(received_at, 0),
+            modified_at: chrono::DateTime::from_timestamp(received_at, 0),
             file_size: Some(content.len() as u64),
             size: Some(content.len() as u64),
             file_type: Some("email".to_string()),
@@ -1026,6 +1034,9 @@ pub async fn index_email_message(
             location: None,
             collaboration: None,
             activity: None,
+            priority: None,
+            status: None,
+            custom: std::collections::HashMap::new(),
         },
         tags: vec!["email".to_string()],
         categories: vec![folder.unwrap_or("inbox".to_string())],
@@ -1123,6 +1134,7 @@ pub async fn index_calendar_event(
                 permissions: Some("read".to_string()),
             }),
             activity: None,
+            priority: None,
             status: Some(status.clone()),
             custom: custom_metadata,
         },
@@ -1305,8 +1317,8 @@ pub async fn init_oauth_manager(storage_path: Option<String>) -> Result<()> {
         AuthManager::with_storage_file(path).await
             .map_err(|e| Error::from_reason(format!("OAuth manager initialization failed: {}", e)))?
     } else {
-        AuthManager::new().await
-            .map_err(|e| Error::from_reason(format!("OAuth manager initialization failed: {}", e)))?
+        AuthManager::new()
+            .map_err(|e| Error::from_reason(format!("OAuth manager initialization failed: {:?}", e)))?
     };
     
     *manager_guard = Some(auth_manager);
@@ -1404,7 +1416,7 @@ pub async fn handle_oauth_callback(
             expires_at: tokens.expires_at.map(|dt| dt.timestamp()),
             token_type: tokens.token_type,
             scope: tokens.scope,
-            id_token: tokens.id_token,
+            id_token: None,
         },
         user_info: NapiOAuthUserInfo {
             email: user_info.email,
@@ -1441,6 +1453,8 @@ pub async fn store_oauth_credentials(
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
         expires_at: tokens.expires_at.and_then(|ts| chrono::DateTime::from_timestamp(ts, 0)),
+        token_type: tokens.token_type,
+        scope: tokens.scope,
     };
     
     manager.store_credentials(account_uuid, mail_provider, &oauth_tokens, scopes).await
@@ -1503,7 +1517,7 @@ pub async fn refresh_oauth_token(
         expires_at: tokens.expires_at.map(|dt| dt.timestamp()),
         token_type: tokens.token_type,
         scope: tokens.scope,
-        id_token: tokens.id_token,
+        id_token: None,
     })
 }
 
@@ -1665,7 +1679,7 @@ impl ProductionOAuthManager {
         let mail_auth_manager = if let Some(path) = storage_path {
             AuthManager::with_storage_file(path).await?
         } else {
-            AuthManager::new().await?
+            AuthManager::new()?
         };
         
         let calendar_oauth_manager = CalendarOAuthManager::new();

@@ -24,10 +24,10 @@ pub mod database;
 
 // NAPI bindings
 #[cfg(feature = "napi")]
-pub mod napi_bindings;
+pub mod napi_bindings_minimal;
 
 #[cfg(feature = "napi")]
-pub use napi_bindings::*;
+pub use napi_bindings_minimal::*;
 
 // FFI bindings
 #[cfg(feature = "ffi")]
