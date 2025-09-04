@@ -48,8 +48,7 @@ pub use types::{
 
 // Provider-specific re-exports
 pub use providers::{
-    CalendarProviderTrait, GoogleCalendarProvider, 
-    OutlookCalendarProvider, CalDavProvider, SyncStatus
+    CalendarProviderTrait, CalDavProvider, SyncStatus
 };
 
 // Privacy sync re-exports

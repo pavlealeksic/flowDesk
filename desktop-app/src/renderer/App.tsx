@@ -14,6 +14,12 @@ import {
 import { AccessibilityProvider } from './contexts/AccessibilityContext'
 import ColorBlindnessFilters from './components/accessibility/ColorBlindnessFilters'
 import AccessibilitySettings from './components/accessibility/AccessibilitySettings'
+import { NotificationContainer } from './components/ui/NotificationSystem'
+import { ErrorBoundary, MailErrorBoundary, CalendarErrorBoundary, WorkspaceErrorBoundary } from './components/ui/ErrorBoundary'
+import { KeyboardShortcutManager, commonShortcuts, useKeyboardShortcuts } from './components/ui/KeyboardShortcuts'
+import { LoadingOverlay } from './components/ui/LoadingStates'
+import { AdvancedSearchInterface } from './components/search/AdvancedSearchInterface'
+import type { SearchResult, SearchFilters } from './components/search/AdvancedSearchInterface'
 
 // Lazy load heavy components to reduce initial bundle size
 const MailLayout = lazy(() => import('./components/mail/MailLayout').then(m => ({ default: m.MailLayout })))
@@ -45,6 +51,9 @@ function AppContent() {
   const theme = useAppSelector(state => state.theme)
   
   const [activeView, setActiveView] = useState<AppView>('mail')
+  const [globalLoading, setGlobalLoading] = useState(false)
+  const [globalLoadingMessage, setGlobalLoadingMessage] = useState('')
+  
   // Use currentWorkspaceId from Redux instead of local state
   const activeWorkspaceId = currentWorkspaceId || ''
   
@@ -81,6 +90,84 @@ function AppContent() {
   const [showEditServiceModal, setShowEditServiceModal] = useState(false)
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null)
   const [showAccessibilitySettings, setShowAccessibilitySettings] = useState(false)
+
+  // Global search functionality
+  const handleGlobalSearch = useCallback(async (query: string, filters: SearchFilters): Promise<SearchResult[]> => {
+    setGlobalLoading(true)
+    setGlobalLoadingMessage('Searching...')
+    
+    try {
+      // Implement global search across all data types
+      const results: SearchResult[] = []
+      
+      // This would be replaced with actual search implementation
+      await new Promise(resolve => setTimeout(resolve, 500)) // Simulate API call
+      
+      return results
+    } catch (error) {
+      console.error('Global search error:', error)
+      throw error
+    } finally {
+      setGlobalLoading(false)
+    }
+  }, [])
+
+  const handleSearchResultSelect = useCallback((result: SearchResult) => {
+    // Navigate to the appropriate view based on result type
+    switch (result.type) {
+      case 'email':
+        setActiveView('mail')
+        // TODO: Navigate to specific email
+        break
+      case 'calendar':
+        setActiveView('calendar')
+        // TODO: Navigate to specific event
+        break
+      case 'contact':
+        // TODO: Open contact view
+        break
+      case 'file':
+        // TODO: Open file
+        break
+    }
+    setShowSearchOverlay(false)
+  }, [])
+
+  // Enhanced keyboard shortcuts
+  const shortcuts = useKeyboardShortcuts([
+    {
+      ...commonShortcuts.globalSearch,
+      action: () => setShowSearchOverlay(true)
+    },
+    {
+      ...commonShortcuts.goToMail,
+      action: () => setActiveView('mail')
+    },
+    {
+      ...commonShortcuts.goToCalendar,
+      action: () => setActiveView('calendar')
+    },
+    {
+      ...commonShortcuts.goToWorkspace,
+      action: () => setActiveView('workspace')
+    },
+    {
+      ...commonShortcuts.settings,
+      action: () => setShowAccessibilitySettings(true)
+    },
+    {
+      ...commonShortcuts.refresh,
+      action: () => {
+        setGlobalLoading(true)
+        setGlobalLoadingMessage('Refreshing...')
+        // Refresh current view data
+        setTimeout(() => {
+          setGlobalLoading(false)
+          window.location.reload()
+        }, 1000)
+      }
+    }
+  ])
 
   // Memory management
   const memoryCleanup = useMemoryCleanup({
@@ -197,68 +284,87 @@ function AppContent() {
     switch (activeView) {
       case 'mail':
         return (
-          <Suspense fallback={<ComponentLoader name="Mail" />}>
-            <MailLayout className="h-full" />
-          </Suspense>
+          <MailErrorBoundary>
+            <Suspense fallback={<ComponentLoader name="Mail" />}>
+              <MailLayout className="h-full" />
+            </Suspense>
+          </MailErrorBoundary>
         )
       case 'calendar':
         return (
-          <Suspense fallback={<ComponentLoader name="Calendar" />}>
-            <CalendarViews
-              className="h-full"
-              onEventClick={(event) => console.log('Event clicked:', event)}
-              onCreateEvent={() => console.log('Create event')}
-            />
-          </Suspense>
+          <CalendarErrorBoundary>
+            <Suspense fallback={<ComponentLoader name="Calendar" />}>
+              <CalendarViews
+                className="h-full"
+                onEventClick={(event) => console.log('Event clicked:', event)}
+                onCreateEvent={() => console.log('Create event')}
+              />
+            </Suspense>
+          </CalendarErrorBoundary>
         )
       case 'workspace':
         if (activeServiceId) {
           // Show the selected service content - BrowserView will be overlaid here
           const selectedService = currentWorkspace?.services.find(s => s.id === activeServiceId);
           return (
-            <div className="h-full bg-white">
-              {/* This area will be covered by BrowserView */}
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <div className="text-2xl mb-2">🔄</div>
-                  <p className="text-sm text-gray-600">
-                    Loading {selectedService?.name || 'service'}...
-                  </p>
+            <WorkspaceErrorBoundary>
+              <div className="h-full bg-white">
+                {/* This area will be covered by BrowserView */}
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <div className="text-2xl mb-2">🔄</div>
+                    <p className="text-sm text-gray-600">
+                      Loading {selectedService?.name || 'service'}...
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
+            </WorkspaceErrorBoundary>
           )
         } else {
           // Show workspace dashboard
           return (
-            <div className="h-full flex items-center justify-center">
-              <div className="text-center">
-                <div className="text-6xl mb-4">🗂️</div>
-                <h2 className="text-xl font-semibold mb-2">Workspace Dashboard</h2>
-                <p className="text-sm text-muted-foreground">
-                  Select a service from the sidebar to get started
-                </p>
+            <WorkspaceErrorBoundary>
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-6xl mb-4">🗂️</div>
+                  <h2 className="text-xl font-semibold mb-2">Workspace Dashboard</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Select a service from the sidebar to get started
+                  </p>
+                </div>
               </div>
-            </div>
+            </WorkspaceErrorBoundary>
           )
         }
       default:
-        return <MailLayout className="h-full" />
+        return (
+          <MailErrorBoundary>
+            <MailLayout className="h-full" />
+          </MailErrorBoundary>
+        )
     }
   }, [activeView, activeServiceId, currentWorkspace?.services])
 
   return (
-    <div className="h-screen flex overflow-hidden bg-background text-foreground">
-      {/* Skip Links for Screen Readers */}
-      <a href="#main-content" className="skip-link">
-        Skip to main content
-      </a>
-      <a href="#navigation" className="skip-link">
-        Skip to navigation
-      </a>
+    <KeyboardShortcutManager shortcuts={shortcuts}>
+      <div className="h-screen flex overflow-hidden bg-background text-foreground">
+        {/* Global Loading Overlay */}
+        <LoadingOverlay 
+          isVisible={globalLoading} 
+          message={globalLoadingMessage}
+        />
 
-      {/* Color Blindness Filters */}
-      <ColorBlindnessFilters />
+        {/* Skip Links for Screen Readers */}
+        <a href="#main-content" className="skip-link">
+          Skip to main content
+        </a>
+        <a href="#navigation" className="skip-link">
+          Skip to navigation
+        </a>
+
+        {/* Color Blindness Filters */}
+        <ColorBlindnessFilters />
 
       {/* Primary Sidebar (Far Left) - Mail, Calendar, Workspaces */}
       <nav id="navigation" role="navigation" aria-label="Main navigation">
@@ -329,23 +435,27 @@ function AppContent() {
         </main>
       </div>
 
-      {/* Search Overlay */}
+      {/* Advanced Search Overlay */}
       {showSearchOverlay && (
         <div 
           className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-start justify-center pt-20"
           role="dialog"
           aria-modal="true"
           aria-labelledby="search-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowSearchOverlay(false)
+            }
+          }}
         >
-          <div className="w-full max-w-2xl mx-4">
-            <h2 id="search-title" className="sr-only">Search</h2>
-            <SearchInterface
+          <div className="w-full max-w-3xl mx-4">
+            <h2 id="search-title" className="sr-only">Global Search</h2>
+            <AdvancedSearchInterface
+              onSearch={handleGlobalSearch}
+              onResultSelect={handleSearchResultSelect}
               autoFocus
-              onResultSelect={(result) => {
-                console.log('Selected result:', result)
-                setShowSearchOverlay(false)
-                // Navigate to result
-              }}
+              showFilters
+              placeholder="Search mail, calendar, contacts, and files..."
             />
           </div>
         </div>
@@ -410,7 +520,11 @@ function AppContent() {
           }
         }}
       />
+
+      {/* Global Notification System */}
+      <NotificationContainer position="top-right" />
     </div>
+    </KeyboardShortcutManager>
   )
 }
 

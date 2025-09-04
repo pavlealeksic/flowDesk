@@ -15,6 +15,7 @@ pub mod config;
 pub mod database;
 pub mod engine;
 pub mod error;
+pub mod notifications;
 pub mod production_account_manager;
 pub mod production_engine;
 pub mod providers;
@@ -36,6 +37,7 @@ pub use config::MailEngineConfig;
 pub use database::MailDatabase;
 pub use engine::MailEngine;
 pub use error::{MailError, MailResult};
+pub use notifications::{EmailNotificationSystem, NotificationConfig, NotificationListener, UINotification};
 pub use production_account_manager::{ProductionAccountManager, EmailCredentials, AccountSetupResult, ValidationResult};
 pub use production_engine::{ProductionEmailEngine, SyncResult as ProductionSyncResult, ConnectionStatus};
 pub use providers::{

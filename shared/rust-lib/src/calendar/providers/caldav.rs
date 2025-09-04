@@ -211,21 +211,45 @@ impl CalDavProvider {
         Ok(())
     }
     
-    /// Normalize server URL to ensure proper formatting
+    /// Normalize server URL to ensure proper formatting for different CalDAV providers
     fn normalize_server_url(url: &str) -> String {
         let mut normalized = url.trim_end_matches('/').to_string();
         
         // Add default paths for common CalDAV servers
-        if normalized.contains("google.com") && !normalized.contains("calendar/dav") {
-            normalized.push_str("/calendar/dav");
-        } else if normalized.contains("icloud.com") && !normalized.ends_with("/calendars") {
-            normalized.push_str("/calendars");
-        } else if normalized.contains("fastmail.com") && !normalized.ends_with("/dav/calendars") {
-            normalized.push_str("/dav/calendars");
+        if normalized.contains("google.com") || normalized.contains("googleapis.com") {
+            if !normalized.contains("caldav") {
+                normalized = "https://apidata.googleusercontent.com/caldav/v2".to_string();
+            }
+        } else if normalized.contains("icloud.com") {
+            if !normalized.contains("caldav") {
+                normalized = "https://caldav.icloud.com".to_string();
+            }
+        } else if normalized.contains("fastmail.com") {
+            if !normalized.contains("caldav") {
+                normalized = "https://caldav.fastmail.com".to_string();
+            }
+        } else if normalized.contains("yahoo.com") {
+            if !normalized.contains("caldav") {
+                normalized = "https://caldav.calendar.yahoo.com".to_string();
+            }
+        } else if normalized.contains("aol.com") {
+            if !normalized.contains("caldav") {
+                normalized = "https://caldav.aol.com".to_string();
+            }
+        } else if normalized.contains("att.net") {
+            if !normalized.contains("caldav") {
+                normalized = "https://caldav.att.yahoo.com".to_string();
+            }
+        } else if normalized.contains("protonmail.com") || normalized.contains("pm.me") {
+            if !normalized.contains("calendar") {
+                normalized = "https://calendar.protonmail.com/api/calendar".to_string();
+            }
         }
         
-        // Ensure it ends with /
-        if !normalized.ends_with('/') {
+        // Ensure it ends with / (but not for specific APIs that don't need it)
+        if !normalized.ends_with('/') && 
+           !normalized.contains("protonmail.com") && 
+           !normalized.contains("calendar.yahoo.com") {
             normalized.push('/');
         }
         

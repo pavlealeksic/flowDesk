@@ -1,23 +1,21 @@
 /*!
  * Calendar Providers
  * 
- * Abstract provider traits and concrete implementations for different calendar services:
- * - Google Calendar API
- * - Microsoft Graph Calendar  
- * - CalDAV (generic, iCloud, Fastmail)
- * - Exchange Web Services
+ * Universal CalDAV provider supporting all CalDAV-compliant servers:
+ * - Generic CalDAV servers
+ * - Google Calendar (via CalDAV)
+ * - iCloud Calendar
+ * - Fastmail
+ * - Nextcloud/ownCloud
+ * - Other RFC 4791 compliant servers
  */
 
-pub mod google;
-pub mod outlook;
 pub mod caldav;
 pub mod traits;
 pub mod detection;
 
 // Re-export main provider types
 pub use traits::*;
-pub use google::GoogleCalendarProvider;
-pub use outlook::OutlookCalendarProvider;
 pub use caldav::CalDavProvider;
 pub use detection::{ProviderDetector, DetectionResult, AutoDetectedConfig};
 
@@ -43,12 +41,12 @@ impl CalendarProviderFactory {
     /// Create a boxed provider instance for the given account
     pub fn create_boxed_provider(account: &CalendarAccount) -> CalendarResult<Box<dyn CalendarProviderTrait>> {
         match account.provider {
-            CalendarProvider::Google => {
+            CalendarProvider::CalDAV | CalendarProvider::CalDav | CalendarProvider::ICloud | CalendarProvider::Fastmail => {
                 let config = match &account.config {
-                    crate::calendar::CalendarAccountConfig::Google(config) => config,
+                    crate::calendar::CalendarAccountConfig::CalDav(config) => config,
                     _ => return Err(CalendarError::ValidationError {
-                        message: "Invalid config type for Google provider".to_string(),
-                        provider: Some(CalendarProvider::Google),
+                        message: "Invalid config type for CalDAV provider".to_string(),
+                        provider: Some(account.provider.clone()),
                         account_id: Some(account.id.to_string()),
                         field: Some("config".to_string()),
                         value: None,
@@ -56,22 +54,20 @@ impl CalendarProviderFactory {
                     }),
                 };
                 
-                // Extract credentials from account config
-                let credentials = config.oauth_tokens.clone().unwrap_or_else(|| {
-                    crate::calendar::CalendarAccountCredentials {
-                        access_token: config.access_token.clone(),
-                        refresh_token: config.refresh_token.clone(),
-                        expires_at: None,
-                        auth_type: Some("oauth2".to_string()),
-                        username: None,
-                        password: None,
-                    }
+                // Extract credentials from account config - use basic auth for CalDAV
+                let credentials = Some(crate::calendar::CalendarAccountCredentials {
+                    access_token: String::new(),
+                    refresh_token: None,
+                    expires_at: None,
+                    auth_type: Some("basic".to_string()),
+                    username: Some(config.username.clone()),
+                    password: Some(config.password.clone()),
                 });
                 
-                Ok(Box::new(GoogleCalendarProvider::new(
+                Ok(Box::new(CalDavProvider::new(
                     account.id.to_string(),
                     config.clone(),
-                    Some(credentials),
+                    credentials,
                 )?))
             },
             _ => Err(CalendarError::ValidationError {
@@ -88,68 +84,6 @@ impl CalendarProviderFactory {
     /// Create a provider instance for the given account
     pub fn create_provider(account: &CalendarAccount) -> CalendarResult<Arc<dyn CalendarProviderTrait>> {
         match account.provider {
-            CalendarProvider::Google => {
-                let config = match &account.config {
-                    crate::calendar::CalendarAccountConfig::Google(config) => config,
-                    _ => return Err(CalendarError::ValidationError {
-                        message: "Invalid config type for Google provider".to_string(),
-                        provider: Some(CalendarProvider::Google),
-                        account_id: Some(account.id.to_string()),
-                        field: Some("config".to_string()),
-                        value: None,
-                        constraint: Some("type_match".to_string()),
-                    }),
-                };
-                
-                // Extract credentials from account config
-                let credentials = config.oauth_tokens.clone().unwrap_or_else(|| {
-                    crate::calendar::CalendarAccountCredentials {
-                        access_token: config.access_token.clone(),
-                        refresh_token: config.refresh_token.clone(),
-                        expires_at: None,
-                        auth_type: Some("oauth2".to_string()),
-                        username: None,
-                        password: None,
-                    }
-                });
-                
-                Ok(Arc::new(GoogleCalendarProvider::new(
-                    account.id.to_string(),
-                    config.clone(),
-                    Some(credentials),
-                )?))
-            },
-            CalendarProvider::Outlook => {
-                let config = match &account.config {
-                    crate::calendar::CalendarAccountConfig::Outlook(config) => config,
-                    _ => return Err(CalendarError::ValidationError {
-                        message: "Invalid config type for Outlook provider".to_string(),
-                        provider: Some(CalendarProvider::Outlook),
-                        account_id: Some(account.id.to_string()),
-                        field: Some("config".to_string()),
-                        value: None,
-                        constraint: Some("type_match".to_string()),
-                    }),
-                };
-                
-                // Extract credentials from account config
-                let credentials = config.oauth_tokens.clone().unwrap_or_else(|| {
-                    crate::calendar::CalendarAccountCredentials {
-                        access_token: config.access_token.clone(),
-                        refresh_token: config.refresh_token.clone(),
-                        expires_at: None,
-                        auth_type: Some("oauth2".to_string()),
-                        username: None,
-                        password: None,
-                    }
-                });
-                
-                Ok(Arc::new(OutlookCalendarProvider::new(
-                    account.id.to_string(),
-                    config.clone(),
-                    Some(credentials),
-                )?))
-            },
             CalendarProvider::CalDAV | CalendarProvider::CalDav | CalendarProvider::ICloud | CalendarProvider::Fastmail => {
                 let config = match &account.config {
                     crate::calendar::CalendarAccountConfig::CalDav(config) => config,
@@ -163,90 +97,53 @@ impl CalendarProviderFactory {
                     }),
                 };
                 
-                // Extract credentials from account config
-                let credentials = config.oauth_tokens.clone().unwrap_or_else(|| {
-                    crate::calendar::CalendarAccountCredentials {
-                        access_token: String::new(),
-                        refresh_token: None,
-                        expires_at: None,
-                        auth_type: Some("basic".to_string()),
-                        username: Some(config.username.clone()),
-                        password: Some(config.password.clone()),
-                    }
+                // Extract credentials from account config - use basic auth for CalDAV
+                let credentials = Some(crate::calendar::CalendarAccountCredentials {
+                    access_token: String::new(),
+                    refresh_token: None,
+                    expires_at: None,
+                    auth_type: Some("basic".to_string()),
+                    username: Some(config.username.clone()),
+                    password: Some(config.password.clone()),
                 });
                 
                 Ok(Arc::new(CalDavProvider::new(
                     account.id.to_string(),
                     config.clone(),
-                    Some(credentials),
+                    credentials,
                 )?))
             },
-            CalendarProvider::Exchange => {
-                // Exchange implementation would go here
-                Err(CalendarError::InternalError {
-                    message: "Exchange provider not yet implemented".to_string(),
-                    operation: Some("create_provider".to_string()),
-                    context: None,
-                })
-            },
+            _ => Err(CalendarError::ValidationError {
+                message: format!("Unsupported provider: {:?}", account.provider),
+                provider: Some(account.provider.clone()),
+                account_id: Some(account.id.to_string()),
+                field: Some("provider".to_string()),
+                value: Some(format!("{:?}", account.provider)),
+                constraint: Some("supported_provider".to_string()),
+            }),
         }
     }
 
     /// Get supported providers
     pub fn supported_providers() -> Vec<CalendarProvider> {
         vec![
-            CalendarProvider::Google,
-            CalendarProvider::Outlook,
             CalendarProvider::CalDav,
             CalendarProvider::ICloud,
             CalendarProvider::Fastmail,
-            // CalendarProvider::Exchange, // Not yet implemented
         ]
     }
 
     /// Get provider capabilities
     pub fn get_provider_capabilities(provider: CalendarProvider) -> ProviderCapabilities {
         match provider {
-            CalendarProvider::Google => ProviderCapabilities {
-                supports_webhooks: true,
-                supports_push_notifications: true,
-                supports_recurring_events: true,
-                supports_attendees: true,
-                supports_free_busy: true,
-                supports_conferencing: true,
-                supports_attachments: true,
-                supports_reminders: true,
-                supports_colors: true,
-                supports_multiple_calendars: true,
-                supports_calendar_sharing: true,
-                max_event_duration_days: Some(365),
-                rate_limit_rpm: 300,
-                batch_operations: true,
-            },
-            CalendarProvider::Outlook => ProviderCapabilities {
-                supports_webhooks: true,
-                supports_push_notifications: true,
-                supports_recurring_events: true,
-                supports_attendees: true,
-                supports_free_busy: true,
-                supports_conferencing: true,
-                supports_attachments: true,
-                supports_reminders: true,
-                supports_colors: true,
-                supports_multiple_calendars: true,
-                supports_calendar_sharing: true,
-                max_event_duration_days: Some(365),
-                rate_limit_rpm: 600,
-                batch_operations: true,
-            },
-            CalendarProvider::CalDav | CalendarProvider::ICloud | CalendarProvider::Fastmail => ProviderCapabilities {
+            CalendarProvider::CalDav | CalendarProvider::CalDAV | CalendarProvider::ICloud | CalendarProvider::Fastmail => ProviderCapabilities {
                 supports_webhooks: false,
                 supports_push_notifications: false,
                 supports_recurring_events: true,
                 supports_attendees: true,
                 supports_free_busy: true,
                 supports_conferencing: false,
-                supports_attachments: false,
+                supports_attachments: true,
                 supports_reminders: true,
                 supports_colors: true,
                 supports_multiple_calendars: true,
@@ -255,36 +152,20 @@ impl CalendarProviderFactory {
                 rate_limit_rpm: 60,
                 batch_operations: false,
             },
-            CalendarProvider::Exchange => ProviderCapabilities {
-                supports_webhooks: true,
-                supports_push_notifications: true,
-                supports_recurring_events: true,
-                supports_attendees: true,
-                supports_free_busy: true,
-                supports_conferencing: true,
-                supports_attachments: true,
-                supports_reminders: true,
-                supports_colors: false,
-                supports_multiple_calendars: true,
-                supports_calendar_sharing: true,
-                max_event_duration_days: Some(365),
-                rate_limit_rpm: 120,
-                batch_operations: true,
-            },
-            CalendarProvider::CalDAV => ProviderCapabilities {
+            _ => ProviderCapabilities {
                 supports_webhooks: false,
                 supports_push_notifications: false,
-                supports_recurring_events: true,
-                supports_attendees: true,
-                supports_free_busy: true,
+                supports_recurring_events: false,
+                supports_attendees: false,
+                supports_free_busy: false,
                 supports_conferencing: false,
-                supports_attachments: true,
-                supports_reminders: true,
+                supports_attachments: false,
+                supports_reminders: false,
                 supports_colors: false,
-                supports_multiple_calendars: true,
+                supports_multiple_calendars: false,
                 supports_calendar_sharing: false,
                 max_event_duration_days: None,
-                rate_limit_rpm: 60,
+                rate_limit_rpm: 1,
                 batch_operations: false,
             },
         }
@@ -451,23 +332,24 @@ mod tests {
 
     #[test]
     fn test_provider_capabilities() {
-        let google_caps = CalendarProviderFactory::get_provider_capabilities(CalendarProvider::Google);
-        assert!(google_caps.supports_webhooks);
-        assert!(google_caps.supports_attendees);
-        assert_eq!(google_caps.rate_limit_rpm, 300);
-
         let caldav_caps = CalendarProviderFactory::get_provider_capabilities(CalendarProvider::CalDav);
         assert!(!caldav_caps.supports_webhooks);
+        assert!(caldav_caps.supports_attendees);
         assert!(caldav_caps.supports_recurring_events);
         assert_eq!(caldav_caps.rate_limit_rpm, 60);
+
+        let icloud_caps = CalendarProviderFactory::get_provider_capabilities(CalendarProvider::ICloud);
+        assert!(!icloud_caps.supports_webhooks);
+        assert!(icloud_caps.supports_recurring_events);
+        assert_eq!(icloud_caps.rate_limit_rpm, 60);
     }
 
     #[test]
     fn test_supported_providers() {
         let providers = CalendarProviderFactory::supported_providers();
-        assert!(providers.contains(&CalendarProvider::Google));
-        assert!(providers.contains(&CalendarProvider::Outlook));
         assert!(providers.contains(&CalendarProvider::CalDav));
+        assert!(providers.contains(&CalendarProvider::ICloud));
+        assert!(providers.contains(&CalendarProvider::Fastmail));
     }
 
     #[test]

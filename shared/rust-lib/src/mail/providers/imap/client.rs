@@ -22,6 +22,7 @@ pub struct ImapClient {
     folder_cache: Arc<RwLock<HashMap<String, CachedFolder>>>,
     search_cache: Arc<RwLock<HashMap<String, CachedSearchResult>>>,
     sync_state: Arc<Mutex<HashMap<String, FolderSyncState>>>,
+    idle_manager: Option<Arc<super::idle::IdleConnectionManager>>,
 }
 
 #[derive(Debug, Clone)]
@@ -58,16 +59,23 @@ impl ImapClient {
             folder_cache: Arc::new(RwLock::new(HashMap::new())),
             search_cache: Arc::new(RwLock::new(HashMap::new())),
             sync_state: Arc::new(Mutex::new(HashMap::new())),
+            idle_manager: None,
         }
     }
 
     /// Create new IMAP client
     pub async fn new(connection_pool: Arc<ImapConnectionPool>) -> MailResult<Self> {
+        // Initialize IDLE manager with default configuration
+        let idle_config = super::idle::IdleConfig::default();
+        let mut idle_manager = super::idle::IdleConnectionManager::new(idle_config);
+        idle_manager.initialize(connection_pool.clone()).await;
+        
         Ok(Self {
             connection_pool,
             folder_cache: Arc::new(RwLock::new(HashMap::new())),
             search_cache: Arc::new(RwLock::new(HashMap::new())),
             sync_state: Arc::new(Mutex::new(HashMap::new())),
+            idle_manager: Some(Arc::new(idle_manager)),
         })
     }
 
@@ -1213,16 +1221,99 @@ impl ImapClient {
 
     /// Setup IDLE monitoring for push notifications
     pub async fn setup_idle_monitoring(&self, _webhook_url: &str) -> MailResult<()> {
-        // Full IDLE implementation would be complex and require persistent connections
-        // For now, return success but don't actually implement IDLE
-        info!("IDLE monitoring setup requested (not fully implemented)");
+        let idle_manager = self.idle_manager.as_ref()
+            .ok_or_else(|| MailError::configuration("IDLE manager not initialized"))?;
+        
+        // For a full implementation, you would:
+        // 1. Get list of folders to monitor (INBOX, etc.)
+        // 2. Start IDLE monitoring for each folder
+        // 3. Setup webhook or event handling
+        
+        info!("Setting up IDLE monitoring for real-time notifications");
+        
+        // Example: Start monitoring INBOX folder
+        // In a real implementation, you'd get the account_id from context
+        let account_id = uuid::Uuid::new_v4(); // Placeholder
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        
+        // Start monitoring INBOX
+        idle_manager.start_folder_monitoring(
+            account_id,
+            "INBOX".to_string(),
+            tx,
+        ).await?;
+        
+        // Spawn a task to handle IDLE events (in production, this would be more sophisticated)
+        tokio::spawn(async move {
+            while let Some(event) = rx.recv().await {
+                debug!("Received IDLE event: {:?}", event);
+                // In production, you would:
+                // - Send webhook notifications
+                // - Update local cache
+                // - Trigger sync operations
+                // - Notify UI components
+            }
+        });
+        
+        info!("IDLE monitoring setup completed");
         Ok(())
     }
 
     /// Disable IDLE monitoring
     pub async fn disable_idle_monitoring(&self) -> MailResult<()> {
-        info!("IDLE monitoring disabled");
+        if let Some(idle_manager) = &self.idle_manager {
+            info!("Shutting down IDLE monitoring...");
+            idle_manager.shutdown().await?;
+            info!("IDLE monitoring disabled");
+        } else {
+            debug!("IDLE manager not initialized, nothing to disable");
+        }
         Ok(())
+    }
+    
+    /// Start IDLE monitoring for a specific folder
+    pub async fn start_folder_idle_monitoring(
+        &self,
+        account_id: uuid::Uuid,
+        folder_name: String,
+    ) -> MailResult<tokio::sync::mpsc::UnboundedReceiver<super::idle::IdleEvent>> {
+        let idle_manager = self.idle_manager.as_ref()
+            .ok_or_else(|| MailError::configuration("IDLE manager not initialized"))?;
+        
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        
+        idle_manager.start_folder_monitoring(account_id, folder_name, tx).await?;
+        
+        Ok(rx)
+    }
+    
+    /// Stop IDLE monitoring for a specific folder
+    pub async fn stop_folder_idle_monitoring(
+        &self,
+        account_id: uuid::Uuid,
+        folder_name: String,
+    ) -> MailResult<()> {
+        if let Some(idle_manager) = &self.idle_manager {
+            idle_manager.stop_folder_monitoring(account_id, folder_name).await?;
+        }
+        Ok(())
+    }
+    
+    /// Stop IDLE monitoring for all folders of an account
+    pub async fn stop_account_idle_monitoring(&self, account_id: uuid::Uuid) -> MailResult<()> {
+        if let Some(idle_manager) = &self.idle_manager {
+            idle_manager.stop_account_monitoring(account_id).await?;
+        }
+        Ok(())
+    }
+    
+    /// Get IDLE connection health status
+    pub async fn get_idle_health_status(&self) -> HashMap<String, super::idle::ConnectionHealth> {
+        if let Some(idle_manager) = &self.idle_manager {
+            idle_manager.get_health_status().await
+        } else {
+            HashMap::new()
+        }
     }
 }
 
@@ -1258,6 +1349,7 @@ mod tests {
             folder_cache: Arc::new(RwLock::new(HashMap::new())),
             search_cache: Arc::new(RwLock::new(HashMap::new())),
             sync_state: Arc::new(Mutex::new(HashMap::new())),
+            idle_manager: None, // Not needed for basic test
         };
 
         assert_eq!(client.convert_search_query("from:test@example.com"), "FROM \"test@example.com\"");

@@ -33,14 +33,6 @@ pub enum AutoDetectedConfig {
         supports_calendar_query: bool,
         supports_calendar_multiget: bool,
     },
-    Google {
-        client_id: Option<String>,
-        scopes: Vec<String>,
-    },
-    Outlook {
-        tenant_id: Option<String>,
-        scopes: Vec<String>,
-    },
 }
 
 /// Calendar provider auto-detection engine
@@ -65,37 +57,21 @@ impl ProviderDetector {
 
         let mut domain_mappings = HashMap::new();
         
-        // Popular email providers with known CalDAV/CardDAV endpoints
+        // Popular email providers with CalDAV endpoints
+        // Google Calendar via CalDAV (requires app-specific password)
         domain_mappings.insert("gmail.com".to_string(), ProviderInfo {
-            provider: CalendarProvider::Google,
-            caldav_url_template: None, // Google uses API, not CalDAV
-            confidence: 0.95,
+            provider: CalendarProvider::CalDav,
+            caldav_url_template: Some("https://apidata.googleusercontent.com/caldav/v2".to_string()),
+            confidence: 0.90,
         });
         
         domain_mappings.insert("googlemail.com".to_string(), ProviderInfo {
-            provider: CalendarProvider::Google,
-            caldav_url_template: None,
-            confidence: 0.95,
-        });
-        
-        domain_mappings.insert("outlook.com".to_string(), ProviderInfo {
-            provider: CalendarProvider::Outlook,
-            caldav_url_template: None, // Outlook uses Graph API
-            confidence: 0.95,
-        });
-        
-        domain_mappings.insert("hotmail.com".to_string(), ProviderInfo {
-            provider: CalendarProvider::Outlook,
-            caldav_url_template: None,
+            provider: CalendarProvider::CalDav,
+            caldav_url_template: Some("https://apidata.googleusercontent.com/caldav/v2".to_string()),
             confidence: 0.90,
         });
         
-        domain_mappings.insert("live.com".to_string(), ProviderInfo {
-            provider: CalendarProvider::Outlook,
-            caldav_url_template: None,
-            confidence: 0.90,
-        });
-        
+        // Apple iCloud Calendar
         domain_mappings.insert("icloud.com".to_string(), ProviderInfo {
             provider: CalendarProvider::ICloud,
             caldav_url_template: Some("https://caldav.icloud.com".to_string()),
@@ -114,6 +90,7 @@ impl ProviderDetector {
             confidence: 0.90,
         });
         
+        // Fastmail
         domain_mappings.insert("fastmail.com".to_string(), ProviderInfo {
             provider: CalendarProvider::Fastmail,
             caldav_url_template: Some("https://caldav.fastmail.com".to_string()),
@@ -124,6 +101,46 @@ impl ProviderDetector {
             provider: CalendarProvider::Fastmail,
             caldav_url_template: Some("https://caldav.fastmail.com".to_string()),
             confidence: 0.95,
+        });
+        
+        // Yahoo Calendar
+        domain_mappings.insert("yahoo.com".to_string(), ProviderInfo {
+            provider: CalendarProvider::CalDav,
+            caldav_url_template: Some("https://caldav.calendar.yahoo.com".to_string()),
+            confidence: 0.85,
+        });
+        
+        domain_mappings.insert("yahoo.co.uk".to_string(), ProviderInfo {
+            provider: CalendarProvider::CalDav,
+            caldav_url_template: Some("https://caldav.calendar.yahoo.com".to_string()),
+            confidence: 0.85,
+        });
+        
+        // ProtonMail Calendar
+        domain_mappings.insert("protonmail.com".to_string(), ProviderInfo {
+            provider: CalendarProvider::CalDav,
+            caldav_url_template: Some("https://calendar.protonmail.com/api/calendar/".to_string()),
+            confidence: 0.80,
+        });
+        
+        domain_mappings.insert("pm.me".to_string(), ProviderInfo {
+            provider: CalendarProvider::CalDav,
+            caldav_url_template: Some("https://calendar.protonmail.com/api/calendar/".to_string()),
+            confidence: 0.80,
+        });
+        
+        // Zimbra-based providers
+        domain_mappings.insert("att.net".to_string(), ProviderInfo {
+            provider: CalendarProvider::CalDav,
+            caldav_url_template: Some("https://caldav.att.yahoo.com".to_string()),
+            confidence: 0.75,
+        });
+        
+        // AOL Calendar
+        domain_mappings.insert("aol.com".to_string(), ProviderInfo {
+            provider: CalendarProvider::CalDav,
+            caldav_url_template: Some("https://caldav.aol.com".to_string()),
+            confidence: 0.75,
         });
 
         Self {
@@ -149,21 +166,7 @@ impl ProviderDetector {
         // Check known domain mappings
         if let Some(provider_info) = self.domain_mappings.get(domain) {
             let auto_config = match &provider_info.provider {
-                CalendarProvider::Google => Some(AutoDetectedConfig::Google {
-                    client_id: None,
-                    scopes: vec![
-                        "https://www.googleapis.com/auth/calendar".to_string(),
-                        "https://www.googleapis.com/auth/calendar.events".to_string(),
-                    ],
-                }),
-                CalendarProvider::Outlook => Some(AutoDetectedConfig::Outlook {
-                    tenant_id: None,
-                    scopes: vec![
-                        "https://graph.microsoft.com/calendars.readwrite".to_string(),
-                        "https://graph.microsoft.com/calendars.readwrite.shared".to_string(),
-                    ],
-                }),
-                CalendarProvider::ICloud | CalendarProvider::Fastmail | CalendarProvider::CalDAV => {
+                CalendarProvider::CalDav | CalendarProvider::ICloud | CalendarProvider::Fastmail | CalendarProvider::CalDAV => {
                     provider_info.caldav_url_template.as_ref().map(|url| AutoDetectedConfig::CalDAV {
                         server_url: url.clone(),
                         principal_url: None,
@@ -214,31 +217,16 @@ impl ProviderDetector {
         if let Some(host) = url.host_str() {
             if host.contains("google") || host.contains("googleapis") {
                 return Ok(DetectionResult {
-                    provider: CalendarProvider::Google,
+                    provider: CalendarProvider::CalDav,
                     server_url: Some(server_url.to_string()),
-                    auto_config: Some(AutoDetectedConfig::Google {
-                        client_id: None,
-                        scopes: vec![
-                            "https://www.googleapis.com/auth/calendar".to_string(),
-                            "https://www.googleapis.com/auth/calendar.events".to_string(),
-                        ],
+                    auto_config: Some(AutoDetectedConfig::CalDAV {
+                        server_url: server_url.to_string(),
+                        principal_url: None,
+                        calendar_home_set: None,
+                        supports_calendar_query: true,
+                        supports_calendar_multiget: true,
                     }),
-                    confidence: 0.90,
-                });
-            }
-
-            if host.contains("outlook") || host.contains("office365") || host.contains("microsoft") {
-                return Ok(DetectionResult {
-                    provider: CalendarProvider::Outlook,
-                    server_url: Some(server_url.to_string()),
-                    auto_config: Some(AutoDetectedConfig::Outlook {
-                        tenant_id: None,
-                        scopes: vec![
-                            "https://graph.microsoft.com/calendars.readwrite".to_string(),
-                            "https://graph.microsoft.com/calendars.readwrite.shared".to_string(),
-                        ],
-                    }),
-                    confidence: 0.90,
+                    confidence: 0.85,
                 });
             }
 
@@ -280,13 +268,41 @@ impl ProviderDetector {
     /// Generate possible CalDAV URLs for a domain
     fn generate_caldav_urls(&self, domain: &str) -> Vec<String> {
         vec![
+            // Standard CalDAV patterns
             format!("https://caldav.{}", domain),
             format!("https://{}/caldav", domain),
-            format!("https://{}/remote.php/dav", domain), // Nextcloud/ownCloud
             format!("https://{}/dav", domain),
-            format!("https://{}/calendar/dav", domain),
             format!("https://calendar.{}", domain),
             format!("https://cal.{}", domain),
+            
+            // Nextcloud/ownCloud patterns
+            format!("https://{}/remote.php/dav", domain),
+            format!("https://{}/remote.php/caldav", domain),
+            format!("https://cloud.{}/remote.php/dav", domain),
+            format!("https://nextcloud.{}/remote.php/dav", domain),
+            format!("https://owncloud.{}/remote.php/dav", domain),
+            
+            // Other common patterns
+            format!("https://{}/calendar/dav", domain),
+            format!("https://{}/calendars", domain),
+            format!("https://mail.{}/caldav", domain),
+            format!("https://webmail.{}/caldav", domain),
+            format!("https://{}/server/php/dav.php", domain), // Horde
+            format!("https://{}/SOGo/dav", domain), // SOGo
+            format!("https://sogo.{}/SOGo/dav", domain),
+            
+            // Zimbra patterns
+            format!("https://{}/dav/{}", domain, "username"), // Will be replaced with actual username
+            format!("https://mail.{}/dav", domain),
+            
+            // cPanel patterns
+            format!("https://{}/calendars/", domain),
+            format!("https://cpanel.{}/calendars/", domain),
+            
+            // Generic server patterns
+            format!("https://{}/calendar", domain),
+            format!("https://{}/cal", domain),
+            format!("https://{}/ical", domain),
         ]
     }
 
@@ -364,33 +380,7 @@ impl ProviderDetector {
     /// Get recommended configuration for a detected provider
     pub fn get_recommended_config(&self, detection: &DetectionResult, email: &str, password: Option<&str>) -> CalendarResult<serde_json::Value> {
         match &detection.provider {
-            CalendarProvider::Google => {
-                Ok(serde_json::json!({
-                    "provider": "Google",
-                    "email": email,
-                    "oauth_required": true,
-                    "scopes": [
-                        "https://www.googleapis.com/auth/calendar",
-                        "https://www.googleapis.com/auth/calendar.events"
-                    ],
-                    "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
-                    "token_url": "https://oauth2.googleapis.com/token"
-                }))
-            },
-            CalendarProvider::Outlook => {
-                Ok(serde_json::json!({
-                    "provider": "Outlook",
-                    "email": email,
-                    "oauth_required": true,
-                    "scopes": [
-                        "https://graph.microsoft.com/calendars.readwrite",
-                        "https://graph.microsoft.com/calendars.readwrite.shared"
-                    ],
-                    "auth_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-                    "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token"
-                }))
-            },
-            CalendarProvider::CalDAV | CalendarProvider::ICloud | CalendarProvider::Fastmail => {
+            CalendarProvider::CalDAV | CalendarProvider::CalDav | CalendarProvider::ICloud | CalendarProvider::Fastmail => {
                 Ok(serde_json::json!({
                     "provider": detection.provider,
                     "email": email,
@@ -431,8 +421,8 @@ mod tests {
         let results = detector.detect_from_email("user@gmail.com").await.unwrap();
         
         assert!(!results.is_empty());
-        assert_eq!(results[0].provider, CalendarProvider::Google);
-        assert!(results[0].confidence > 0.9);
+        assert_eq!(results[0].provider, CalendarProvider::CalDav);
+        assert!(results[0].confidence > 0.8);
     }
 
     #[tokio::test]

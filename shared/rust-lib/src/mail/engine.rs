@@ -5,6 +5,7 @@ use crate::mail::{
     config::MailEngineConfig,
     database::MailDatabase,
     error::{MailError, MailResult},
+    notifications::{EmailNotificationSystem, NotificationConfig, NotificationListener, UINotification},
     providers::{MailProviderTrait, ProviderFactory, SyncResult},
     sync::SyncEngine,
     threading::ThreadingEngine,
@@ -25,6 +26,8 @@ pub struct MailEngine {
     threading_engine: Arc<tokio::sync::Mutex<ThreadingEngine>>,
     /// Active provider instances keyed by account ID
     providers: Arc<RwLock<HashMap<Uuid, Arc<dyn MailProviderTrait>>>>,
+    /// Real-time notification system
+    notification_system: Option<Arc<EmailNotificationSystem>>,
     /// Shutdown signal
     shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
 }
@@ -45,8 +48,92 @@ impl MailEngine {
             sync_engine,
             threading_engine: Arc::new(tokio::sync::Mutex::new(threading_engine)),
             providers: Arc::new(RwLock::new(HashMap::new())),
+            notification_system: None,
             shutdown_tx: None,
         })
+    }
+
+    /// Initialize real-time notifications
+    pub async fn initialize_notifications(&mut self) -> MailResult<()> {
+        if self.notification_system.is_some() {
+            return Ok(()); // Already initialized
+        }
+
+        // Create notification configuration based on engine config
+        let notification_config = NotificationConfig {
+            enable_push_notifications: self.config.sync_config.enable_push_notifications,
+            enable_background_sync: true,
+            ..Default::default()
+        };
+
+        // Create and initialize notification system
+        let mut notification_system = EmailNotificationSystem::new(notification_config).await?;
+        
+        // TODO: Initialize with connection pool when available
+        // This would require accessing the connection pool from providers
+        // notification_system.initialize(connection_pool).await?;
+        
+        self.notification_system = Some(Arc::new(notification_system));
+        
+        tracing::info!("Real-time notification system initialized");
+        Ok(())
+    }
+
+    /// Enable real-time notifications for an account
+    pub async fn enable_account_notifications(&self, account_id: Uuid) -> MailResult<()> {
+        let notification_system = self.notification_system.as_ref()
+            .ok_or_else(|| MailError::configuration("Notification system not initialized"))?;
+
+        // Get folders for the account
+        let folders = self.get_folders(account_id).await?;
+        let folder_names = folders.into_iter()
+            .filter(|f| f.is_selectable)
+            .map(|f| f.name)
+            .collect::<Vec<_>>();
+
+        // Start monitoring
+        notification_system.start_account_monitoring(account_id, folder_names).await?;
+        
+        tracing::info!("Enabled real-time notifications for account {}", account_id);
+        Ok(())
+    }
+
+    /// Disable real-time notifications for an account
+    pub async fn disable_account_notifications(&self, account_id: Uuid) -> MailResult<()> {
+        if let Some(notification_system) = &self.notification_system {
+            notification_system.stop_account_monitoring(account_id).await?;
+            tracing::info!("Disabled real-time notifications for account {}", account_id);
+        }
+        Ok(())
+    }
+
+    /// Add a UI notification listener
+    pub async fn add_notification_listener(
+        &self,
+        listener_id: String,
+        listener: NotificationListener,
+    ) -> MailResult<()> {
+        let notification_system = self.notification_system.as_ref()
+            .ok_or_else(|| MailError::configuration("Notification system not initialized"))?;
+
+        notification_system.add_listener(listener_id, listener).await
+    }
+
+    /// Remove a UI notification listener
+    pub async fn remove_notification_listener(&self, listener_id: &str) -> MailResult<()> {
+        if let Some(notification_system) = &self.notification_system {
+            notification_system.remove_listener(listener_id).await?;
+        }
+        Ok(())
+    }
+
+    /// Get notification system health
+    pub async fn get_notification_health(&self) -> MailResult<Option<crate::mail::notifications::NotificationHealth>> {
+        if let Some(notification_system) = &self.notification_system {
+            Ok(Some(notification_system.get_health().await))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Add a mail account
@@ -468,6 +555,11 @@ impl MailEngine {
     pub async fn shutdown(&self) -> MailResult<()> {
         // Stop all syncs
         self.stop_sync().await?;
+
+        // Shutdown notification system
+        if let Some(notification_system) = &self.notification_system {
+            notification_system.shutdown().await?;
+        }
 
         // Clear providers
         {

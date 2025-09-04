@@ -904,12 +904,64 @@ impl MailProviderTrait for GmailProvider {
     }
 
     async fn setup_push_notifications(&self, webhook_url: &str) -> MailResult<String> {
-        // TODO: Implement push notification setup
-        Ok("dummy_subscription_id".to_string())
+        let token = self.ensure_valid_token().await
+            .map_err(|e| crate::mail::error::MailError::Authentication { 
+                message: format!("Token validation failed: {}", e)
+            })?;
+
+        // Setup Gmail push notifications using Google Cloud Pub/Sub
+        let watch_request = serde_json::json!({
+            "labelIds": ["INBOX"], // Monitor INBOX for new messages
+            "topicName": format!("projects/{}/topics/gmail-push", self.get_project_id()), // Would need project configuration
+        });
+
+        let response = self.client
+            .post("https://gmail.googleapis.com/gmail/v1/users/me/watch")
+            .bearer_auth(token)
+            .json(&watch_request)
+            .send()
+            .await
+            .map_err(|e| crate::mail::error::MailError::Api(format!("Failed to setup push notifications: {}", e)))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(crate::mail::error::MailError::Api(format!("Gmail push setup failed {}: {}", status, error_text)));
+        }
+
+        let result: serde_json::Value = response.json().await
+            .map_err(|e| crate::mail::error::MailError::Api(format!("Failed to parse push setup response: {}", e)))?;
+        
+        let subscription_id = result["historyId"].as_str().unwrap_or("gmail_push").to_string();
+        tracing::info!("Successfully setup Gmail push notifications with subscription ID: {}", subscription_id);
+        
+        Ok(subscription_id)
     }
 
     async fn disable_push_notifications(&self, subscription_id: &str) -> MailResult<()> {
-        // TODO: Implement push notification disabling
+        let token = self.ensure_valid_token().await
+            .map_err(|e| crate::mail::error::MailError::Authentication { 
+                message: format!("Token validation failed: {}", e)
+            })?;
+
+        // Stop Gmail push notifications
+        let stop_request = serde_json::json!({});
+
+        let response = self.client
+            .post("https://gmail.googleapis.com/gmail/v1/users/me/stop")
+            .bearer_auth(token)
+            .json(&stop_request)
+            .send()
+            .await
+            .map_err(|e| crate::mail::error::MailError::Api(format!("Failed to disable push notifications: {}", e)))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(crate::mail::error::MailError::Api(format!("Gmail push disable failed {}: {}", status, error_text)));
+        }
+
+        tracing::info!("Successfully disabled Gmail push notifications for subscription: {}", subscription_id);
         Ok(())
     }
 
@@ -936,6 +988,13 @@ impl MailProviderTrait for GmailProvider {
 
 // Helper methods for Gmail provider (separate impl block)
 impl GmailProvider {
+    /// Get the Google Cloud Project ID for push notifications
+    fn get_project_id(&self) -> String {
+        // This would typically be configured through environment variables or config
+        // For now, return a placeholder that would need to be configured
+        std::env::var("GOOGLE_CLOUD_PROJECT_ID").unwrap_or_else(|_| "your-project-id".to_string())
+    }
+
     // Parse a single email address from header string like "John Doe <john@example.com>"
     fn parse_email_address(&self, address_str: &str) -> Option<EmailAddress> {
         let address_str = address_str.trim();
