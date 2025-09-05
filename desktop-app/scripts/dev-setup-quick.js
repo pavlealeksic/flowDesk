@@ -75,8 +75,40 @@ function copyRustEngine() {
   }
 }
 
+function buildRustIfNeeded() {
+  log('Checking if Rust binary needs building...');
+  
+  const rustBinaryPath = path.join(RUST_LIB_PATH, 'target/release/flow_desk_cli');
+  const existingBinary = process.platform === 'win32' ? rustBinaryPath + '.exe' : rustBinaryPath;
+  
+  // Check if binary exists and is recent (less than 1 hour old)
+  if (fs.existsSync(existingBinary)) {
+    const binaryStats = fs.statSync(existingBinary);
+    const oneHourAgo = Date.now() - (60 * 60 * 1000);
+    
+    if (binaryStats.mtime.getTime() > oneHourAgo) {
+      log('Rust binary is recent, skipping build');
+      return true;
+    }
+  }
+  
+  log('Rust binary missing or old, building...');
+  try {
+    execSync('cargo build --release --bin flow_desk_cli', {
+      cwd: RUST_LIB_PATH,
+      stdio: 'inherit'
+    });
+    log('Rust binary built successfully');
+    return true;
+  } catch (error) {
+    log(`Failed to build Rust binary: ${error.message}`);
+    log('Continuing with existing binary if available...');
+    return fs.existsSync(existingBinary);
+  }
+}
+
 function copyRustBinary() {
-  log('Copying existing Rust binaries and wrappers...');
+  log('Copying Rust binaries and wrappers...');
   
   const { copyBinary, copyNapiBinary, copyRustWrapperFiles, getCurrentPlatformKey } = require('./copy-rust-binaries');
   
@@ -128,6 +160,7 @@ function main() {
   try {
     copyRustEngine();
     createModuleStubs();
+    buildRustIfNeeded();
     copyRustBinary();
     
     log('✅ Quick development environment setup complete!');
