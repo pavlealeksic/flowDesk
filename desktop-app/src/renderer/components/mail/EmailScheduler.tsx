@@ -140,7 +140,7 @@ export const EmailScheduler: React.FC<EmailSchedulerProps> = ({
                 return (
                   <Button
                     key={index}
-                    variant={isSelected ? "default" : "ghost"}
+                    variant={isSelected ? "secondary" : "ghost"}
                     size="sm"
                     onClick={() => handleQuickSchedule(option.getTime)}
                     className="h-auto p-3 text-left"

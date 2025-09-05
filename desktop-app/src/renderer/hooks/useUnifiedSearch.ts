@@ -11,6 +11,7 @@ import {
   ContentType,
   ProviderType 
 } from '@flow-desk/shared';
+import type { SearchOptions, SearchResult } from '../types/preload.d.ts';
 
 // Logging stub for renderer process
 const log = {
@@ -121,7 +122,7 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
   }, []);
 
   // Execute search query
-  const search = useCallback(async (query: string, queryOptions: Partial<SearchQuery> = {}): Promise<void> => {
+  const search = useCallback(async (query: string, queryOptions: Partial<SearchOptions> = {}): Promise<void> => {
     if (!state.isInitialized) {
       log.warn('Search engine not initialized');
       return;
@@ -148,26 +149,22 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
       setState(prev => ({ ...prev, isSearching: true, error: null }));
 
       try {
-        const searchQuery: SearchQuery = {
+        const searchOptions: SearchOptions = {
           query,
           limit: maxResults,
-          options: {
-            highlighting: true,
-            suggestions: enableSuggestions,
-            fuzzy: true,
-            timeout: 5000,
-          },
-          ...queryOptions,
+          offset: 0,
+          sources: queryOptions?.sources,
+          filters: queryOptions?.filters,
         };
 
-        const result = await window.searchAPI.search(searchQuery);
+        const result = await window.searchAPI.search(searchOptions);
 
         if (result.success && result.data) {
           setState(prev => ({
             ...prev,
             results: result.data!.results,
-            totalCount: result.data!.totalCount,
-            executionTime: result.data!.executionTimeMs,
+            totalCount: result.data!.total,
+            executionTime: 0, // executionTime not provided in current API
             suggestions: result.data!.suggestions || [],
             isSearching: false,
           }));
@@ -214,7 +211,17 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
     setState(prev => ({ ...prev, isIndexing: true, error: null }));
 
     try {
-      const result = await window.searchAPI.indexDocument(document);
+      // Convert SearchDocument to SearchResult format for API
+      const searchResult: Partial<SearchResult> = {
+        id: document.id,
+        title: document.title,
+        content: document.content,
+        source: document.provider,
+        type: document.contentType as 'email' | 'calendar' | 'contact' | 'file' | 'plugin' | 'command',
+        metadata: document.metadata,
+      };
+      
+      const result = await window.searchAPI.indexDocument(searchResult);
       
       setState(prev => ({ 
         ...prev, 
@@ -244,7 +251,22 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
     setState(prev => ({ ...prev, isIndexing: true, error: null }));
 
     try {
-      const result = await window.searchAPI.indexDocuments(documents);
+      if (!window.searchAPI.indexDocuments) {
+        log.warn('Batch indexing not available');
+        setState(prev => ({ ...prev, isIndexing: false }));
+        return 0;
+      }
+      // Convert SearchDocument array to SearchResult array for API
+      const searchResults: Partial<SearchResult>[] = documents.map(document => ({
+        id: document.id,
+        title: document.title,
+        content: document.content,
+        source: document.provider,
+        type: document.contentType as 'email' | 'calendar' | 'contact' | 'file' | 'plugin' | 'command',
+        metadata: document.metadata,
+      }));
+      
+      const result = await window.searchAPI.indexDocuments(searchResults);
       
       setState(prev => ({ 
         ...prev, 
@@ -272,6 +294,10 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
     }
 
     try {
+      if (!window.searchAPI.deleteDocument) {
+        log.warn('Document deletion not available');
+        return false;
+      }
       const result = await window.searchAPI.deleteDocument(documentId);
       
       if (!result.success) {
@@ -302,7 +328,7 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
       const result = await window.searchAPI.getSuggestions(partialQuery, 10);
       
       if (result.success) {
-        setState(prev => ({ ...prev, suggestions: result.data }));
+        setState(prev => ({ ...prev, suggestions: result.data || [] }));
       }
     } catch (error) {
       log.error('Suggestions error:', error);
@@ -320,7 +346,7 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
       const result = await window.searchAPI.getAnalytics();
       
       if (result.success && result.data) {
-        setState(prev => ({ ...prev, analytics: result.data! }));
+        setState(prev => ({ ...prev, analytics: result.data as any as SearchAnalytics }));
       } else {
         setState(prev => ({ 
           ...prev, 
@@ -343,6 +369,10 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
     }
 
     try {
+      if (!window.searchAPI.optimizeIndices) {
+        log.warn('Index optimization not available');
+        return false;
+      }
       const result = await window.searchAPI.optimizeIndices();
       
       if (!result.success) {
@@ -352,7 +382,14 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
         }));
       }
       
-      return result.success;
+      if (!result.success) {
+        setState(prev => ({
+          ...prev,
+          error: result.error || 'Index optimization failed'
+        }));
+        return false;
+      }
+      return true;
     } catch (error) {
       log.error('Index optimization error:', error);
       setState(prev => ({
@@ -370,6 +407,10 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
     }
 
     try {
+      if (!window.searchAPI.clearCache) {
+        log.warn('Cache clearing not available');
+        return false;
+      }
       const result = await window.searchAPI.clearCache();
       
       if (!result.success) {
@@ -377,9 +418,10 @@ export function useUnifiedSearch(options: UseUnifiedSearchOptions = {}): UseUnif
           ...prev, 
           error: result.error || 'Cache clearing failed'
         }));
+        return false;
       }
+      return true;
       
-      return result.success;
     } catch (error) {
       log.error('Cache clearing error:', error);
       setState(prev => ({

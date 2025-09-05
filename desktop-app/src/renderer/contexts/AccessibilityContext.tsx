@@ -173,7 +173,7 @@ export function AccessibilityProvider({ children }: AccessibilityProviderProps) 
                   };
                   const actionType = actionMap[key];
                   if (actionType) {
-                    dispatch({ type: actionType });
+                    dispatch({ type: actionType } as AccessibilityAction);
                   }
                 }
             }

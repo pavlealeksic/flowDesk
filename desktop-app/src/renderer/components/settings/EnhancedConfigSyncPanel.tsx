@@ -54,7 +54,7 @@ export function EnhancedConfigSyncPanel({ className }: ConfigSyncPanelProps) {
   useEffect(() => {
     const updateRealTimeStatus = async () => {
       try {
-        const status = await window.electronAPI.invoke('config-sync:get-detailed-status');
+        const status = await window.flowDesk.invoke<any>('config-sync:get-detailed-status');
         if (status) {
           setRealTimeStatus({
             status: status.currentStatus || 'idle',
@@ -126,13 +126,13 @@ export function EnhancedConfigSyncPanel({ className }: ConfigSyncPanelProps) {
           setQrCodeImage('');
         }, timeUntilExpiry);
       }
-
-      return () => {
-        if (qrExpiryTimer.current) {
-          clearTimeout(qrExpiryTimer.current);
-        }
-      };
     }
+
+    return () => {
+      if (qrExpiryTimer.current) {
+        clearTimeout(qrExpiryTimer.current);
+      }
+    };
   }, [qrExpiryTime]);
 
   const loadBackups = async () => {
@@ -215,7 +215,7 @@ export function EnhancedConfigSyncPanel({ className }: ConfigSyncPanelProps) {
 
   const handleForceSync = async () => {
     try {
-      await window.electronAPI.invoke('config-sync:force-sync');
+      await window.flowDesk.invoke<void>('config-sync:force-sync');
     } catch (error) {
       console.error('Force sync failed:', error);
     }
@@ -308,14 +308,14 @@ export function EnhancedConfigSyncPanel({ className }: ConfigSyncPanelProps) {
             </div>
           )}
 
-          {(realTimeStatus.conflictCount > 0 || realTimeStatus.queuedChanges > 0) && (
+          {((realTimeStatus.conflictCount || 0) > 0 || (realTimeStatus.queuedChanges || 0) > 0) && (
             <div className="flex gap-4 text-sm">
-              {realTimeStatus.conflictCount > 0 && (
+              {(realTimeStatus.conflictCount || 0) > 0 && (
                 <span className="text-yellow-600 dark:text-yellow-400">
                   {realTimeStatus.conflictCount} conflicts
                 </span>
               )}
-              {realTimeStatus.queuedChanges > 0 && (
+              {(realTimeStatus.queuedChanges || 0) > 0 && (
                 <span className="text-blue-600 dark:text-blue-400">
                   {realTimeStatus.queuedChanges} queued changes
                 </span>
@@ -368,7 +368,7 @@ export function EnhancedConfigSyncPanel({ className }: ConfigSyncPanelProps) {
               </p>
             </div>
             <Button
-              variant={state.autoSync ? 'default' : 'outline'}
+              variant={state.autoSync ? 'secondary' : 'outline'}
               size="sm"
               onClick={() => actions.setAutoSync(!state.autoSync)}
             >
@@ -385,7 +385,7 @@ export function EnhancedConfigSyncPanel({ className }: ConfigSyncPanelProps) {
                 type="number"
                 min="1"
                 max="1440"
-                value={state.syncInterval}
+                value={state.syncInterval.toString()}
                 onChange={(e) => actions.setSyncInterval(parseInt(e.target.value))}
                 className="w-full"
               />

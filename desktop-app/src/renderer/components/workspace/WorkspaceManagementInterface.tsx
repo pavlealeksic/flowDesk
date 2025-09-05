@@ -22,7 +22,7 @@ import { Button, Card, Input, Avatar, ServiceIcon } from '../ui'
 import { cn } from '../ui/utils'
 import { useNotifications } from '../ui/NotificationSystem'
 import { SmartLoading } from '../ui/LoadingStates'
-import type { Workspace } from '../../types/preload'
+import type { Workspace, WorkspaceService } from '../../types/preload'
 
 interface ServiceStatus {
   id: string
@@ -180,7 +180,7 @@ const WorkspaceCard: React.FC<{
             </div>
             
             <div className="flex flex-wrap gap-1">
-              {workspace.services.slice(0, 6).map((service) => {
+              {workspace.services.slice(0, 6).map((service: WorkspaceService) => {
                 const status = serviceStatuses.find(s => s.id === service.id)
                 return (
                   <div
@@ -335,7 +335,7 @@ export const WorkspaceManagementInterface: React.FC<WorkspaceManagementInterface
   const serviceStatuses: ServiceStatus[] = useMemo(() => {
     const statuses: ServiceStatus[] = []
     workspaces.forEach(workspace => {
-      workspace.services.forEach(service => {
+      workspace.services.forEach((service: WorkspaceService) => {
         statuses.push({
           id: service.id,
           status: Math.random() > 0.8 ? 'error' : Math.random() > 0.3 ? 'online' : 'offline',
@@ -354,7 +354,7 @@ export const WorkspaceManagementInterface: React.FC<WorkspaceManagementInterface
       workspaceId: workspace.id,
       totalServices: workspace.services.length,
       activeServices: serviceStatuses.filter(s => 
-        workspace.services.some(svc => svc.id === s.id) && s.status === 'online'
+        workspace.services.some((svc: WorkspaceService) => svc.id === s.id) && s.status === 'online'
       ).length,
       totalUsers: Math.floor(Math.random() * 10) + 1,
       dataUsage: Math.floor(Math.random() * 1024 * 1024 * 100),
@@ -370,7 +370,7 @@ export const WorkspaceManagementInterface: React.FC<WorkspaceManagementInterface
     return workspaces.filter(workspace =>
       workspace.name.toLowerCase().includes(query) ||
       workspace.description?.toLowerCase().includes(query) ||
-      workspace.services.some(service => 
+      workspace.services.some((service: WorkspaceService) => 
         service.name.toLowerCase().includes(query)
       )
     )
@@ -494,7 +494,7 @@ export const WorkspaceManagementInterface: React.FC<WorkspaceManagementInterface
             {filteredWorkspaces.map(workspace => {
               const stats = workspaceStats.find(s => s.workspaceId === workspace.id)
               const workspaceServiceStatuses = serviceStatuses.filter(s => 
-                workspace.services.some(svc => svc.id === s.id)
+                workspace.services.some((svc: WorkspaceService) => svc.id === s.id)
               )
 
               return (

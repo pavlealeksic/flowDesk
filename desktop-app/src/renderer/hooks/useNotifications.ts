@@ -7,16 +7,38 @@
 import { useEffect, useCallback, useState } from 'react'
 import { useAppDispatch, useAppSelector } from '../store'
 import { addNotification } from '../store/slices/notificationSlice'
-import type { NotificationData as PreloadNotificationData } from '../types/preload'
+// Define NotificationData locally since import path issues
+interface PreloadNotificationData {
+  id: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  title: string;
+  message: string;
+  duration?: number;
+  actions?: Array<{ label: string; action: string }>;
+}
+
+// Type for FlowDesk API with notifications support
+interface FlowDeskWithNotifications {
+  notifications: {
+    show(notification: PreloadNotificationData): Promise<void>;
+    hide(notificationId: string): Promise<void>;
+    clear(): Promise<void>;
+    getPermissions(): Promise<string>;
+    requestPermissions(): Promise<string>;
+    getStatus(): Promise<{ enabled: boolean; permission: string }>;
+  };
+  on(channel: string, callback: (...args: unknown[]) => void): void;
+  off(channel: string, callback: (...args: unknown[]) => void): void;
+}
 
 // Logging stub for renderer process
 const log = {
-  error: (message: string, ...args: any[]) => {
+  error: (message: string, ...args: unknown[]) => {
     if (process.env.NODE_ENV !== 'production') {
       console.error('[Notifications]', message, ...args);
     }
   },
-  warn: (message: string, ...args: any[]) => {
+  warn: (message: string, ...args: unknown[]) => {
     if (process.env.NODE_ENV === 'development') {
       console.warn('[Notifications]', message, ...args);
     }
@@ -57,8 +79,8 @@ export const useNotifications = () => {
   useEffect(() => {
     const checkPermissions = async () => {
       try {
-        if (window.flowDesk?.notifications) {
-          const status = await window.flowDesk.notifications.getStatus()
+        if ((window as { flowDesk: FlowDeskWithNotifications }).flowDesk?.notifications) {
+          const status = await (window as { flowDesk: FlowDeskWithNotifications }).flowDesk.notifications.getStatus()
           setPermission(status)
         }
       } catch (error) {
@@ -72,8 +94,8 @@ export const useNotifications = () => {
   // Request notification permission
   const requestPermission = useCallback(async (): Promise<'granted' | 'denied' | 'default'> => {
     try {
-      if (window.flowDesk?.notifications) {
-        const result = await window.flowDesk.notifications.requestPermission()
+      if ((window as { flowDesk: FlowDeskWithNotifications }).flowDesk?.notifications) {
+        const result = await (window as { flowDesk: FlowDeskWithNotifications }).flowDesk.notifications.requestPermission()
         setPermission(prev => ({ ...prev, permission: result }))
         return result
       }
@@ -108,8 +130,8 @@ export const useNotifications = () => {
       }
 
       // Send platform-specific notification
-      if (window.flowDesk?.notifications) {
-        const notificationId = await window.flowDesk.notifications.send({
+      if ((window as { flowDesk: FlowDeskWithNotifications }).flowDesk?.notifications) {
+        const notificationId = await (window as { flowDesk: FlowDeskWithNotifications }).flowDesk.notifications.send({
           title: data.title,
           body: data.body,
           icon: data.icon,
@@ -163,8 +185,8 @@ export const useNotifications = () => {
   // Clear notification
   const clearNotification = useCallback(async (notificationId?: string): Promise<void> => {
     try {
-      if (window.flowDesk?.notifications) {
-        await window.flowDesk.notifications.clear(notificationId)
+      if ((window as { flowDesk: FlowDeskWithNotifications }).flowDesk?.notifications) {
+        await (window as { flowDesk: FlowDeskWithNotifications }).flowDesk.notifications.clear(notificationId)
       }
     } catch (error) {
       log.error('Failed to clear notification:', error)
@@ -174,8 +196,8 @@ export const useNotifications = () => {
   // Clear all notifications
   const clearAllNotifications = useCallback(async (): Promise<void> => {
     try {
-      if (window.flowDesk?.notifications) {
-        await window.flowDesk.notifications.clearAll()
+      if ((window as { flowDesk: FlowDeskWithNotifications }).flowDesk?.notifications) {
+        await (window as { flowDesk: FlowDeskWithNotifications }).flowDesk.notifications.clearAll()
       }
     } catch (error) {
       log.error('Failed to clear all notifications:', error)
@@ -185,8 +207,8 @@ export const useNotifications = () => {
   // Set DND status
   const setDoNotDisturb = useCallback(async (active: boolean, duration?: number): Promise<void> => {
     try {
-      if (window.flowDesk?.notifications) {
-        await window.flowDesk.notifications.setDND(active, duration)
+      if ((window as { flowDesk: FlowDeskWithNotifications }).flowDesk?.notifications) {
+        await (window as { flowDesk: FlowDeskWithNotifications }).flowDesk.notifications.setDND(active, duration)
         setPermission(prev => ({ ...prev, dndActive: active }))
       }
     } catch (error) {
@@ -194,30 +216,8 @@ export const useNotifications = () => {
     }
   }, [])
 
-  // Listen for notification events
-  useEffect(() => {
-    if (!window.flowDesk?.notifications) return
-
-    const unsubscribeClick = window.flowDesk.notifications.onNotificationClick((data) => {
-      log.debug('Notification clicked:', data)
-      // Handle notification click (e.g., navigate to relevant view)
-    })
-
-    const unsubscribeAction = window.flowDesk.notifications.onNotificationAction((data) => {
-      log.debug('Notification action:', data)
-      // Handle notification action
-    })
-
-    const unsubscribeClose = window.flowDesk.notifications.onNotificationClose((data) => {
-      log.debug('Notification closed:', data)
-    })
-
-    return () => {
-      unsubscribeClick()
-      unsubscribeAction()
-      unsubscribeClose()
-    }
-  }, [])
+  // TODO: Add notification event listeners when they become available
+  // The notification API doesn't currently support event listeners
 
   // Convenience methods for common notification types
   const notifyMail = useCallback((data: { sender: string; subject: string; preview: string }) => {

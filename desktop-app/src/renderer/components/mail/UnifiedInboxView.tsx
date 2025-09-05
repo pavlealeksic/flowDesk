@@ -203,7 +203,7 @@ export const UnifiedInboxView: React.FC<UnifiedInboxViewProps> = ({
             {(['all', 'unread', 'starred', 'attachments'] as FilterOption[]).map((filter) => (
               <Button
                 key={filter}
-                variant={filterBy === filter ? "default" : "ghost"}
+                variant={filterBy === filter ? "secondary" : "ghost"}
                 size="sm"
                 onClick={() => setFilterBy(filter)}
                 className="text-xs"

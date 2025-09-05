@@ -335,9 +335,10 @@ export const DropdownContent = React.forwardRef<
   return createPortal(
     <div
       ref={(node) => {
-        contentRef.current = node
+        // Assign to internal ref for component functionality
+        ;(contentRef as React.MutableRefObject<HTMLDivElement | null>).current = node
         if (typeof ref === 'function') ref(node)
-        else if (ref) ref.current = node
+        else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node
       }}
       className={cn(
         'fixed z-50 rounded-md border bg-popover p-1 text-popover-foreground shadow-md',

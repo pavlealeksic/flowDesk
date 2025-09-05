@@ -399,7 +399,7 @@ export class FeedbackSystem {
 
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { mediaSource: 'screen' },
+        video: true,
         audio: false
       });
 
@@ -446,7 +446,7 @@ export class FeedbackSystem {
    * Take screenshot for feedback
    */
   async takeScreenshot(): Promise<FeedbackAttachment | null> {
-    if (typeof html2canvas === 'undefined') {
+    if (typeof (globalThis as any).html2canvas === 'undefined') {
       console.warn('html2canvas not available for screenshots');
       return null;
     }

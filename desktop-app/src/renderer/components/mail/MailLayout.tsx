@@ -101,7 +101,7 @@ const FolderList: React.FC<FolderListProps> = ({
                 <Button
                   key={mode}
                   size="sm"
-                  variant={(viewMode || 'folders') === mode ? "default" : "ghost"}
+                  variant={(viewMode || 'folders') === mode ? "secondary" : "ghost"}
                   onClick={() => onViewModeChange(mode as 'folders' | 'unified' | 'smart')}
                   className="text-xs"
                 >
@@ -754,7 +754,7 @@ export const MailLayout: React.FC<MailLayoutProps> = ({
             {(viewMode || 'folders') === 'unified' ? (
               <UnifiedInboxView
                 onMessageSelect={handleMessageSelect}
-                selectedMessageId={selectedMessageId}
+                selectedMessageId={selectedMessageId || undefined}
                 height={containerHeight}
                 className="h-full"
               />
@@ -779,7 +779,10 @@ export const MailLayout: React.FC<MailLayoutProps> = ({
               thread={{
                 id: selectedMessage.id,
                 subject: selectedMessage.subject,
-                participants: [selectedMessage.from, ...selectedMessage.to],
+                participants: [
+                  { name: selectedMessage.from.name || selectedMessage.from.address, address: selectedMessage.from.address }, 
+                  ...selectedMessage.to.map(addr => ({ name: addr.name || addr.address, address: addr.address }))
+                ],
                 messages: [selectedMessage], // In real implementation, would group related messages
                 unreadCount: selectedMessage.flags?.isRead ? 0 : 1,
                 lastMessageDate: selectedMessage.date,
@@ -792,7 +795,7 @@ export const MailLayout: React.FC<MailLayoutProps> = ({
               onArchive={() => console.log('Archive')}
               onDelete={() => console.log('Delete')}
               onToggleStar={() => console.log('Toggle star')}
-              onMarkRead={(messageId, isRead) => handleMarkRead()}
+              onMarkRead={(messageId, isRead) => handleMarkRead(isRead)}
               onDownloadAttachment={(attachment) => {
                 // Handle attachment download
                 console.log('Download attachment:', attachment)

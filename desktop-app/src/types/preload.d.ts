@@ -99,16 +99,20 @@ export interface CalendarServerConfig {
 export interface Calendar {
     id: string;
     accountId: string;
+    providerId: string;
     name: string;
     color: string;
+    timezone: string;
     isPrimary: boolean;
+    accessLevel: 'owner' | 'writer' | 'reader' | 'freeBusyReader';
+    isVisible: boolean;
     isWritable: boolean;
     description?: string;
-    timezone?: string;
 }
 export interface CalendarEvent {
     id: string;
     calendarId: string;
+    providerId: string;
     title: string;
     description?: string;
     startTime: Date;
@@ -121,6 +125,16 @@ export interface CalendarEvent {
     status?: 'confirmed' | 'tentative' | 'cancelled';
     visibility?: 'private' | 'public' | 'confidential';
     reminders?: CalendarReminder[];
+    attachments: Array<{
+        id: string;
+        filename: string;
+        mimeType: string;
+        size: number;
+        url?: string;
+    }>;
+    transparency: 'transparent' | 'opaque';
+    uid: string;
+    sequence: number;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -178,6 +192,7 @@ export interface EmailTemplate {
     body: string;
     category: string;
     variables?: string[];
+    tags?: string[];
     isDefault?: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -228,8 +243,24 @@ export interface SearchResult {
     title: string;
     content: string;
     source: string;
+    type: 'email' | 'calendar' | 'contact' | 'file' | 'plugin' | 'command';
     score?: number;
     metadata?: Record<string, unknown>;
+    createdAt?: Date;
+    updatedAt?: Date;
+}
+
+export interface SearchDocument {
+    id: string;
+    title: string;
+    content: string;
+    summary?: string;
+    contentType: 'email' | 'calendar' | 'contact' | 'file' | 'plugin' | 'command';
+    provider: string;
+    providerType: string;
+    url?: string;
+    metadata?: Record<string, unknown>;
+    tags?: string[];
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -250,6 +281,74 @@ export interface ThemeSettings {
     fontSize?: 'small' | 'medium' | 'large';
     compactMode?: boolean;
 }
+
+export interface EmailCredentials {
+    email: string;
+    password: string;
+    displayName: string;
+    providerOverride?: string;
+}
+
+export interface AccountSetupResult {
+    success: boolean;
+    accountId?: string;
+    error?: string;
+    details?: any;
+}
+
+export interface ValidationResult {
+    success: boolean;
+    error?: string;
+    serverConfig?: ServerConfig;
+}
+
+export interface ServerConfig {
+    provider: string;
+    displayName: string;
+    imap: {
+        host: string;
+        port: number;
+        secure: boolean;
+    };
+    smtp: {
+        host: string;
+        port: number;
+        secure: boolean;
+    };
+}
+
+export type MailAccountStatus = 'active' | 'inactive' | 'error' | 'syncing';
+
+export type MailProvider = 
+  | 'gmail'
+  | 'outlook'
+  | 'exchange'
+  | 'imap'
+  | 'fastmail'
+  | 'proton'
+  | 'yahoo'
+  | 'aol';
+
+export interface CreateMailAccountInput {
+    name: string;
+    email: string;
+    password: string;
+    displayName: string;
+    status: MailAccountStatus;
+    userId: string;
+    provider: MailProvider;
+    isEnabled?: boolean;
+    config?: Record<string, any>;
+    syncIntervalMinutes?: number;
+    serverConfig?: ServerConfig;
+}
+
+export interface InitializationProgress {
+    stage: string;
+    progress: number;
+    message?: string;
+    details?: any;
+}
 export interface SystemInfo {
     platform: string;
     version: string;
@@ -268,7 +367,30 @@ export interface SyncStatus {
     lastSync: Date;
     error?: string;
 }
+export interface ConfigBackup {
+    id: string;
+    name: string;
+    data: Record<string, any>;
+    createdAt: Date;
+    size: number;
+}
+
 export interface FlowDeskAPI {
+    invoke<T = unknown>(channel: string, ...args: unknown[]): Promise<T>;
+    pluginManager?: {
+        getInstalledPlugins(): Promise<any[]>;
+        installPlugin(url: string): Promise<any>;
+        uninstallPlugin(id: string): Promise<boolean>;
+        enablePlugin(id: string): Promise<boolean>;
+        disablePlugin(id: string): Promise<boolean>;
+        getPluginConfig(id: string): Promise<any>;
+        setPluginConfig(id: string, config: any): Promise<boolean>;
+        searchPlugins(options: { query?: string; category?: string }): Promise<any[]>;
+    };
+    analytics?: {
+        captureException(error: Error): void;
+        track(event: string, data?: Record<string, any>): void;
+    };
     app: {
         getVersion(): Promise<string>;
         getPlatform(): Promise<string>;
@@ -360,13 +482,13 @@ export interface FlowDeskAPI {
         searchEvents(query: string, limit?: number): Promise<APIResponse<CalendarEvent[]>>;
         syncAccount(accountId: string, force?: boolean): Promise<APIResponse<unknown>>;
         syncAll(): Promise<void>;
-        onAccountCreated(callback: (account: CalendarAccount) => void): () => void;
-        onAccountUpdated(callback: (account: CalendarAccount) => void): () => void;
+        onAccountCreated(callback: (account: import('@flow-desk/shared').CalendarAccount) => void): () => void;
+        onAccountUpdated(callback: (account: import('@flow-desk/shared').CalendarAccount) => void): () => void;
         onAccountDeleted(callback: (data: {
             accountId: string;
         }) => void): () => void;
-        onEventCreated(callback: (event: CalendarEvent) => void): () => void;
-        onEventUpdated(callback: (event: CalendarEvent) => void): () => void;
+        onEventCreated(callback: (event: import('@flow-desk/shared').CalendarEvent) => void): () => void;
+        onEventUpdated(callback: (event: import('@flow-desk/shared').CalendarEvent) => void): () => void;
         onEventDeleted(callback: (data: {
             calendarId: string;
             eventId: string;
@@ -404,6 +526,28 @@ export interface FlowDeskAPI {
         maximize(): Promise<void>;
         close(): Promise<void>;
     };
+    productionEmail: {
+        setupAccount(userId: string, credentials: EmailCredentials): Promise<AccountSetupResult>;
+        testEmailSetup(credentials: EmailCredentials): Promise<ValidationResult>;
+        getServerConfig(email: string): Promise<ServerConfig>;
+    };
+    notifications: {
+        show(notification: { id: string; type: string; title: string; message: string; duration?: number; actions?: Array<{ label: string; action: string }> }): Promise<void>;
+        hide(notificationId: string): Promise<void>;
+        clear(): Promise<void>;
+        clearAll(): Promise<void>;
+        send(notification: { title: string; body: string }): Promise<void>;
+        setDND(enabled: boolean): Promise<void>;
+        getPermissions(): Promise<string>;
+        requestPermissions(): Promise<string>;
+        requestPermission(): Promise<string>;
+        getStatus(): Promise<{ enabled: boolean; permission: string }>;
+    };
+    analytics?: {
+        captureException(error: Error, context?: { context: string; extra?: any }): Promise<void>;
+        track(event: string, properties?: Record<string, unknown>): Promise<void>;
+    };
+    removeAllListeners(channel: string): void;
     on(channel: string, callback: (...args: unknown[]) => void): void;
     off(channel: string, callback: (...args: unknown[]) => void): void;
 }

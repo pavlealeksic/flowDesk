@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
-import type { AppSettings } from '../../types/preload'
+import type { AppSettings } from '../../types/preload.d.ts'
 // FlowDeskAPI type is defined globally in preload script
 
 interface SystemInfo {
@@ -140,7 +140,12 @@ const appSlice = createSlice({
       .addCase(initializeApp.fulfilled, (state, action) => {
         state.isLoading = false
         state.isInitialized = true
-        state.systemInfo = action.payload.systemInfo
+        state.systemInfo = {
+          ...action.payload.systemInfo,
+          deviceId: 'unknown',
+          isDarkMode: false,
+          isHighContrast: false
+        }
         state.settings = action.payload.settings
       })
       .addCase(initializeApp.rejected, (state, action) => {

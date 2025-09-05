@@ -31,6 +31,10 @@ const inputVariants = cva(
         success: [
           'border-green-500 text-green-600',
           'focus:border-green-500 focus:ring-green-500'
+        ],
+        warning: [
+          'border-yellow-500 text-yellow-600',
+          'focus:border-yellow-500 focus:ring-yellow-500'
         ]
       },
       size: {
@@ -55,6 +59,8 @@ export interface InputProps
   clearable?: boolean
   onClear?: () => void
   onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void // Custom onKeyDown handler
+  onFocus?: (event: React.FocusEvent<HTMLInputElement>) => void
+  onBlur?: (event: React.FocusEvent<HTMLInputElement>) => void
   value?: string // Custom value property  
   containerClassName?: string
   // Enhanced accessibility props

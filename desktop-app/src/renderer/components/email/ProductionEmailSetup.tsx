@@ -38,17 +38,7 @@ interface ProductionEmailSetupProps {
   onCancel?: () => void
 }
 
-declare global {
-  interface Window {
-    flowDesk: {
-      productionEmail: {
-        setupAccount(userId: string, credentials: EmailCredentials): Promise<AccountSetupResult>
-        testEmailSetup(credentials: EmailCredentials): Promise<ValidationResult>
-        getServerConfig(email: string): Promise<ServerConfig>
-      }
-    }
-  }
-}
+// Types are now defined in preload.d.ts
 
 const ProductionEmailSetup: React.FC<ProductionEmailSetupProps> = ({
   onAccountSetup,

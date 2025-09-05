@@ -13,6 +13,10 @@
         "-y",
         "@modelcontextprotocol/server-memory"
       ]
-    }
+    },
+    "circuit-electron": {
+        "command": "npx",
+        "args": ["@snowfort/circuit-electron@latest"]
+      }
   }
 }

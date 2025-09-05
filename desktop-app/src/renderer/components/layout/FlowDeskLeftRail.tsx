@@ -199,10 +199,10 @@ export const FlowDeskLeftRail: React.FC<FlowDeskLeftRailProps> = ({
               aria-selected={workspace.id === activeWorkspaceId && activeView === 'workspace'}
               aria-controls="main-content"
             >
-            {workspace.icon ? (
+            {(workspace as any).icon ? (
               // Show custom image icon if provided
               <img 
-                src={workspace.icon} 
+                src={(workspace as any).icon} 
                 alt={`${workspace.name} workspace icon`}
                 className="w-full h-full rounded-lg object-cover"
                 onError={(e) => {

@@ -50,7 +50,7 @@ export const DatabaseManagement: React.FC = () => {
     setError(null);
     
     try {
-      const result = await window.electronAPI?.invoke('database:get-status');
+      const result = await (window.flowDesk as any)?.invoke('database:get-status');
       if (result?.success) {
         setStatus(result.data);
       } else {
@@ -68,7 +68,7 @@ export const DatabaseManagement: React.FC = () => {
     setError(null);
     
     try {
-      const result = await window.electronAPI?.invoke('database:check-integrity');
+      const result = await (window.flowDesk as any)?.invoke('database:check-integrity');
       if (result?.success) {
         setIntegrity(result.data);
       } else {
@@ -86,7 +86,7 @@ export const DatabaseManagement: React.FC = () => {
     setError(null);
     
     try {
-      const result = await window.electronAPI?.invoke('database:get-migration-status');
+      const result = await (window.flowDesk as any)?.invoke('database:get-migration-status');
       if (result?.success) {
         setMigrationStatus(result.data);
       } else {
@@ -108,7 +108,7 @@ export const DatabaseManagement: React.FC = () => {
     setError(null);
     
     try {
-      const result = await window.electronAPI?.invoke('database:repair');
+      const result = await (window.flowDesk as any)?.invoke('database:repair');
       if (result?.success) {
         alert('Database repair completed successfully!');
         await loadDatabaseStatus();
@@ -132,7 +132,7 @@ export const DatabaseManagement: React.FC = () => {
     setError(null);
     
     try {
-      const result = await window.electronAPI?.invoke('database:apply-migrations');
+      const result = await (window.flowDesk as any)?.invoke('database:apply-migrations');
       if (result?.success) {
         alert('Database migrations applied successfully!');
         await loadMigrationStatus();

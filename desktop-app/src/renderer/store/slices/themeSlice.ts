@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
-import type { ThemeConfig } from '../../types/preload'
+import type { ThemeSettings as ThemeConfig } from '../../types/preload.d.ts'
 
 type ThemeMode = 'light' | 'dark' | 'system'
 

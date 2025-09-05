@@ -225,7 +225,7 @@ export const EnhancedMailLayout: React.FC<EnhancedMailLayoutProps> = ({
                 ].map(({ mode, label }) => (
                   <Button
                     key={mode}
-                    variant={viewMode === mode ? "default" : "ghost"}
+                    variant={viewMode === mode ? "secondary" : "ghost"}
                     size="sm"
                     onClick={() => handleViewModeChange(mode)}
                     className="text-xs"
@@ -241,7 +241,7 @@ export const EnhancedMailLayout: React.FC<EnhancedMailLayoutProps> = ({
               {viewMode === 'smart' ? (
                 <SmartMailboxes
                   onSelectMailbox={handleSmartMailboxSelect}
-                  selectedMailboxId={selectedSmartMailbox}
+                  selectedMailboxId={selectedSmartMailbox || undefined}
                 />
               ) : viewMode === 'unified' ? (
                 <div className="text-center py-8">
@@ -253,7 +253,7 @@ export const EnhancedMailLayout: React.FC<EnhancedMailLayoutProps> = ({
                   {accounts.map((account) => (
                     <Button
                       key={account.id}
-                      variant={currentAccount?.id === account.id ? "default" : "ghost"}
+                      variant={currentAccount?.id === account.id ? "secondary" : "ghost"}
                       onClick={() => dispatch(setCurrentAccount(account.id))}
                       className="w-full justify-start text-left"
                       size="sm"
@@ -307,7 +307,7 @@ export const EnhancedMailLayout: React.FC<EnhancedMailLayoutProps> = ({
             {viewMode === 'unified' ? (
               <UnifiedInboxView
                 onMessageSelect={handleMessageSelect}
-                selectedMessageId={selectedMessageId}
+                selectedMessageId={selectedMessageId || undefined}
                 height={containerHeight}
               />
             ) : viewMode === 'thread' && currentThread ? (
@@ -325,7 +325,7 @@ export const EnhancedMailLayout: React.FC<EnhancedMailLayoutProps> = ({
             ) : (
               <VirtualizedMailList
                 messages={currentMessages}
-                selectedMessageId={selectedMessageId}
+                selectedMessageId={selectedMessageId || undefined}
                 onMessageSelect={handleMessageSelect}
                 height={containerHeight}
                 className="h-full"

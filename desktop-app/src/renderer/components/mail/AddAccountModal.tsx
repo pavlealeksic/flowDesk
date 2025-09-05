@@ -217,9 +217,30 @@ const CredentialsSetup: React.FC<{
     try {
       // Use simple email + password - the backend handles provider detection
       const accountData = {
+        name: formData.email,
         email: formData.email,
         password: formData.password,
-        displayName: formData.email // Simple display name
+        displayName: formData.email,
+        status: 'active' as const,
+        userId: 'current-user', // TODO: Get from user context
+        provider: provider.id, // Use selected provider
+        isEnabled: true,
+        config: {
+          provider: provider.id,
+          imap: provider.defaultImap ? {
+            host: provider.defaultImap,
+            port: provider.defaultImapPort || 993,
+            secure: true,
+            auth: { user: formData.email, pass: formData.password }
+          } : undefined,
+          smtp: provider.defaultSmtp ? {
+            host: provider.defaultSmtp,
+            port: provider.defaultSmtpPort || 587,
+            secure: true,
+            auth: { user: formData.email, pass: formData.password }
+          } : undefined
+        } as any,
+        syncIntervalMinutes: 5
       }
 
       await dispatch(addMailAccount(accountData)).unwrap()

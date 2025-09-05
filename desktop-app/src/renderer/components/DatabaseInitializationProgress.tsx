@@ -53,7 +53,8 @@ export const DatabaseInitializationProgress: React.FC<DatabaseInitializationProg
     if (!show) return;
 
     // Listen for progress updates from main process
-    const handleProgress = (event: any, progressData: InitializationProgress) => {
+    const handleProgress = (...args: unknown[]) => {
+      const progressData = args[1] as InitializationProgress;
       setProgress(progressData);
       
       if (progressData.stage === 'complete') {
@@ -67,7 +68,8 @@ export const DatabaseInitializationProgress: React.FC<DatabaseInitializationProg
     };
 
     // Listen for completion events
-    const handleComplete = (event: any, result: { success: boolean; error?: string; config?: any }) => {
+    const handleComplete = (...args: unknown[]) => {
+      const result = args[1] as { success: boolean; error?: string; config?: any };
       if (result.success) {
         setProgress({
           stage: 'complete',
@@ -86,13 +88,13 @@ export const DatabaseInitializationProgress: React.FC<DatabaseInitializationProg
     };
 
     // Register event listeners
-    window.electronAPI?.on('database-initialization-progress', handleProgress);
-    window.electronAPI?.on('database-initialization-complete', handleComplete);
+    window.flowDesk?.on('database-initialization-progress', handleProgress);
+    window.flowDesk?.on('database-initialization-complete', handleComplete);
 
     return () => {
       // Clean up listeners
-      window.electronAPI?.off('database-initialization-progress', handleProgress);
-      window.electronAPI?.off('database-initialization-complete', handleComplete);
+      window.flowDesk?.off('database-initialization-progress', handleProgress);
+      window.flowDesk?.off('database-initialization-complete', handleComplete);
     };
   }, [show, onComplete]);
 
@@ -101,7 +103,7 @@ export const DatabaseInitializationProgress: React.FC<DatabaseInitializationProg
     setProgress({ stage: 'setup', progress: 0, message: 'Retrying database initialization...' });
     
     try {
-      const result = await window.electronAPI?.invoke('database:initialize');
+      const result = await (window.flowDesk as any)?.invoke('database:initialize');
       if (!result?.success) {
         setError(result?.error || 'Retry failed');
         setProgress(null);

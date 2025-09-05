@@ -249,8 +249,9 @@ const Modal = forwardRef<HTMLDivElement, ModalProps>(
       >
         <div
           ref={(node) => {
-            modalRef.current = node
-            containerRef.current = node
+            // Assign to internal refs for component functionality
+            ;(modalRef as React.MutableRefObject<HTMLDivElement | null>).current = node
+            ;(containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node
             if (typeof ref === 'function') {
               ref(node)
             } else if (ref) {

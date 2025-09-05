@@ -1,6 +1,37 @@
 import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@reduxjs/toolkit'
 import type { MailAccount, EmailMessage, MailFolder, MailSyncStatus, CreateMailAccountInput, UpdateMailAccountInput } from '@flow-desk/shared'
-import type { MailMessageOptions, ComposeMessageInput } from '../../types/preload'
+import type { EmailMessage as PreloadEmailMessage, GetMessagesOptions } from '../../types/preload.d.ts'
+
+interface MailMessageOptions {
+  limit?: number;
+  offset?: number;
+  since?: Date;
+  before?: Date;
+  unreadOnly?: boolean;
+  sortBy?: 'date' | 'subject' | 'from';
+  sortOrder?: 'asc' | 'desc';
+  markAsRead?: boolean;
+  priority?: 'high' | 'normal' | 'low';
+  tracking?: boolean;
+}
+
+interface ComposeMessageInput {
+  to: Array<{ name: string; address: string; }>;
+  cc?: Array<{ name: string; address: string; }>;
+  bcc?: Array<{ name: string; address: string; }>;
+  subject: string;
+  body: string;
+  attachments?: Array<{
+    id: string;
+    filename: string;
+    mimeType: string;
+    size: number;
+    isInline: boolean;
+    contentId?: string;
+    downloadUrl?: string;
+    localPath?: string;
+  }>;
+}
 
 
 interface SmartMailbox {
@@ -125,7 +156,7 @@ export const addMailAccount = createAsyncThunk(
       if (!window.flowDesk?.mail) {
         throw new Error('Mail API not available')
       }
-      const newAccount = await window.flowDesk.mail.addAccount(account)
+      const newAccount = await window.flowDesk.mail.addAccount(account as any)
       return newAccount
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to add account')
@@ -249,10 +280,10 @@ export const fetchSyncStatus = createAsyncThunk(
 export const markMessageStarred = createAsyncThunk(
   'mail/markMessageStarred',
   async ({ accountId, messageId, starred }: { 
-    accountId: string
-    messageId: string
-    starred: boolean 
-  }, { rejectWithValue }) => {
+    accountId: string;
+    messageId: string;
+    starred: boolean;
+  }, { rejectWithValue }: any) => {
     try {
       if (!window.flowDesk?.mail) {
         throw new Error('Mail API not available')
@@ -267,7 +298,7 @@ export const markMessageStarred = createAsyncThunk(
 
 export const fetchUnifiedMessages = createAsyncThunk(
   'mail/fetchUnifiedMessages', 
-  async (limit?: number, { rejectWithValue }) => {
+  async (limit: number = 50, { rejectWithValue }) => {
     try {
       if (!window.flowDesk?.mail) {
         throw new Error('Mail API not available')
@@ -469,7 +500,7 @@ const mailSlice = createSlice({
       })
       .addCase(fetchMailAccounts.fulfilled, (state, action) => {
         state.isLoadingAccounts = false
-        state.accounts = action.payload
+        state.accounts = action.payload as any
         // Set first account as current if none selected
         if (!state.currentAccountId && action.payload.length > 0) {
           state.currentAccountId = action.payload[0].id
@@ -488,7 +519,7 @@ const mailSlice = createSlice({
       })
       .addCase(addMailAccount.fulfilled, (state, action) => {
         state.isLoading = false
-        state.accounts.push(action.payload)
+        state.accounts.push(action.payload as any)
       })
       .addCase(addMailAccount.rejected, (state, action) => {
         state.isLoading = false
@@ -519,7 +550,7 @@ const mailSlice = createSlice({
         state.isLoadingMessages = false
         const { accountId, folderId, messages } = action.payload
         const key = `${accountId}:${folderId || 'inbox'}`
-        state.messages[key] = messages
+        state.messages[key] = messages as any
       })
       .addCase(fetchMessages.rejected, (state, action) => {
         state.isLoadingMessages = false
@@ -535,7 +566,7 @@ const mailSlice = createSlice({
       .addCase(fetchFolders.fulfilled, (state, action) => {
         state.isLoading = false
         const { accountId, folders } = action.payload
-        state.folders[accountId] = folders
+        state.folders[accountId] = folders as any
       })
       .addCase(fetchFolders.rejected, (state, action) => {
         state.isLoading = false
@@ -564,7 +595,7 @@ const mailSlice = createSlice({
       })
       .addCase(searchMessages.fulfilled, (state, action) => {
         state.isLoading = false
-        state.searchResults = action.payload
+        state.searchResults = action.payload as any
       })
       .addCase(searchMessages.rejected, (state, action) => {
         state.isLoading = false
@@ -617,7 +648,7 @@ const mailSlice = createSlice({
       })
       .addCase(fetchUnifiedMessages.fulfilled, (state, action) => {
         state.isLoadingMessages = false
-        state.unifiedMessages = action.payload
+        state.unifiedMessages = action.payload as any
       })
       .addCase(fetchUnifiedMessages.rejected, (state, action) => {
         state.isLoadingMessages = false
@@ -634,7 +665,7 @@ const mailSlice = createSlice({
           state.smartMailboxes[mailboxIndex].count = messages.length
         }
         // Store messages with special key
-        state.messages[`smart:${criteria}`] = messages
+        state.messages[`smart:${criteria}`] = messages as any
       })
 
     // Fetch message thread
@@ -647,13 +678,13 @@ const mailSlice = createSlice({
         const { threadId, messages } = action.payload
         state.threads[threadId] = {
           threadId,
-          messages,
+          messages: messages as any,
           subject: messages[0]?.subject || '',
           participants: [...new Set(messages.flatMap(m => [m.from.address, ...m.to.map(t => t.address)]))],
           lastMessageDate: messages[messages.length - 1]?.date ? 
             (typeof messages[messages.length - 1].date === 'string' ? 
-              messages[messages.length - 1].date : 
-              new Date(messages[messages.length - 1].date).toISOString()) : 
+              messages[messages.length - 1].date as string : 
+              (messages[messages.length - 1].date as unknown as Date).toISOString()) : 
             new Date().toISOString(),
           unreadCount: messages.filter(m => !m.flags.isRead).length
         }
@@ -670,9 +701,9 @@ const mailSlice = createSlice({
         state.scheduledMessages.push({
           id: scheduledId,
           accountId,
-          to: message.to || [],
-          cc: message.cc,
-          bcc: message.bcc,
+          to: (message.to || []).map(addr => addr.address),
+          cc: (message.cc || []).map(addr => addr.address),
+          bcc: (message.bcc || []).map(addr => addr.address),
           subject: message.subject || '',
           body: message.body || '',
           scheduledDate: scheduledDate,

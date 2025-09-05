@@ -14,6 +14,7 @@ export interface ErrorContext {
   timestamp: number;
   sessionId?: string;
   breadcrumbs: Breadcrumb[];
+  context?: Record<string, any>;
   metadata?: Record<string, any>;
 }
 
@@ -334,7 +335,7 @@ export class ErrorHandler {
           this.captureError(
             `Network retry failed after ${retries} attempts`,
             'error',
-            { feature: 'network', originalError: error.message }
+            { feature: 'network', timestamp: Date.now(), breadcrumbs: [], context: { originalError: error.message } }
           );
           throw retryError;
         }
@@ -657,9 +658,9 @@ export class ErrorHandler {
           return;
         } catch (recoveryError) {
           this.captureError(
-            `Recovery failed for error ${errorReport.id}: ${recoveryError.message}`,
+            `Recovery failed for error ${errorReport.id}: ${(recoveryError as Error).message || 'Unknown error'}`,
             'error',
-            { originalErrorId: errorReport.id }
+            { timestamp: Date.now(), breadcrumbs: [], context: { originalErrorId: errorReport.id } }
           );
         }
       }
@@ -721,7 +722,7 @@ export class ErrorHandler {
   private setupPerformanceMonitoring(): void {
     if (this.config.enablePerformanceMonitoring) {
       this.performanceMonitor = new PerformanceMonitor();
-      this.performanceMonitor.onPerformanceIssue((issue) => {
+      this.performanceMonitor.onPerformanceIssue((issue: any) => {
         this.captureError(
           `Performance issue: ${issue.type}`,
           'warn',

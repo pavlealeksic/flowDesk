@@ -480,6 +480,9 @@ export function useKeyboardOnly() {
         document.head.removeChild(style)
       }
     }
+    
+    // Return undefined when keyboard-only is not enabled
+    return undefined
   }, [settings.keyboardOnly])
 
   return {

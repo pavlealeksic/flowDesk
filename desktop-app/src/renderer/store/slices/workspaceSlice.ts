@@ -104,13 +104,21 @@ export const switchWorkspace = createAsyncThunk(
 export const createWorkspace = createAsyncThunk(
   'workspace/createWorkspace',
   async (workspace: Omit<WorkspaceData, 'createdAt' | 'updatedAt'>) => {
-    const newWorkspace = await window.flowDesk.workspace.create(workspace)
+    const workspaceId = await window.flowDesk.workspace.create(workspace)
+    
+    // Create the full workspace object
+    const workspaceData: WorkspaceData = {
+      ...workspace,
+      id: workspaceId,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
     
     // Create corresponding partition
     const partitionConfig: WorkspacePartitionConfig = {
-      id: workspace.id,
+      id: workspaceId,
       name: workspace.name,
-      partitionId: `persist:${workspace.id}`,
+      partitionId: `persist:${workspaceId}`,
       ephemeral: false,
       permissions: {
         notifications: true,
@@ -134,14 +142,14 @@ export const createWorkspace = createAsyncThunk(
     
     await window.flowDesk.workspace.createPartition(partitionConfig)
     
-    return { workspace: newWorkspace, partition: partitionConfig }
+    return { workspace: workspaceData, partition: partitionConfig }
   }
 )
 
 export const updateWorkspace = createAsyncThunk(
   'workspace/updateWorkspace',
   async ({ workspaceId, updates }: { workspaceId: string; updates: Partial<WorkspaceData> }) => {
-    await window.flowDesk.workspace.update(workspaceId, updates)
+    await window.flowDesk.workspace.update(workspaceId, updates as any)
     return { workspaceId, updates }
   }
 )
@@ -181,8 +189,9 @@ export const loadWorkspaceWindows = createAsyncThunk(
 export const createWorkspaceWindow = createAsyncThunk(
   'workspace/createWindow',
   async ({ workspaceId, options }: { workspaceId: string; options: Electron.BrowserWindowConstructorOptions }) => {
-    const result = await window.flowDesk.workspace.createWindow({ workspaceId, ...options })
-    return result
+    const result = await window.flowDesk.workspace.createWindow(options as any)
+    // Return both workspaceId and result for reducer
+    return { workspaceId, windowId: result }
   }
 )
 
@@ -273,34 +282,7 @@ const workspaceSlice = createSlice({
       // Create workspace
       .addCase(createWorkspace.fulfilled, (state, action) => {
         const { workspace, partition } = action.payload
-        // Ensure the workspace has all required fields
-        const workspaceData: WorkspaceData = {
-          id: workspace.id || `ws_${Date.now()}`,
-          name: workspace.name || 'New Workspace',
-          abbreviation: workspace.abbreviation || workspace.name?.substring(0, 2).toUpperCase() || 'NW',
-          color: workspace.color || '#4285f4',
-          icon: workspace.icon,
-          browserIsolation: workspace.browserIsolation || 'shared',
-          services: workspace.services || [],
-          members: workspace.members || [],
-          created: typeof workspace.created === 'string' ? workspace.created : 
-                   workspace.created ? new Date(workspace.created).toISOString() : new Date().toISOString(),
-          lastAccessed: typeof workspace.lastAccessed === 'string' ? workspace.lastAccessed : 
-                       workspace.lastAccessed ? new Date(workspace.lastAccessed).toISOString() : new Date().toISOString(),
-          isActive: workspace.isActive || false,
-          // Legacy compatibility
-          type: workspace.type,
-          description: workspace.description,
-          organizationId: workspace.organizationId,
-          teamId: workspace.teamId,
-          ownerId: workspace.ownerId,
-          createdAt: workspace.createdAt,
-          updatedAt: workspace.updatedAt,
-          tags: workspace.tags,
-          apps: workspace.apps,
-          settings: workspace.settings
-        };
-        state.workspaces[workspace.id] = workspaceData
+        state.workspaces[workspace.id] = workspace
         if (partition) {
           state.partitions[partition.id] = partition
         }
@@ -346,12 +328,12 @@ const workspaceSlice = createSlice({
       // Load workspace windows
       .addCase(loadWorkspaceWindows.fulfilled, (state, action) => {
         const { workspaceId, windows } = action.payload
-        state.windows[workspaceId] = windows
+        state.windows[workspaceId] = windows as WorkspaceWindow[]
       })
       
       // Create workspace window
       .addCase(createWorkspaceWindow.fulfilled, (state, action) => {
-        const { workspaceId, windowId } = action.payload
+        const result = action.payload as { workspaceId: string; windowId: number }
         // Window will be loaded in the next loadWorkspaceWindows call
       })
   }

@@ -549,7 +549,7 @@ const calendarSlice = createSlice({
       })
       .addCase(fetchUserAccounts.fulfilled, (state, action) => {
         state.isLoading = false
-        state.accounts = action.payload
+        state.accounts = action.payload as any
       })
       .addCase(fetchUserAccounts.rejected, (state, action) => {
         state.isLoading = false
@@ -564,7 +564,7 @@ const calendarSlice = createSlice({
       })
       .addCase(createCalendarAccount.fulfilled, (state, action) => {
         state.isLoading = false
-        state.accounts.push(action.payload)
+        state.accounts.push(action.payload as any)
       })
       .addCase(createCalendarAccount.rejected, (state, action) => {
         state.isLoading = false
@@ -576,7 +576,7 @@ const calendarSlice = createSlice({
       .addCase(updateCalendarAccount.fulfilled, (state, action) => {
         const index = state.accounts.findIndex(account => account.id === action.payload.id)
         if (index !== -1) {
-          state.accounts[index] = action.payload
+          state.accounts[index] = action.payload as any
         }
       })
       .addCase(updateCalendarAccount.rejected, (state, action) => {
@@ -605,7 +605,7 @@ const calendarSlice = createSlice({
     builder
       .addCase(fetchCalendars.fulfilled, (state, action) => {
         const { accountId, calendars } = action.payload
-        state.calendars[accountId] = calendars
+        state.calendars[accountId] = calendars as any
       })
       .addCase(fetchCalendars.rejected, (state, action) => {
         state.error = action.payload as string
@@ -627,7 +627,7 @@ const calendarSlice = createSlice({
           if (!eventsByCalendar[event.calendarId]) {
             eventsByCalendar[event.calendarId] = []
           }
-          eventsByCalendar[event.calendarId].push(event)
+          eventsByCalendar[event.calendarId].push(event as any)
         })
         
         // Update state with new events
@@ -647,7 +647,7 @@ const calendarSlice = createSlice({
         if (!state.events[event.calendarId]) {
           state.events[event.calendarId] = []
         }
-        state.events[event.calendarId].push(event)
+        state.events[event.calendarId].push(event as any)
       })
       .addCase(createCalendarEvent.rejected, (state, action) => {
         state.error = action.payload as string
@@ -661,7 +661,7 @@ const calendarSlice = createSlice({
         if (calendarEvents) {
           const index = calendarEvents.findIndex(e => e.id === event.id)
           if (index !== -1) {
-            calendarEvents[index] = event
+            calendarEvents[index] = event as any
           }
         }
       })
@@ -702,7 +702,7 @@ const calendarSlice = createSlice({
         state.isLoading = false
         const { query, events } = action.payload
         state.searchQuery = query
-        state.searchResults = events
+        state.searchResults = events as any
       })
       .addCase(searchCalendarEvents.rejected, (state, action) => {
         state.isLoading = false

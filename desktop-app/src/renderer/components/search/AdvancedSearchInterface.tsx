@@ -203,7 +203,7 @@ const SearchFiltersPanel: React.FC<{
           ].map(option => (
             <Button
               key={option.value}
-              variant={filters.type === option.value ? 'default' : 'outline'}
+              variant={filters.type === option.value ? 'secondary' : 'outline'}
               size="sm"
               onClick={() => handleFilterChange('type', option.value as any)}
               className="text-xs"
@@ -439,7 +439,7 @@ export const AdvancedSearchInterface: React.FC<AdvancedSearchInterfaceProps> = (
           <div className="flex items-center gap-1">
             {showFilters && (
               <Button
-                variant={showFilterPanel || hasActiveFilters ? 'default' : 'ghost'}
+                variant={showFilterPanel || hasActiveFilters ? 'secondary' : 'ghost'}
                 size="sm"
                 onClick={() => setShowFilterPanel(!showFilterPanel)}
                 className="h-6"
@@ -524,9 +524,9 @@ export const AdvancedSearchInterface: React.FC<AdvancedSearchInterfaceProps> = (
                   <button
                     key={index}
                     onClick={() => {
-                      setQuery(suggestion.query || suggestion.text)
-                      if (suggestion.query) {
-                        performSearch(suggestion.query, filters)
+                      setQuery((suggestion as any).query || suggestion.text)
+                      if ((suggestion as any).query) {
+                        performSearch((suggestion as any).query, filters)
                       }
                     }}
                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-accent rounded"

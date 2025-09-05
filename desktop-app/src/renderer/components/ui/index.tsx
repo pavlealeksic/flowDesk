@@ -221,6 +221,13 @@ export const DialogTitle: React.FC<{
   return <h2 className={className}>{children}</h2>;
 };
 
+export const DialogDescription: React.FC<{ 
+  children: React.ReactNode; 
+  className?: string 
+}> = ({ children, className }) => {
+  return <p className={className}>{children}</p>;
+};
+
 export const DialogTrigger: React.FC<{ 
   children: React.ReactNode; 
   asChild?: boolean 

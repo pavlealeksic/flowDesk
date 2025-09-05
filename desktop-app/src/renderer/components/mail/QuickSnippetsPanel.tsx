@@ -171,7 +171,14 @@ const SnippetsManagementModal: React.FC<{
 }> = ({ isOpen, onClose }) => {
   const dispatch = useAppDispatch()
   const snippets = useAppSelector(selectSnippets)
-  const categories = useAppSelector(selectSnippetCategories)
+  const rawCategories = useAppSelector(selectSnippetCategories)
+  
+  // Transform string categories to proper category objects
+  const categories = rawCategories.map((category: string) => ({
+    id: category,
+    name: category,
+    snippetCount: snippets.filter((snippet: any) => snippet.category === category).length
+  }))
 
   const [showEditor, setShowEditor] = useState(false)
   const [editingSnippet, setEditingSnippet] = useState<TextSnippet | undefined>()
@@ -300,7 +307,14 @@ export const QuickSnippetsPanel: React.FC<QuickSnippetsPanelProps> = ({
 }) => {
   const dispatch = useAppDispatch()
   const snippets = useAppSelector(selectSnippets)
-  const categories = useAppSelector(selectSnippetCategories)
+  const rawCategories = useAppSelector(selectSnippetCategories)
+  
+  // Transform string categories to proper category objects
+  const categories = rawCategories.map((category: string) => ({
+    id: category,
+    name: category,
+    snippetCount: snippets.filter((snippet: any) => snippet.category === category).length
+  }))
 
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['common']))

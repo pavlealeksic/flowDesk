@@ -74,6 +74,7 @@ export interface ButtonProps
   leftIcon?: React.ReactNode
   rightIcon?: React.ReactNode
   onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void
+  onKeyDown?: (event: React.KeyboardEvent<HTMLButtonElement>) => void
   shortcut?: KeyboardShortcut
   fullWidth?: boolean
   // Enhanced accessibility props
@@ -208,9 +209,10 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           if (typeof ref === 'function') {
             ref(node)
           } else if (ref) {
-            ref.current = node
+            (ref as React.MutableRefObject<HTMLButtonElement | null>).current = node
           }
-          buttonRef.current = node
+          // Assign to internal ref for component functionality
+          ;(buttonRef as React.MutableRefObject<HTMLButtonElement | null>).current = node
         }}
         className={buttonClasses}
         disabled={disabled || loading}

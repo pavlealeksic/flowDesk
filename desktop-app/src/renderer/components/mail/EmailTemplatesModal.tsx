@@ -131,7 +131,7 @@ const TemplateVariableEditor: React.FC<{
             {variable.type === 'select' && (
               <Input
                 value={variable.options?.join(', ') || ''}
-                onChange={(value) => updateVariable(index, { options: value.split(',').map(o => o.trim()) })}
+                onChange={(value) => updateVariable(index, { options: value.split(',').map((o: string) => o.trim()) })}
                 placeholder="Options (comma separated)"
                 className="flex-1"
               />
@@ -156,8 +156,15 @@ const TemplateEditor: React.FC<{
     body: template?.body || '',
     category: template?.category || 'general',
     tags: template?.tags || [],
-    variables: template?.variables || [],
-    isPublic: template?.isPublic || false
+    variables: Array.isArray(template?.variables) 
+      ? template.variables.map((v: any) => 
+          typeof v === 'string' 
+            ? { name: v, label: v, type: 'text' as const, required: false, placeholder: '' }
+            : v as TemplateVariable
+        )
+      : [],
+    isPublic: template?.isPublic || false,
+    isShared: template?.isShared || false
   })
 
   const [newTag, setNewTag] = useState('')
@@ -182,7 +189,11 @@ const TemplateEditor: React.FC<{
   const handleSave = () => {
     if (!formData.name.trim() || !formData.subject.trim()) return
     
-    onSave(formData)
+    onSave({
+      ...formData,
+      category: formData.category as 'business' | 'personal' | 'follow-up' | 'meeting' | 'custom',
+      variables: formData.variables.map(v => v.name) // Convert to string array
+    })
   }
 
   return (
@@ -321,7 +332,7 @@ const TemplateList: React.FC<{
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
                 <h3 className="font-medium">{template.name}</h3>
-                {template.tags.map(tag => (
+                {(template.tags || []).map(tag => (
                   <span key={tag} className="px-1.5 py-0.5 bg-muted text-xs rounded">
                     {tag}
                   </span>
@@ -342,10 +353,10 @@ const TemplateList: React.FC<{
                 {template.body.substring(0, 100)}...
               </p>
               
-              {template.variables.length > 0 && (
+              {Array.isArray(template.variables) && template.variables.length > 0 && (
                 <div className="mt-2">
                   <p className="text-xs text-muted-foreground">
-                    Variables: {template.variables.map(v => v.name).join(', ')}
+                    Variables: {template.variables.map((v: any) => typeof v === 'string' ? v : v.name).join(', ')}
                   </p>
                 </div>
               )}
@@ -354,7 +365,7 @@ const TemplateList: React.FC<{
             <div className="flex items-center gap-1 ml-4">
               {onSelect && (
                 <Button
-                  variant="default"
+                  variant="secondary"
                   size="sm"
                   onClick={() => handleUseTemplate(template)}
                 >
@@ -425,7 +436,10 @@ export const EmailTemplatesModal: React.FC<EmailTemplatesModalProps> = ({
 
   const handleSaveTemplate = async (templateData: Omit<EmailTemplate, 'id' | 'createdAt' | 'updatedAt' | 'usageCount'>) => {
     if (editingTemplate) {
-      await dispatch(updateTemplate({ ...templateData, ...editingTemplate }))
+      await dispatch(updateTemplate({ 
+        templateId: editingTemplate.id, 
+        updates: templateData 
+      }))
     } else {
       await dispatch(saveTemplate(templateData))
     }
@@ -458,7 +472,7 @@ export const EmailTemplatesModal: React.FC<EmailTemplatesModalProps> = ({
         t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         t.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
         t.body.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
+        (t.tags || []).some((tag: string) => tag.toLowerCase().includes(searchQuery.toLowerCase()))
       )
     }
     

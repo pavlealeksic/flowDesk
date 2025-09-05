@@ -167,7 +167,7 @@ const MeetingInviteCard: React.FC<MeetingInviteCardProps> = ({
               <div className="space-y-2">
                 <h4 className="text-sm font-medium">Attendees</h4>
                 <div className="space-y-1">
-                  {event.attendees.slice(0, 3).map((attendee, index) => (
+                  {event.attendees.slice(0, 3).map((attendee: any, index: number) => (
                     <div key={index} className="flex items-center gap-2 text-sm">
                       <div className={cn(
                         "w-2 h-2 rounded-full",
@@ -294,7 +294,7 @@ export const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({
 
   // Auto-detect meeting invites
   useEffect(() => {
-    if (!settings.calendar.enableAutoDetection) return
+    if (!(settings as any).calendar?.enableAutoDetection) return
     
     const messageText = (message.bodyText || message.bodyHtml || '').toLowerCase()
     const subject = message.subject.toLowerCase()
@@ -307,7 +307,7 @@ export const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({
 
     if (hasKeywords || hasAttachments) {
       // Check if already processed
-      const existingInvite = meetingInvites.find(invite => invite.messageId === message.id)
+      const existingInvite = meetingInvites.find((invite: any) => invite.messageId === message.id)
       if (!existingInvite && !isProcessing) {
         setIsProcessing(true)
         dispatch(extractMeetingInvite(message.id))
@@ -323,7 +323,7 @@ export const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({
           })
       }
     }
-  }, [message, settings.calendar.enableAutoDetection, meetingInvites, isProcessing, dispatch, hasMeetingKeywords])
+  }, [message, (settings as any).calendar?.enableAutoDetection, meetingInvites, isProcessing, dispatch, hasMeetingKeywords])
 
   const handleRespond = useCallback(async (response: 'accepted' | 'declined' | 'tentative') => {
     if (!detectedInvite) return
@@ -350,17 +350,17 @@ export const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({
         processed: true 
       } : null)
       
-      if (settings.calendar.autoAddToCalendar) {
+      if ((settings as any).calendar?.autoAddToCalendar) {
         // Would integrate with system calendar here
         console.log('Auto-added to system calendar')
       }
     } catch (error) {
       console.error('Failed to add to calendar:', error)
     }
-  }, [dispatch, settings.calendar.autoAddToCalendar])
+  }, [dispatch, (settings as any).calendar?.autoAddToCalendar])
 
   // Find existing invite for this message
-  const existingInvite = meetingInvites.find(invite => invite.messageId === message.id)
+  const existingInvite = meetingInvites.find((invite: any) => invite.messageId === message.id)
   const currentInvite = detectedInvite || existingInvite
 
   if (!currentInvite && !isProcessing) {
@@ -398,8 +398,8 @@ export const CalendarIntegration: React.FC<CalendarIntegrationProps> = ({
 
 // Standalone component for managing all meeting invites
 export const MeetingInvitesManager: React.FC<BaseComponentProps> = ({ className }) => {
-  const unprocessedInvites = useAppSelector(selectUnprocessedInvites)
-  const allInvites = useAppSelector(selectMeetingInvites)
+  const unprocessedInvites = useAppSelector(selectUnprocessedInvites) as MeetingInvite[]
+  const allInvites = useAppSelector(selectMeetingInvites) as MeetingInvite[]
   const dispatch = useAppDispatch()
 
   const handleRespond = useCallback(async (inviteId: string, response: 'accepted' | 'declined' | 'tentative') => {

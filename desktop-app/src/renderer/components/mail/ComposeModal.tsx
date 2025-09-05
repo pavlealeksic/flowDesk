@@ -354,25 +354,27 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
       const messageData = {
         to: composeData.to.split(',').map(addr => {
           const match = addr.trim().match(/^(.+?)\s*<(.+)>$/)
-          return match ? { name: match[1].trim(), address: match[2].trim() } : { address: addr.trim() }
+          return match ? { name: match[1].trim(), address: match[2].trim() } : { name: addr.trim(), address: addr.trim() }
         }),
         cc: composeData.cc ? composeData.cc.split(',').map(addr => {
           const match = addr.trim().match(/^(.+?)\s*<(.+)>$/)
-          return match ? { name: match[1].trim(), address: match[2].trim() } : { address: addr.trim() }
+          return match ? { name: match[1].trim(), address: match[2].trim() } : { name: addr.trim(), address: addr.trim() }
         }) : [],
         bcc: composeData.bcc ? composeData.bcc.split(',').map(addr => {
           const match = addr.trim().match(/^(.+?)\s*<(.+)>$/)
-          return match ? { name: match[1].trim(), address: match[2].trim() } : { address: addr.trim() }
+          return match ? { name: match[1].trim(), address: match[2].trim() } : { name: addr.trim(), address: addr.trim() }
         }) : [],
         subject: composeData.subject,
-        bodyHtml: composeData.body,
-        bodyText: composeData.body.replace(/<[^>]*>/g, ''), // Strip HTML for text version
+        body: composeData.body,
         attachments: composeData.attachments.map((file, index) => ({
           id: `attachment-${index}`,
           filename: file.name,
-          size: file.size,
           mimeType: file.type,
-          isInline: false
+          size: file.size,
+          isInline: false,
+          contentId: undefined,
+          downloadUrl: undefined,
+          localPath: undefined
         })),
         inReplyTo: replyTo?.messageId,
         references: replyTo ? [...(replyTo.references || []), replyTo.messageId] : []
@@ -618,6 +620,7 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
                         const newBody = currentBody + (currentBody ? '\n\n' : '') + snippet.content
                         handleInputChange('body', newBody)
                       }}
+                      onClose={() => setShowSnippets(false)}
                       compact={true}
                     />
                   </div>

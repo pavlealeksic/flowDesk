@@ -20,6 +20,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   cn
 } from '../ui';
 import {
@@ -109,7 +110,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ className }) => {
   const loadInstalledPlugins = useCallback(async () => {
     setIsLoading(true);
     try {
-      const plugins = await window.electronAPI?.pluginManager?.getInstalledPlugins?.() || mockInstalledPlugins;
+      const plugins = await window.flowDesk.pluginManager?.getInstalledPlugins?.() || mockInstalledPlugins;
       setInstalledPlugins(plugins);
     } catch (error) {
       console.error('Failed to load installed plugins:', error);
@@ -122,7 +123,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ className }) => {
   const loadAvailablePlugins = useCallback(async () => {
     setIsLoading(true);
     try {
-      const plugins = await window.electronAPI?.pluginManager?.searchPlugins?.({ 
+      const plugins = await window.flowDesk.pluginManager?.searchPlugins({ 
         query: searchQuery,
         category: selectedCategory === 'all' ? undefined : selectedCategory
       }) || mockAvailablePlugins;
@@ -138,7 +139,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ className }) => {
   const installPlugin = useCallback(async (manifest: PluginManifest) => {
     setIsLoading(true);
     try {
-      await window.electronAPI?.pluginManager?.installPlugin?.(manifest.id);
+      await window.flowDesk.pluginManager?.installPlugin(manifest.id);
       await loadInstalledPlugins();
     } catch (error) {
       console.error('Failed to install plugin:', error);
@@ -151,7 +152,7 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ className }) => {
   const uninstallPlugin = useCallback(async (installation: PluginInstallation) => {
     setIsLoading(true);
     try {
-      await window.electronAPI?.pluginManager?.uninstallPlugin?.(installation.id);
+      await window.flowDesk.pluginManager?.uninstallPlugin(installation.id);
       await loadInstalledPlugins();
     } catch (error) {
       console.error('Failed to uninstall plugin:', error);
@@ -165,9 +166,9 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ className }) => {
     setIsLoading(true);
     try {
       if (installation.settings.enabled) {
-        await window.electronAPI?.pluginManager?.disablePlugin?.(installation.id);
+        await window.flowDesk.pluginManager?.disablePlugin(installation.id);
       } else {
-        await window.electronAPI?.pluginManager?.enablePlugin?.(installation.id);
+        await window.flowDesk.pluginManager?.enablePlugin(installation.id);
       }
       await loadInstalledPlugins();
     } catch (error) {

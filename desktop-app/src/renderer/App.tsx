@@ -314,7 +314,7 @@ function AppContent() {
       case 'workspace':
         if (activeServiceId) {
           // Show the selected service content - BrowserView will be overlaid here
-          const selectedService = currentWorkspace?.services.find(s => s.id === activeServiceId);
+          const selectedService = currentWorkspace?.services.find((s: any) => s.id === activeServiceId);
           return (
             <WorkspaceErrorBoundary>
               <div className="h-full bg-white">
@@ -520,7 +520,7 @@ function AppContent() {
         }}
         workspaceId={currentWorkspace?.id || ''}
         serviceId={editingServiceId}
-        currentService={currentWorkspace?.services.find(s => s.id === editingServiceId)}
+        currentService={currentWorkspace?.services.find((s: any) => s.id === editingServiceId)}
         onSave={async (serviceId, updates) => {
           try {
             console.log('Service updated successfully:', serviceId, updates);

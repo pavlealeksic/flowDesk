@@ -5,25 +5,98 @@
  */
 
 import { contextBridge, ipcRenderer } from 'electron';
+// Import types from shared library instead of declaration file
 import type { 
-  Workspace, 
-  WorkspaceService, 
   MailAccount, 
   MailFolder, 
   EmailMessage, 
   CalendarAccount, 
-  CalendarEvent, 
-  CreateWorkspaceData,
-  CreatePartitionData,
-  CreateWindowData,
-  GetMessagesOptions,
+  CalendarEvent,
   EmailTemplate,
-  EmailRule,
-  TextSnippet,
-  SearchOptions,
-  APIResponse,
-  SyncStatus
-} from '../types/preload';
+  EmailFilter,
+  SearchOptions
+} from '@flow-desk/shared';
+
+// Define local interfaces for preload-specific types
+interface Workspace {
+  id: string;
+  name: string;
+  abbreviation: string;
+  color: string;
+  icon?: string;
+  browserIsolation?: 'shared' | 'isolated';
+  services: WorkspaceService[];
+  members?: string[];
+  created: Date;
+  lastAccessed: Date;
+  isActive: boolean;
+}
+
+interface WorkspaceService {
+  id: string;
+  name: string;
+  type: string;
+  url: string;
+  iconUrl?: string;
+  isEnabled: boolean;
+  config: Record<string, unknown>;
+}
+
+interface CreateWorkspaceData {
+  name: string;
+  icon?: string;
+  color?: string;
+  browserIsolation?: 'shared' | 'isolated';
+  description?: string;
+}
+
+interface CreatePartitionData {
+  name: string;
+  type?: string;
+  description?: string;
+}
+
+interface CreateWindowData {
+  title: string;
+  url?: string;
+  width?: number;
+  height?: number;
+}
+
+interface GetMessagesOptions {
+  limit?: number;
+  offset?: number;
+  since?: Date;
+  before?: Date;
+  unreadOnly?: boolean;
+  sortBy?: 'date' | 'subject' | 'from';
+  sortOrder?: 'asc' | 'desc';
+}
+
+interface TextSnippet {
+  id: string;
+  name: string;
+  content: string;
+  category: string;
+  shortcut?: string;
+  variables?: string[];
+  isGlobal?: boolean;
+  tags: string[];
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+interface APIResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
+interface SyncStatus {
+  issyncing: boolean;
+  lastSync: Date;
+  error?: string;
+}
 
 // Define the complete Flow Desk API
 interface FlowDeskAPI {
@@ -312,9 +385,31 @@ interface FlowDeskAPI {
     close(): Promise<void>;
   };
 
+  // Core IPC functionality
+  invoke<T = unknown>(channel: string, ...args: unknown[]): Promise<T>;
+  
+  // Plugin management
+  pluginManager?: {
+    getInstalledPlugins(): Promise<any[]>;
+    installPlugin(url: string): Promise<any>;
+    uninstallPlugin(id: string): Promise<boolean>;
+    enablePlugin(id: string): Promise<boolean>;
+    disablePlugin(id: string): Promise<boolean>;
+    getPluginConfig(id: string): Promise<any>;
+    setPluginConfig(id: string, config: any): Promise<boolean>;
+    searchPlugins(options: { query?: string; category?: string }): Promise<any[]>;
+  };
+
+  // Analytics
+  analytics?: {
+    captureException(error: Error, context?: { context: string; extra?: any }): Promise<void>;
+    track(event: string, properties?: Record<string, unknown>): Promise<void>;
+  };
+
   // Event listeners
   on(channel: string, callback: (...args: unknown[]) => void): void;
   off(channel: string, callback: (...args: unknown[]) => void): void;
+  removeAllListeners(channel: string): void;
 }
 
 // Import the EmailAttachment and Calendar types locally if needed
@@ -399,7 +494,7 @@ const flowDeskAPI: FlowDeskAPI = {
   mail: {
     // Account management (exact Redux signatures)
     getAccounts: () => ipcRenderer.invoke('mail:get-accounts'),
-    addAccount: (account: { email: string; name: string; provider: string; config?: Record<string, unknown> }) => 
+    addAccount: (account: Partial<MailAccount>) => 
       ipcRenderer.invoke('mail:add-account-obj', account),
     updateAccount: (accountId: string, updates: Partial<MailAccount>) => 
       ipcRenderer.invoke('mail:update-account', accountId, updates),
@@ -743,6 +838,29 @@ const flowDeskAPI: FlowDeskAPI = {
     close: () => ipcRenderer.invoke('window:close'),
   },
 
+  // Core IPC functionality
+  invoke: <T = unknown>(channel: string, ...args: unknown[]): Promise<T> => {
+    return ipcRenderer.invoke(channel, ...args);
+  },
+
+  // Plugin management (optional implementation)
+  pluginManager: {
+    getInstalledPlugins: () => ipcRenderer.invoke('plugin:get-installed'),
+    installPlugin: (url: string) => ipcRenderer.invoke('plugin:install', url),
+    uninstallPlugin: (id: string) => ipcRenderer.invoke('plugin:uninstall', id),
+    enablePlugin: (id: string) => ipcRenderer.invoke('plugin:enable', id),
+    disablePlugin: (id: string) => ipcRenderer.invoke('plugin:disable', id),
+    getPluginConfig: (id: string) => ipcRenderer.invoke('plugin:get-config', id),
+    setPluginConfig: (id: string, config: any) => ipcRenderer.invoke('plugin:set-config', id, config),
+    searchPlugins: (options: { query?: string; category?: string }) => ipcRenderer.invoke('plugin:search', options),
+  },
+
+  // Analytics (optional implementation)
+  analytics: {
+    captureException: (error: Error, context?: { context: string; extra?: any }) => ipcRenderer.invoke('analytics:capture-exception', error, context),
+    track: (event: string, properties?: Record<string, unknown>) => ipcRenderer.invoke('analytics:track', event, properties),
+  },
+
   // Event handling
   on: (channel: string, callback: (...args: unknown[]) => void) => {
     const subscription = (_event: Electron.IpcRendererEvent, ...args: unknown[]) => callback(...args);
@@ -751,6 +869,10 @@ const flowDeskAPI: FlowDeskAPI = {
 
   off: (channel: string, callback: (...args: unknown[]) => void) => {
     ipcRenderer.removeListener(channel, callback);
+  },
+
+  removeAllListeners: (channel: string) => {
+    ipcRenderer.removeAllListeners(channel);
   }
 };
 

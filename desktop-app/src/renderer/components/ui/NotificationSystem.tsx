@@ -22,7 +22,7 @@ export type NotificationCategory = 'mail' | 'calendar' | 'system' | 'sync' | 'ge
 export interface NotificationAction {
   label: string
   action: () => void
-  variant?: 'default' | 'outline' | 'ghost'
+  variant?: 'primary' | 'secondary' | 'destructive' | 'outline' | 'ghost' | 'link'
 }
 
 export interface Notification {
@@ -139,7 +139,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
                   <Button
                     key={index}
                     size="sm"
-                    variant={action.variant || 'default'}
+                    variant={action.variant || 'secondary'}
                     onClick={() => onAction(id, action)}
                   >
                     {action.label}

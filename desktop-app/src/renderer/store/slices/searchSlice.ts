@@ -1,20 +1,26 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit'
-import type { SearchDocument, SearchSuggestion, AnalyticsData } from '../../types/preload'
+import type { SearchResult, SearchDocument } from '../../types/preload.d.ts'
 
-// Declare global window interface for search API
+interface SearchSuggestion {
+  query: string;
+  category: string;
+  count: number;
+}
 
-interface SearchResult {
-  id: string
-  type: 'email' | 'calendar' | 'contact' | 'file' | 'plugin' | 'command'
-  title: string
-  description?: string
-  snippet?: string
-  metadata?: Record<string, unknown>
-  score: number
-  source: string
-  url?: string
-  icon?: string
-  timestamp?: number
+interface AnalyticsData {
+  searchCount: number;
+  popularQueries: string[];
+  avgResponseTime: number;
+}
+
+// Extended SearchResult with additional properties for the store
+interface ExtendedSearchResult extends SearchResult {
+  type: 'email' | 'calendar' | 'contact' | 'file' | 'plugin' | 'command';
+  description?: string;
+  snippet?: string;
+  url?: string;
+  icon?: string;
+  timestamp?: number;
 }
 
 interface SearchFilter {
@@ -25,7 +31,7 @@ interface SearchFilter {
 
 interface SearchState {
   query: string
-  results: SearchResult[]
+  results: ExtendedSearchResult[]
   totalResults: number
   isSearching: boolean
   searchHistory: string[]
@@ -300,10 +306,14 @@ const searchSlice = createSlice({
       .addCase(performSearch.fulfilled, (state, action) => {
         state.isSearching = false;
         const { results, totalResults, hasMore } = action.payload;
+        const typedResults = results.map((result: any) => ({
+          ...result,
+          type: (result as any).type || 'file' as 'email' | 'calendar' | 'contact' | 'file' | 'plugin' | 'command'
+        }));
         if (state.pagination.page === 1) {
-          state.results = results;
+          state.results = typedResults;
         } else {
-          state.results.push(...results);
+          state.results.push(...typedResults);
         }
         state.totalResults = totalResults;
         state.pagination.hasMore = hasMore;

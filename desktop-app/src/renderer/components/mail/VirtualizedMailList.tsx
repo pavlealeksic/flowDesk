@@ -239,17 +239,8 @@ export const VirtualizedMailList: React.FC<VirtualizedMailListProps> = ({
   className,
   showQuickActions = false
 }) => {
-  const listRef = useRef<any>(null)
-
-  // Scroll to selected message when selection changes
-  useEffect(() => {
-    if (selectedMessageId && listRef.current) {
-      const messageIndex = messages.findIndex(m => m.id === selectedMessageId)
-      if (messageIndex !== -1) {
-        listRef.current.scrollToItem(messageIndex, 'smart')
-      }
-    }
-  }, [selectedMessageId, messages])
+  // TODO: Implement scroll to selected message functionality
+  // This would require using the ref callback pattern with react-window
 
   // Memoize the data object to prevent unnecessary re-renders
   const itemData = useMemo<MessageItemData>(() => ({
@@ -279,15 +270,13 @@ export const VirtualizedMailList: React.FC<VirtualizedMailListProps> = ({
   return (
     <div className={className}>
       <List
-        ref={listRef}
         height={height}
         itemCount={messages.length}
         itemSize={ITEM_HEIGHT}
         itemData={itemData}
         overscanCount={5}
-      >
-        {MessageItem}
-      </List>
+        itemRenderer={MessageItem}
+      />
     </div>
   )
 }

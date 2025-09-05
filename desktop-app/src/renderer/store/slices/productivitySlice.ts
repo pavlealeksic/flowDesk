@@ -157,7 +157,8 @@ export const saveSnippet = createAsyncThunk(
         throw new Error('Snippet API not available')
       }
       const snippetId = await window.flowDesk.mail.saveSnippet(snippet)
-      const savedSnippet = await window.flowDesk.mail.getSnippet?.(snippetId)
+      // Return snippet data from save operation instead of calling getSnippet
+      const savedSnippet = { ...snippet, id: snippetId }
       return savedSnippet
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to save snippet')
@@ -173,7 +174,8 @@ export const updateSnippet = createAsyncThunk(
         throw new Error('Snippet API not available')
       }
       await window.flowDesk.mail.updateSnippet(snippetId, updates)
-      const updatedSnippet = await window.flowDesk.mail.getSnippet?.(snippetId)
+      // Return updated snippet data instead of calling getSnippet
+      const updatedSnippet = { id: snippetId, ...updates }
       return updatedSnippet
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to update snippet')

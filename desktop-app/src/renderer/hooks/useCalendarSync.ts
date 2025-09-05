@@ -5,14 +5,6 @@
  */
 
 import { useEffect, useCallback } from 'react';
-// Import the FlowDeskAPI type from preload script
-import type { FlowDeskAPI } from '../../preload/preload';
-
-declare global {
-  interface Window {
-    flowDesk: FlowDeskAPI;
-  }
-}
 import { useAppDispatch } from '../store';
 import {
   accountCreated,
@@ -49,14 +41,14 @@ export const useCalendarSync = () => {
     const { calendar } = window.flowDesk;
 
     // Account event handlers
-    const handleAccountCreated = (account: CalendarAccount) => {
-      dispatch(accountCreated(account));
+    const handleAccountCreated = (account: any) => {
+      dispatch(accountCreated(account as CalendarAccount));
       // Fetch calendars for new account
       dispatch(fetchCalendars(account.id));
     };
 
-    const handleAccountUpdated = (account: CalendarAccount) => {
-      dispatch(accountUpdated(account));
+    const handleAccountUpdated = (account: any) => {
+      dispatch(accountUpdated(account as CalendarAccount));
     };
 
     const handleAccountDeleted = (data: { accountId: string }) => {
@@ -64,12 +56,12 @@ export const useCalendarSync = () => {
     };
 
     // Event handlers
-    const handleEventCreated = (event: CalendarEvent) => {
-      dispatch(eventCreated(event));
+    const handleEventCreated = (event: any) => {
+      dispatch(eventCreated(event as CalendarEvent));
     };
 
-    const handleEventUpdated = (event: CalendarEvent) => {
-      dispatch(eventUpdated(event));
+    const handleEventUpdated = (event: any) => {
+      dispatch(eventUpdated(event as CalendarEvent));
     };
 
     const handleEventDeleted = (data: { calendarId: string; eventId: string }) => {

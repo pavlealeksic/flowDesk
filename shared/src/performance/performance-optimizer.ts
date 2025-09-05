@@ -563,8 +563,8 @@ export class PerformanceOptimizer {
           const nav = entry as PerformanceNavigationTiming;
           this.recordMetric('page_load', {
             TTFB: nav.responseStart - nav.requestStart,
-            loadTime: nav.loadEventEnd - nav.navigationStart,
-            domContentLoaded: nav.domContentLoadedEventEnd - nav.navigationStart
+            loadTime: nav.loadEventEnd - nav.fetchStart,
+            domContentLoaded: nav.domContentLoadedEventEnd - nav.fetchStart
           });
         }
       });
@@ -684,6 +684,19 @@ export class PerformanceOptimizer {
     this.config.preloading.prefetchResources.forEach(resource => {
       this.prefetchResource(resource);
     });
+  }
+
+  private async prefetchResource(url: string): Promise<void> {
+    try {
+      if (typeof document !== 'undefined') {
+        const link = document.createElement('link');
+        link.rel = 'prefetch';
+        link.href = url;
+        document.head.appendChild(link);
+      }
+    } catch (error) {
+      console.warn('Failed to prefetch resource:', url, error);
+    }
   }
 
   private async preloadResource(url: string): Promise<void> {

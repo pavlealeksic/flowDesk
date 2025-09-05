@@ -8,7 +8,30 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../store';
 import type { WorkspaceConfig } from '@flow-desk/shared/types';
-import type { ConfigSyncConflict, ConfigSyncDevice, ConfigBackup } from '../types/preload';
+// Define types locally since not available in preload
+interface ConfigSyncConflict {
+  id: string;
+  type: 'setting' | 'workspace' | 'account';
+  localValue: any;
+  remoteValue: any;
+  timestamp: number;
+}
+
+interface ConfigSyncDevice {
+  id: string;
+  name: string;
+  type: 'mobile' | 'desktop';
+  platform: string;
+  lastSync: Date;
+  isOnline: boolean;
+}
+
+interface ConfigBackup {
+  id: string;
+  timestamp: number;
+  size: number;
+  description?: string;
+}
 
 interface ConfigSyncState {
   initialized: boolean;
@@ -61,7 +84,12 @@ export function useConfigSync(): UseConfigSyncResult {
   useEffect(() => {
     const loadSyncStatus = async () => {
       try {
-        const status = await window.electronAPI.invoke('config-sync:get-status');
+        const status = await window.flowDesk.invoke('config-sync:get-status') as {
+          initialized: boolean;
+          autoSync: boolean;
+          lastSync: string | null;
+          syncInterval: number;
+        };
         setState(prev => ({
           ...prev,
           initialized: status.initialized,
@@ -96,7 +124,8 @@ export function useConfigSync(): UseConfigSyncResult {
       }));
     };
 
-    const handleSyncFailed = (error: string) => {
+    const handleSyncFailed = (...args: unknown[]) => {
+      const error = args[1] as string;
       setState(prev => ({
         ...prev,
         syncing: false,
@@ -104,64 +133,70 @@ export function useConfigSync(): UseConfigSyncResult {
       }));
     };
 
-    const handleAutoSyncChanged = (enabled: boolean) => {
+    const handleAutoSyncChanged = (...args: unknown[]) => {
+      const enabled = args[1] as boolean;
       setState(prev => ({ ...prev, autoSync: enabled }));
     };
 
-    const handleSyncIntervalChanged = (minutes: number) => {
+    const handleSyncIntervalChanged = (...args: unknown[]) => {
+      const minutes = args[1] as number;
       setState(prev => ({ ...prev, syncInterval: minutes }));
     };
 
-    const handleConfigUpdated = (config: WorkspaceConfig) => {
+    const handleConfigUpdated = (...args: unknown[]) => {
+      const config = args[1] as WorkspaceConfig;
       // Update Redux store with new config
       // This would integrate with your existing workspace slice
       dispatch({ type: 'workspace/configUpdated', payload: config });
     };
 
-    const handleConfigImported = (config: WorkspaceConfig) => {
+    const handleConfigImported = (...args: unknown[]) => {
+      const config = args[1] as WorkspaceConfig;
       dispatch({ type: 'workspace/configImported', payload: config });
     };
 
-    const handleDevicePaired = (device: any) => {
+    const handleDevicePaired = (...args: unknown[]) => {
+      const device = args[1] as ConfigSyncDevice;
       setState(prev => ({
         ...prev,
         discoveredDevices: [...prev.discoveredDevices, device],
       }));
     };
 
-    const handleError = (error: string) => {
+    const handleError = (...args: unknown[]) => {
+      const error = args[1] as string;
       setState(prev => ({ ...prev, error }));
     };
 
     // Register event listeners
-    window.electronAPI.on('config-sync:sync-started', handleSyncStarted);
-    window.electronAPI.on('config-sync:sync-completed', handleSyncCompleted);
-    window.electronAPI.on('config-sync:sync-failed', handleSyncFailed);
-    window.electronAPI.on('config-sync:auto-sync-changed', handleAutoSyncChanged);
-    window.electronAPI.on('config-sync:sync-interval-changed', handleSyncIntervalChanged);
-    window.electronAPI.on('config-sync:config-updated', handleConfigUpdated);
-    window.electronAPI.on('config-sync:config-imported', handleConfigImported);
-    window.electronAPI.on('config-sync:device-paired', handleDevicePaired);
-    window.electronAPI.on('config-sync:error', handleError);
+    window.flowDesk.on('config-sync:sync-started', handleSyncStarted);
+    window.flowDesk.on('config-sync:sync-completed', handleSyncCompleted);
+    window.flowDesk.on('config-sync:sync-failed', handleSyncFailed);
+    window.flowDesk.on('config-sync:auto-sync-changed', handleAutoSyncChanged);
+    window.flowDesk.on('config-sync:sync-interval-changed', handleSyncIntervalChanged);
+    window.flowDesk.on('config-sync:config-updated', handleConfigUpdated);
+    window.flowDesk.on('config-sync:config-imported', handleConfigImported);
+    window.flowDesk.on('config-sync:device-paired', handleDevicePaired);
+    window.flowDesk.on('config-sync:error', handleError);
 
     // Cleanup listeners
     return () => {
-      window.electronAPI.removeAllListeners('config-sync:sync-started');
-      window.electronAPI.removeAllListeners('config-sync:sync-completed');
-      window.electronAPI.removeAllListeners('config-sync:sync-failed');
-      window.electronAPI.removeAllListeners('config-sync:auto-sync-changed');
-      window.electronAPI.removeAllListeners('config-sync:sync-interval-changed');
-      window.electronAPI.removeAllListeners('config-sync:config-updated');
-      window.electronAPI.removeAllListeners('config-sync:config-imported');
-      window.electronAPI.removeAllListeners('config-sync:device-paired');
-      window.electronAPI.removeAllListeners('config-sync:error');
+      window.flowDesk.removeAllListeners('config-sync:sync-started');
+      window.flowDesk.removeAllListeners('config-sync:sync-completed');
+      window.flowDesk.removeAllListeners('config-sync:sync-failed');
+      window.flowDesk.removeAllListeners('config-sync:auto-sync-changed');
+      window.flowDesk.removeAllListeners('config-sync:sync-interval-changed');
+      window.flowDesk.removeAllListeners('config-sync:config-updated');
+      window.flowDesk.removeAllListeners('config-sync:config-imported');
+      window.flowDesk.removeAllListeners('config-sync:device-paired');
+      window.flowDesk.removeAllListeners('config-sync:error');
     };
   }, [dispatch]);
 
   // Actions
   const performSync = useCallback(async () => {
     try {
-      await window.electronAPI.invoke('config-sync:perform-sync');
+      await window.flowDesk.invoke('config-sync:perform-sync');
     } catch (error) {
       console.error('Sync failed:', error);
       setState(prev => ({
@@ -173,7 +208,7 @@ export function useConfigSync(): UseConfigSyncResult {
 
   const setAutoSync = useCallback(async (enabled: boolean) => {
     try {
-      await window.electronAPI.invoke('config-sync:set-auto-sync', enabled);
+      await window.flowDesk.invoke('config-sync:set-auto-sync', enabled);
     } catch (error) {
       console.error('Failed to set auto-sync:', error);
     }
@@ -181,7 +216,7 @@ export function useConfigSync(): UseConfigSyncResult {
 
   const setSyncInterval = useCallback(async (minutes: number) => {
     try {
-      await window.electronAPI.invoke('config-sync:set-sync-interval', minutes);
+      await window.flowDesk.invoke('config-sync:set-sync-interval', minutes);
     } catch (error) {
       console.error('Failed to set sync interval:', error);
     }
@@ -189,7 +224,7 @@ export function useConfigSync(): UseConfigSyncResult {
 
   const exportConfig = useCallback(async (): Promise<string | null> => {
     try {
-      return await window.electronAPI.invoke('config-sync:export-config');
+      return await window.flowDesk.invoke('config-sync:export-config');
     } catch (error) {
       console.error('Export failed:', error);
       setState(prev => ({
@@ -202,7 +237,7 @@ export function useConfigSync(): UseConfigSyncResult {
 
   const importConfig = useCallback(async (): Promise<WorkspaceConfig | null> => {
     try {
-      return await window.electronAPI.invoke('config-sync:import-config');
+      return await window.flowDesk.invoke('config-sync:import-config');
     } catch (error) {
       console.error('Import failed:', error);
       setState(prev => ({
@@ -215,7 +250,7 @@ export function useConfigSync(): UseConfigSyncResult {
 
   const generatePairingQR = useCallback(async (): Promise<string> => {
     try {
-      return await window.electronAPI.invoke('config-sync:generate-pairing-qr');
+      return await window.flowDesk.invoke('config-sync:generate-pairing-qr') as string;
     } catch (error) {
       console.error('Failed to generate pairing QR:', error);
       throw error;
@@ -224,7 +259,7 @@ export function useConfigSync(): UseConfigSyncResult {
 
   const pairWithDevice = useCallback(async (qrData: string) => {
     try {
-      return await window.electronAPI.invoke('config-sync:pair-with-device', qrData);
+      return await window.flowDesk.invoke('config-sync:pair-with-device', qrData) as { success: boolean; error?: string };
     } catch (error) {
       console.error('Device pairing failed:', error);
       setState(prev => ({
@@ -237,16 +272,16 @@ export function useConfigSync(): UseConfigSyncResult {
 
   const createBackup = useCallback(async (description?: string): Promise<string> => {
     try {
-      return await window.electronAPI.invoke('config-sync:create-backup', description);
+      return await window.flowDesk.invoke('config-sync:create-backup', description);
     } catch (error) {
       console.error('Backup creation failed:', error);
       throw error;
     }
   }, []);
 
-  const listBackups = useCallback(async () => {
+  const listBackups = useCallback(async (): Promise<ConfigBackup[]> => {
     try {
-      return await window.electronAPI.invoke('config-sync:list-backups');
+      return await window.flowDesk.invoke('config-sync:list-backups') as ConfigBackup[];
     } catch (error) {
       console.error('Failed to list backups:', error);
       return [];
@@ -255,7 +290,7 @@ export function useConfigSync(): UseConfigSyncResult {
 
   const restoreBackup = useCallback(async (backupId: string) => {
     try {
-      await window.electronAPI.invoke('config-sync:restore-backup', backupId);
+      await window.flowDesk.invoke('config-sync:restore-backup', backupId);
     } catch (error) {
       console.error('Backup restore failed:', error);
       setState(prev => ({
@@ -268,7 +303,7 @@ export function useConfigSync(): UseConfigSyncResult {
 
   const refreshDiscoveredDevices = useCallback(async () => {
     try {
-      const devices = await window.electronAPI.invoke('config-sync:get-discovered-devices');
+      const devices = await window.flowDesk.invoke('config-sync:get-discovered-devices') as ConfigSyncDevice[];
       setState(prev => ({ ...prev, discoveredDevices: devices }));
     } catch (error) {
       console.error('Failed to refresh discovered devices:', error);

@@ -12,7 +12,7 @@ export interface EmailTemplate {
   updatedAt: Date
   usageCount: number
   accountId?: string
-  tags?: string[]
+  tags: string[]
   isPublic?: boolean
 }
 

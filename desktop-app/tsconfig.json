@@ -8,7 +8,9 @@
     "paths": {
       "@/*": ["src/*"],
       "@flow-desk/shared/*": ["../shared/src/*"],
-      "@flow-desk/shared": ["../shared/src/index"]
+      "@flow-desk/shared": ["../shared/src/index"],
+      "*/preload": ["src/types/preload.d.ts"],
+      "*/preload.d": ["src/types/preload.d.ts"]
     },
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
@@ -26,6 +28,8 @@
   "include": [
     "src/renderer/**/*",
     "src/types/**/*",
+    "src/types/preload.d.ts",
+    "src/preload/**/*",
     "../shared/src/**/*"
   ],
   "types": [
@@ -45,6 +49,8 @@
     "src/main/plugin-runtime/**/*",
     "src/main/providers/**/*",
     "src/main/**/test*",
-    "src/renderer/components/calendar/CalendarNotificationCenter.tsx"
+    "src/renderer/components/calendar/CalendarNotificationCenter.tsx",
+    "src/preload/preload-simple.ts",
+    "src/preload/preload-working.ts"
   ]
 }
