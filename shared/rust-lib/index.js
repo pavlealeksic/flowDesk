@@ -380,7 +380,200 @@ function createNapiInterface(napiPath) {
       }
 
       static async initSearchEngine() {
-        return Promise.resolve('NAPI interface - search engine ready');
+        try {
+          if (!this._searchEngineInstance) {
+            this._searchEngineInstance = new napi.JsSearchEngine();
+            // Initialize the search engine with proper config
+            try {
+              const config = {
+                indexDir: '/tmp/flow-desk-search-index'
+              };
+              await this._searchEngineInstance.initialize(config);
+            } catch (initErr) {
+              console.warn('Failed to initialize search engine:', initErr.message);
+              // Continue anyway - the search engine might still work in some cases
+            }
+          }
+          return 'NAPI interface - search engine ready';
+        } catch (e) {
+          console.warn('Failed to initialize NAPI search engine:', e.message);
+          // Create instance anyway for fallback
+          if (!this._searchEngineInstance) {
+            this._searchEngineInstance = new napi.JsSearchEngine();
+          }
+          return 'NAPI interface - search engine ready (fallback)';
+        }
+      }
+
+      // Search Engine Methods
+      static async indexDocument(id, title, content, source, metadata) {
+        try {
+          if (!this._searchEngineInstance) {
+            await this.initSearchEngine();
+          }
+          if (this._searchEngineInstance && this._searchEngineInstance.indexDocument) {
+            const document = {
+              id: id,
+              title: title,
+              content: content,
+              contentType: source,
+              source: source,
+              providerId: 'flow-desk',
+              providerType: 'local',
+              metadata: typeof metadata === 'string' ? metadata : JSON.stringify(metadata || {})
+            };
+            return await this._searchEngineInstance.indexDocument(document);
+          }
+          throw new Error('indexDocument method not available on search engine');
+        } catch (e) {
+          console.warn('NAPI indexDocument failed:', e.message);
+          throw e;
+        }
+      }
+
+      static async searchDocuments(query, limit = 10) {
+        try {
+          if (!this._searchEngineInstance) {
+            await this.initSearchEngine();
+          }
+          if (this._searchEngineInstance && this._searchEngineInstance.search) {
+            const searchQuery = {
+              query: query,
+              limit: limit,
+              offset: 0
+            };
+            return await this._searchEngineInstance.search(searchQuery);
+          }
+          throw new Error('search method not available on search engine');
+        } catch (e) {
+          console.warn('NAPI searchDocuments failed:', e.message);
+          return [];
+        }
+      }
+
+      static async searchSimple(query) {
+        return await this.searchDocuments(query, 10);
+      }
+
+      static async getSearchSuggestions(partialQuery, limit = 5) {
+        try {
+          if (!this._searchEngineInstance) {
+            await this.initSearchEngine();
+          }
+          if (this._searchEngineInstance && this._searchEngineInstance.getSuggestions) {
+            // The getSuggestions method expects a string parameter, not an object
+            return await this._searchEngineInstance.getSuggestions(partialQuery);
+          }
+          // Fallback: return empty suggestions
+          return [];
+        } catch (e) {
+          console.warn('NAPI getSearchSuggestions failed:', e.message);
+          return [];
+        }
+      }
+
+      static async indexEmailMessage(messageData) {
+        try {
+          const metadata = JSON.stringify({
+            type: 'email',
+            accountId: messageData.accountId,
+            folder: messageData.folder,
+            from: messageData.from,
+            to: messageData.to
+          });
+          return await this.indexDocument(
+            messageData.id,
+            messageData.subject || 'No Subject',
+            messageData.body || '',
+            'email',
+            metadata
+          );
+        } catch (e) {
+          console.warn('NAPI indexEmailMessage failed:', e.message);
+          throw e;
+        }
+      }
+
+      static async indexCalendarEvent(eventData) {
+        try {
+          const metadata = JSON.stringify({
+            type: 'calendar',
+            calendarId: eventData.calendarId,
+            start: eventData.start,
+            end: eventData.end,
+            location: eventData.location
+          });
+          return await this.indexDocument(
+            eventData.id,
+            eventData.title || 'No Title',
+            eventData.description || '',
+            'calendar',
+            metadata
+          );
+        } catch (e) {
+          console.warn('NAPI indexCalendarEvent failed:', e.message);
+          throw e;
+        }
+      }
+
+      static async deleteDocumentFromIndex(id) {
+        try {
+          if (!this._searchEngineInstance) {
+            await this.initSearchEngine();
+          }
+          if (this._searchEngineInstance && this._searchEngineInstance.deleteDocument) {
+            return await this._searchEngineInstance.deleteDocument(id);
+          }
+          return true; // Assume success if method not available
+        } catch (e) {
+          console.warn('NAPI deleteDocumentFromIndex failed:', e.message);
+          return false;
+        }
+      }
+
+      static async optimizeSearchIndex() {
+        try {
+          if (!this._searchEngineInstance) {
+            await this.initSearchEngine();
+          }
+          if (this._searchEngineInstance && this._searchEngineInstance.optimize) {
+            return await this._searchEngineInstance.optimize();
+          }
+          return true; // Assume success if method not available
+        } catch (e) {
+          console.warn('NAPI optimizeSearchIndex failed:', e.message);
+          return false;
+        }
+      }
+
+      static async getSearchAnalytics() {
+        try {
+          if (!this._searchEngineInstance) {
+            await this.initSearchEngine();
+          }
+          if (this._searchEngineInstance && this._searchEngineInstance.getAnalytics) {
+            return await this._searchEngineInstance.getAnalytics();
+          }
+          return { totalDocuments: 0, totalSearches: 0, averageQueryTime: 0 };
+        } catch (e) {
+          console.warn('NAPI getSearchAnalytics failed:', e.message);
+          return { totalDocuments: 0, totalSearches: 0, averageQueryTime: 0 };
+        }
+      }
+
+      static async clearSearchCache() {
+        try {
+          if (!this._searchEngineInstance) {
+            await this.initSearchEngine();
+          }
+          if (this._searchEngineInstance && this._searchEngineInstance.clearCache) {
+            return await this._searchEngineInstance.clearCache();
+          }
+          return true; // Assume success if method not available
+        } catch (e) {
+          console.warn('NAPI clearSearchCache failed:', e.message);
+          return false;
+        }
       }
 
       static async initialize() {

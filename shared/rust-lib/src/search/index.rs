@@ -88,29 +88,114 @@ impl Default for IndexStats {
 }
 
 impl IndexManager {
+    /// Validate if a directory contains a valid Tantivy index
+    async fn validate_index_directory(path: &Path) -> bool {
+        // Check for essential Tantivy index files
+        let meta_path = path.join("meta.json");
+        let managed_path = path.join(".managed.json");
+        
+        // At minimum, we need meta.json to exist for a valid index
+        tokio::fs::metadata(&meta_path).await.is_ok()
+    }
+    
+    /// Clean up and recreate index directory
+    async fn recreate_index_directory(path: &Path) -> SearchResultType<()> {
+        if path.exists() {
+            if let Err(e) = tokio::fs::remove_dir_all(path).await {
+                warn!("Failed to clean up index directory: {}", e);
+                // Try to continue anyway
+            }
+        }
+        
+        tokio::fs::create_dir_all(path).await
+            .map_err(|e| SearchError::index_error(format!(
+                "Failed to create index directory at {:?}: {}", path, e
+            )))?;
+            
+        Ok(())
+    }
     /// Create a new index manager
     #[instrument(skip(index_dir))]
     pub async fn new(index_dir: &Path, max_memory_mb: u64) -> SearchResultType<Self> {
         info!("Initializing index manager at: {:?}", index_dir);
         
-        // Ensure index directory exists
-        tokio::fs::create_dir_all(index_dir).await?;
+        // Validate and normalize the index directory path
+        let index_path = index_dir.canonicalize().unwrap_or_else(|_| {
+            // If canonicalize fails, use the path as-is
+            index_dir.to_path_buf()
+        });
+        
+        // Ensure index directory exists with proper permissions
+        if let Err(e) = tokio::fs::create_dir_all(&index_path).await {
+            error!("Failed to create index directory: {}", e);
+            return Err(SearchError::index_error(format!(
+                "Cannot create index directory at {:?}: {}", index_path, e
+            )));
+        }
+        
+        // Validate if existing index is present and valid
+        let has_valid_index = Self::validate_index_directory(&index_path).await;
+        
+        if has_valid_index {
+            debug!("Valid index found in directory, attempting to open existing index");
+        } else {
+            debug!("No valid index found, will create new index");
+        }
         
         // Build schema
         let schema = Self::build_schema();
         let fields = Self::extract_fields(&schema);
         
-        // Create or open index
-        let main_index = match Index::open_in_dir(index_dir) {
-            Ok(index) => {
-                info!("Opened existing search index");
-                index
+        // Create or open index with robust error handling
+        let main_index = if !has_valid_index {
+            // No valid index found, create new one
+            info!("Creating new search index");
+            Self::recreate_index_directory(&index_path).await?;
+            Index::create_in_dir(&index_path, schema.clone())?
+        } else {
+            // Valid index directory found, try to open existing index
+            match Index::open_in_dir(&index_path) {
+                Ok(index) => {
+                    info!("Successfully opened existing search index");
+                    index
+                }
+                Err(TantivyError::OpenDirectoryError(_)) => {
+                    warn!("Directory error opening index, creating new one");
+                    Self::recreate_index_directory(&index_path).await?;
+                    Index::create_in_dir(&index_path, schema.clone())?
+                }
+                Err(ref e) if e.to_string().contains("meta.json") || e.to_string().contains("FileDoesNotExist") => {
+                    warn!("Index file missing ({}), creating new index", e);
+                    Self::recreate_index_directory(&index_path).await?;
+                    Index::create_in_dir(&index_path, schema.clone())?
+                }
+                Err(TantivyError::IoError(ref io_err)) if io_err.kind() == std::io::ErrorKind::NotFound => {
+                    info!("Index files not found, creating new index");
+                    Self::recreate_index_directory(&index_path).await?;
+                    Index::create_in_dir(&index_path, schema.clone())?
+                }
+                Err(e) => {
+                    error!("Failed to open search index: {}", e);
+                    warn!("Attempting to create new index as fallback");
+                    
+                    // Clean up and try to create a fresh index
+                    Self::recreate_index_directory(&index_path).await?;
+                    
+                    match Index::create_in_dir(&index_path, schema.clone()) {
+                        Ok(index) => {
+                            info!("Successfully created new index after error recovery");
+                            index
+                        }
+                        Err(create_err) => {
+                            error!("Failed to create fallback index: {}", create_err);
+                            return Err(SearchError::index_error(format!(
+                                "Failed to open existing index ({}) and failed to create new index ({})", 
+                                e, create_err
+                            )));
+                        }
+                    }
+                }
             }
-            Err(TantivyError::OpenDirectoryError(_)) => {
-                info!("Creating new search index");
-                Index::create_in_dir(index_dir, schema.clone())?
-            }
-            Err(e) => return Err(SearchError::from(e)),
         };
         
         // Create index writer with memory budget
@@ -124,7 +209,7 @@ impl IndexManager {
             .try_into()?;
         
         let manager = Self {
-            index_dir: index_dir.to_path_buf(),
+            index_dir: index_path.clone(),
             main_index: Arc::new(main_index),
             schema,
             fields,
@@ -141,7 +226,22 @@ impl IndexManager {
         // Update initial stats
         manager.update_stats().await?;
         
-        info!("Index manager initialized successfully");
+        // Log initialization success and status
+        info!(
+            "Index manager initialized successfully at {:?} with {} MB memory budget", 
+            manager.index_dir, 
+            max_memory_mb
+        );
+        
+        // Log index statistics for debugging
+        if let Ok(stats) = manager.get_stats().await {
+            info!(
+                "Index initialized with {} documents across {} segments", 
+                stats.total_documents, 
+                stats.segments_count
+            );
+        }
+        
         Ok(manager)
     }
     

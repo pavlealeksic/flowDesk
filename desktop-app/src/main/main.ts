@@ -469,7 +469,7 @@ class FlowDeskApp {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        preload: join(__dirname, '../../../dist/preload/preload.js'),
+        preload: join(__dirname, '../preload/preload.js'),
         webSecurity: true,
         experimentalFeatures: false,
         offscreen: false,
@@ -1432,38 +1432,6 @@ class FlowDeskApp {
       return this.emailRulesEngine ? await this.emailRulesEngine.getRuleStats() : null;
     });
 
-    // Text snippet handlers
-    ipcMain.handle('snippets:get-all', async () => {
-      return this.snippetManager ? await this.snippetManager.getAllSnippets() : [];
-    });
-
-    ipcMain.handle('snippets:get-by-category', async (_, category: string) => {
-      return this.snippetManager ? await this.snippetManager.getSnippetsByCategory(category) : [];
-    });
-
-    ipcMain.handle('snippets:save', async (_, snippet: TextSnippet) => {
-      return this.snippetManager ? await this.snippetManager.saveSnippet(snippet) : null;
-    });
-
-    ipcMain.handle('snippets:update', async (_, snippetId: string, updates: Partial<TextSnippet>) => {
-      return this.snippetManager ? await this.snippetManager.updateSnippet(snippetId, updates) : false;
-    });
-
-    ipcMain.handle('snippets:delete', async (_, snippetId: string) => {
-      return this.snippetManager ? await this.snippetManager.deleteSnippet(snippetId) : false;
-    });
-
-    ipcMain.handle('snippets:use', async (_, snippetId: string) => {
-      return this.snippetManager ? await this.snippetManager.useSnippet(snippetId) : null;
-    });
-
-    ipcMain.handle('snippets:search', async (_, query: string) => {
-      return this.snippetManager ? await this.snippetManager.searchSnippets(query) : [];
-    });
-
-    ipcMain.handle('snippets:get-by-shortcut', async (_, shortcut: string) => {
-      return this.snippetManager ? await this.snippetManager.getSnippetsByShortcut(shortcut) : null;
-    });
 
     // Additional workspace handlers for Redux slice compatibility
     ipcMain.handle('workspace:create-full', async (_, workspaceData: CreateWorkspaceData) => {
