@@ -323,6 +323,11 @@ export interface FlowDeskAPI {
     removeService(workspaceId: string, serviceId: string): Promise<void>;
     loadService(workspaceId: string, serviceId: string): Promise<void>;
     
+    // BrowserView visibility management for proper z-index layering
+    hideBrowserViews(): Promise<void>;
+    showBrowserViews(): Promise<void>;
+    areBrowserViewsHidden(): Promise<boolean>;
+    
     getPredefinedServices(): Promise<Record<string, { name: string; url: string; type: string }>>;
   };
 

@@ -506,6 +506,20 @@ class FlowDeskApp {
       this.resizeBrowserViews();
     });
 
+    // Handle window maximize/unmaximize for browser views
+    this.mainWindow.on('maximize', () => {
+      this.resizeBrowserViews();
+    });
+
+    this.mainWindow.on('unmaximize', () => {
+      this.resizeBrowserViews();
+    });
+
+    // Handle window restore from minimize
+    this.mainWindow.on('restore', () => {
+      this.resizeBrowserViews();
+    });
+
     log.info('Flow Desk main window created');
   }
 
@@ -1096,6 +1110,17 @@ class FlowDeskApp {
 
     ipcMain.handle('workspace:close-service', async (_, workspaceId: string, serviceId: string) => {
       return await this.workspaceManager.closeService(workspaceId, serviceId);
+    });
+
+    // BrowserView visibility management for proper z-index layering
+    ipcMain.handle('workspace:hide-browser-views', () => {
+      this.workspaceManager.hideBrowserViews();
+    });
+    ipcMain.handle('workspace:show-browser-views', () => {
+      this.workspaceManager.showBrowserViews();
+    });
+    ipcMain.handle('workspace:are-browser-views-hidden', () => {
+      return this.workspaceManager.areBrowserViewsHidden();
     });
 
     // Mail attachment handlers
@@ -3670,16 +3695,8 @@ class FlowDeskApp {
   private resizeBrowserViews() {
     if (!this.mainWindow) return;
 
-    const browserView = this.mainWindow.getBrowserView();
-    if (browserView) {
-      const bounds = this.mainWindow.getBounds();
-      browserView.setBounds({
-        x: 300, // After sidebars
-        y: 0,
-        width: bounds.width - 300,
-        height: bounds.height
-      });
-    }
+    // Use workspace manager to update all browser view bounds properly
+    this.workspaceManager.updateBrowserViewBounds(this.mainWindow);
   }
 
   // Workspace Window Management Utility Methods

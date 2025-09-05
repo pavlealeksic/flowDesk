@@ -4,6 +4,8 @@ import { X, AlertTriangle, CheckCircle, Info, HelpCircle } from 'lucide-react'
 import { cn } from './utils'
 import { Button } from './Button'
 import { useFocusTrap, useFocusRestore, useScreenReader, useHighContrast, useReducedMotion, useEnhancedFocus } from '../../hooks/useAccessibility'
+import { getZIndexClass } from '../../constants/zIndex'
+import { useBlockingOverlay } from '../../hooks/useBrowserViewVisibility'
 
 export interface ModalProps {
   isOpen: boolean
@@ -64,8 +66,15 @@ const Modal = forwardRef<HTMLDivElement, ModalProps>(
     const { prefersReducedMotion, getAnimationClass } = useReducedMotion()
     const { getFocusClasses } = useEnhancedFocus()
 
-    // Generate unique IDs for accessibility
+    // Generate unique IDs for accessibility and BrowserView management
     const modalId = `modal-${Math.random().toString(36).substr(2, 9)}`
+    
+    // Block BrowserViews when modal is open
+    useBlockingOverlay(
+      modalId,
+      isOpen,
+      role === 'alertdialog' ? 'ALERT_MODAL' : 'MODAL'
+    )
     const titleId = title ? `${modalId}-title` : ariaLabelledby
     const descriptionId = description ? `${modalId}-description` : ariaDescribedby
 
@@ -229,7 +238,8 @@ const Modal = forwardRef<HTMLDivElement, ModalProps>(
       <div
         ref={overlayRef}
         className={cn(
-          'fixed inset-0 z-50 flex items-center justify-center p-4',
+          'fixed inset-0 flex items-center justify-center p-4',
+          getZIndexClass('MODAL_BACKDROP'),
           'bg-black/50 backdrop-blur-sm',
           getAnimationClass('animate-fade-in', ''),
           overlayClassName
@@ -250,6 +260,7 @@ const Modal = forwardRef<HTMLDivElement, ModalProps>(
           className={cn(
             'relative w-full bg-background rounded-lg border shadow-lg',
             'focus:outline-none',
+            getZIndexClass(role === 'alertdialog' ? 'ALERT_MODAL' : 'MODAL'),
             getSizeClasses(),
             getVariantClasses(),
             getContrastClass('', 'high-contrast-modal'),

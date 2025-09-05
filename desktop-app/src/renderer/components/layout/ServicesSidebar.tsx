@@ -253,7 +253,7 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
                 <Button
                   variant={activeServiceId === service.id ? 'primary' : 'ghost'}
                   className={cn(
-                    'w-full justify-start h-10 px-3',
+                    'w-full justify-start items-center h-10 px-3 gap-3',
                     'hover:bg-accent hover:text-accent-foreground',
                     activeServiceId === service.id && 'bg-primary text-primary-foreground'
                   )}
@@ -265,27 +265,31 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
                   }}
                   disabled={!service.isEnabled}
                 >
-                <img 
-                  src={getServiceIcon(service.type)} 
-                  alt={service.name}
-                  className="w-4 h-4 mr-3 object-contain"
-                  onError={(e) => {
-                    // Fallback to first letter if icon fails
-                    const target = e.currentTarget;
-                    target.style.display = 'none';
-                    const parent = target.parentElement;
-                    if (parent) {
-                      const fallback = document.createElement('div');
-                      fallback.className = 'w-4 h-4 mr-3 bg-primary/20 rounded flex items-center justify-center text-xs font-bold';
-                      fallback.textContent = service.name[0].toUpperCase();
-                      parent.insertBefore(fallback, target.nextSibling);
-                    }
-                  }}
-                />
-                <span className="text-sm font-medium truncate">{service.name}</span>
-                {!service.isEnabled && (
-                  <span className="ml-auto w-2 h-2 bg-gray-400 rounded-full" />
-                )}
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <img 
+                      src={getServiceIcon(service.type)} 
+                      alt={service.name}
+                      className="w-4 h-4 flex-shrink-0 object-contain"
+                      onError={(e) => {
+                        // Fallback to first letter if icon fails
+                        const target = e.currentTarget;
+                        target.style.display = 'none';
+                        const parent = target.parentElement;
+                        if (parent) {
+                          const fallback = document.createElement('div');
+                          fallback.className = 'w-4 h-4 flex-shrink-0 bg-primary/20 rounded flex items-center justify-center text-xs font-bold';
+                          fallback.textContent = service.name[0].toUpperCase();
+                          parent.insertBefore(fallback, target.nextSibling);
+                        }
+                      }}
+                    />
+                    <span className="text-sm font-medium truncate min-w-0 flex-1">{service.name}</span>
+                  </div>
+                  {!service.isEnabled && (
+                    <div className="flex-shrink-0">
+                      <span className="w-2 h-2 bg-gray-400 rounded-full block" />
+                    </div>
+                  )}
                 </Button>
                 
                 {/* Service Context Menu */}

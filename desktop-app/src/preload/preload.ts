@@ -68,6 +68,11 @@ interface FlowDeskAPI {
     loadService(workspaceId: string, serviceId: string): Promise<void>;
     closeService(workspaceId: string, serviceId: string): Promise<void>;
     
+    // BrowserView visibility management for proper z-index layering
+    hideBrowserViews(): Promise<void>;
+    showBrowserViews(): Promise<void>;
+    areBrowserViewsHidden(): Promise<boolean>;
+    
     // Utility methods
     getPredefinedServices(): Promise<Record<string, { name: string; url: string; type: string }>>;
   };
@@ -379,6 +384,11 @@ const flowDeskAPI: FlowDeskAPI = {
       ipcRenderer.invoke('workspace:load-service', workspaceId, serviceId),
     closeService: (workspaceId: string, serviceId: string) => 
       ipcRenderer.invoke('workspace:close-service', workspaceId, serviceId),
+    
+    // BrowserView visibility management for proper z-index layering
+    hideBrowserViews: () => ipcRenderer.invoke('workspace:hide-browser-views'),
+    showBrowserViews: () => ipcRenderer.invoke('workspace:show-browser-views'),
+    areBrowserViewsHidden: () => ipcRenderer.invoke('workspace:are-browser-views-hidden'),
     
     // Utility methods
     getPredefinedServices: () => ipcRenderer.invoke('workspace:get-predefined-services'),

@@ -6,6 +6,7 @@ import { EventEmitter } from 'events';
 import { BrowserWindow, BrowserView, session, shell } from 'electron';
 import log from 'electron-log';
 import { rustEngineIntegration } from '../lib/rust-integration/rust-engine-integration';
+import { LAYOUT_CONSTANTS } from './constants/layout';
 
 export interface WebviewOptions {
   partition?: string;
@@ -74,6 +75,7 @@ export class WorkspaceManager extends EventEmitter {
   private initialized: boolean = false;
   private browserViews: Map<string, BrowserView> = new Map();
   private workspaceSessions: Map<string, Electron.Session> = new Map();
+  private browserViewsHidden: boolean = false;
 
   constructor() {
     super();
@@ -403,7 +405,22 @@ export class WorkspaceManager extends EventEmitter {
     }
   }
 
-  getPredefinedServices(): WorkspaceService[] {
+  getPredefinedServices(): Record<string, { name: string; url: string; type: string }> {
+    const services = this.getPredefinedServicesList();
+    const result: Record<string, { name: string; url: string; type: string }> = {};
+    
+    services.forEach(service => {
+      result[service.id] = {
+        name: service.name,
+        url: service.url,
+        type: service.type
+      };
+    });
+    
+    return result;
+  }
+
+  private getPredefinedServicesList(): WorkspaceService[] {
     return [
       // Task Management & Project Management
       { id: 'asana-template', name: 'Asana', type: 'browser-service', url: 'https://app.asana.com', icon: 'asana-icon', color: '#f06a6a', isEnabled: false, config: { integration: 'browser', webviewOptions: { partition: 'persist:asana', allowExternalUrls: true } } },
@@ -617,14 +634,22 @@ export class WorkspaceManager extends EventEmitter {
   }
 
   private configureBrowserViewBounds(browserView: BrowserView, mainWindow: BrowserWindow): void {
-    const bounds = mainWindow.getBounds();
-    const sidebarWidth = 280; // Standard sidebar width
+    const contentBounds = mainWindow.getContentBounds();
     
-    browserView.setBounds({
-      x: sidebarWidth,
-      y: 0,
-      width: bounds.width - sidebarWidth,
-      height: bounds.height
+    // Calculate main content area bounds (after sidebar) using layout constants
+    const mainContentArea = {
+      x: LAYOUT_CONSTANTS.BROWSER_VIEW_OFFSET_X,
+      y: LAYOUT_CONSTANTS.BROWSER_VIEW_OFFSET_Y,
+      width: Math.max(0, contentBounds.width - LAYOUT_CONSTANTS.SIDEBAR_WIDTH),
+      height: Math.max(0, contentBounds.height - LAYOUT_CONSTANTS.TOP_BAR_HEIGHT)
+    };
+    
+    browserView.setBounds(mainContentArea);
+    
+    log.debug(`Configured BrowserView bounds:`, {
+      contentBounds,
+      layoutConstants: LAYOUT_CONSTANTS,
+      calculatedBounds: mainContentArea
     });
   }
 
@@ -643,9 +668,102 @@ export class WorkspaceManager extends EventEmitter {
     }
   }
 
+  /**
+   * Hide all active browser views in the current workspace
+   */
+  async hideBrowserViews(): Promise<void> {
+    if (this.browserViewsHidden) {
+      return; // Already hidden
+    }
+
+    try {
+      const browserViewEntries = Array.from(this.browserViews.entries());
+      for (const [key, browserView] of browserViewEntries) {
+        try {
+          // Hide the browser view by setting visibility to false
+          browserView.webContents.setVisualZoomLevelLimits(1, 1);
+          browserView.setBounds({ x: -10000, y: -10000, width: 1, height: 1 });
+          log.debug(`Hidden browser view: ${key}`);
+        } catch (error) {
+          log.warn(`Error hiding browser view ${key}:`, error);
+        }
+      }
+      
+      this.browserViewsHidden = true;
+      this.emit('browser-views-hidden');
+      log.info('All browser views have been hidden');
+    } catch (error) {
+      log.error('Error hiding browser views:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Show previously hidden browser views in the current workspace
+   */
+  async showBrowserViews(): Promise<void> {
+    if (!this.browserViewsHidden) {
+      return; // Already visible
+    }
+
+    try {
+      // Find the main window to restore proper bounds
+      const { BrowserWindow } = require('electron');
+      const mainWindow = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+      
+      if (!mainWindow) {
+        log.warn('No main window found to restore browser view bounds');
+        return;
+      }
+
+      // Mark as not hidden first, then update bounds
+      this.browserViewsHidden = false;
+      
+      // Use the centralized method to restore bounds for all browser views
+      this.updateBrowserViewBounds(mainWindow);
+      
+      this.emit('browser-views-shown');
+      log.info('All browser views have been restored');
+    } catch (error) {
+      log.error('Error showing browser views:', error);
+      // Revert hidden state if restore failed
+      this.browserViewsHidden = true;
+      throw error;
+    }
+  }
+
+  /**
+   * Check if browser views are currently hidden
+   * @returns true if browser views are hidden, false otherwise
+   */
+  areBrowserViewsHidden(): boolean {
+    return this.browserViewsHidden;
+  }
+
+  /**
+   * Update bounds for all browser views when window resizes
+   * @param mainWindow The main window to get bounds from
+   */
+  updateBrowserViewBounds(mainWindow: BrowserWindow): void {
+    if (this.browserViewsHidden) {
+      return; // Don't update bounds if views are hidden
+    }
+
+    const browserViewEntries = Array.from(this.browserViews.entries());
+    for (const [key, browserView] of browserViewEntries) {
+      try {
+        this.configureBrowserViewBounds(browserView, mainWindow);
+        log.debug(`Updated bounds for browser view: ${key}`);
+      } catch (error) {
+        log.warn(`Error updating bounds for browser view ${key}:`, error);
+      }
+    }
+  }
+
   async cleanup(): Promise<void> {
     // Close all browser views
-    for (const [key, browserView] of this.browserViews.entries()) {
+    const browserViewEntries = Array.from(this.browserViews.entries());
+    for (const [key, browserView] of browserViewEntries) {
       try {
         browserView.webContents.close();
       } catch (error) {
@@ -658,7 +776,8 @@ export class WorkspaceManager extends EventEmitter {
     this.workspaceSessions.clear();
 
     // Save workspace data
-    for (const workspace of this.workspaces.values()) {
+    const workspaces = Array.from(this.workspaces.values());
+    for (const workspace of workspaces) {
       await this.saveWorkspace(workspace);
     }
     

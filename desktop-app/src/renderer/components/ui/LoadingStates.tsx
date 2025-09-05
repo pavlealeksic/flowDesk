@@ -2,6 +2,7 @@ import React from 'react'
 import { motion } from 'framer-motion'
 import { Loader2, RefreshCw, AlertCircle, CheckCircle, Clock } from 'lucide-react'
 import { cn } from './utils'
+import { getZIndexClass } from '../../constants/zIndex'
 
 interface LoadingSpinnerProps {
   size?: 'sm' | 'md' | 'lg'
@@ -141,7 +142,8 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className={cn(
-        'fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center',
+        'fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center',
+        getZIndexClass('LOADING_OVERLAY'),
         className
       )}
     >

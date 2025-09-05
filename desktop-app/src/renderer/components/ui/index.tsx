@@ -9,6 +9,7 @@ export * from './ResizablePanel'
 export * from './Badge'
 export * from './Label'
 export * from './Modal'
+export * from './ServiceIcon'
 
 // Export compound select components that match expected API
 export { 

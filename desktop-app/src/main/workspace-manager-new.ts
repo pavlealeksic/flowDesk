@@ -59,6 +59,8 @@ export class WorkspaceManager {
   private sessions: Map<string, Electron.Session> = new Map();
   private workspaces: Map<string, Workspace> = new Map();
   private activeWorkspaceId?: string;
+  private mainWindow?: BrowserWindow;
+  private browserViewsHidden: boolean = false;
 
   constructor() {
     this.store = new Store<WorkspaceStore>({
@@ -296,17 +298,22 @@ export class WorkspaceManager {
       this.browserViews.set(serviceId, browserView);
     }
 
-    // Attach to main window
-    mainWindow.setBrowserView(browserView);
+    // Store main window reference
+    this.mainWindow = mainWindow;
     
-    // Position the browser view (will be managed by UI)
-    const bounds = mainWindow.getBounds();
-    browserView.setBounds({
-      x: 300, // After sidebars
-      y: 0,
-      width: bounds.width - 300,
-      height: bounds.height
-    });
+    // Attach to main window only if BrowserViews are not hidden
+    if (!this.browserViewsHidden) {
+      mainWindow.setBrowserView(browserView);
+      
+      // Position the browser view (will be managed by UI)
+      const bounds = mainWindow.getBounds();
+      browserView.setBounds({
+        x: 300, // After sidebars
+        y: 0,
+        width: bounds.width - 300,
+        height: bounds.height
+      });
+    }
 
     // Load the service URL
     await browserView.webContents.loadURL(service.url);
@@ -332,6 +339,66 @@ export class WorkspaceManager {
   }
 
   /**
+   * Hide all BrowserViews (for modal overlays)
+   */
+  hideBrowserViews(): void {
+    if (this.browserViewsHidden) return;
+    
+    try {
+      if (this.mainWindow) {
+        const currentView = this.mainWindow.getBrowserView();
+        if (currentView) {
+          this.mainWindow.setBrowserView(null);
+          log.debug('BrowserViews hidden for modal overlay');
+        }
+      }
+      this.browserViewsHidden = true;
+    } catch (error) {
+      log.warn('Error hiding browser views:', error);
+    }
+  }
+
+  /**
+   * Show BrowserViews (when modals close)
+   */
+  showBrowserViews(): void {
+    if (!this.browserViewsHidden) return;
+    
+    try {
+      if (this.mainWindow && this.browserViews.size > 0) {
+        // Find the currently active service's BrowserView
+        // For now, we'll show the first available one
+        // TODO: Implement proper active service tracking
+        const firstBrowserView = this.browserViews.values().next().value;
+        if (firstBrowserView) {
+          this.mainWindow.setBrowserView(firstBrowserView);
+          
+          // Reposition the browser view
+          const bounds = this.mainWindow.getBounds();
+          firstBrowserView.setBounds({
+            x: 300, // After sidebars
+            y: 0,
+            width: bounds.width - 300,
+            height: bounds.height
+          });
+          
+          log.debug('BrowserViews shown after modal close');
+        }
+      }
+      this.browserViewsHidden = false;
+    } catch (error) {
+      log.warn('Error showing browser views:', error);
+    }
+  }
+
+  /**
+   * Check if BrowserViews are currently hidden
+   */
+  areBrowserViewsHidden(): boolean {
+    return this.browserViewsHidden;
+  }
+
+  /**
    * Cleanup resources
    */
   async cleanup(): Promise<void> {
@@ -346,6 +413,7 @@ export class WorkspaceManager {
 
     this.browserViews.clear();
     this.sessions.clear();
+    this.mainWindow = undefined;
     
     log.info('Workspace manager cleanup completed');
   }

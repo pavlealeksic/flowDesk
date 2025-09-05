@@ -8,7 +8,7 @@ export default defineConfig({
     'src/utils/index.ts',
   ],
   format: ['cjs', 'esm'],
-  dts: false, // Disable DTS generation for now
+  dts: false, // Temporarily disabled due to automation types conflict
   splitting: false,
   sourcemap: true,
   clean: true,

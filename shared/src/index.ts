@@ -8,6 +8,7 @@
 export * from './types'
 // export * from './crypto' // Temporarily disabled due to TypeScript compatibility issues
 export * from './utils'
+export * from './config/service-icons.js'
 
 // Version information
 export const VERSION = '0.1.0'

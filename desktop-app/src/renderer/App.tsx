@@ -20,6 +20,8 @@ import { KeyboardShortcutManager, commonShortcuts, useKeyboardShortcuts } from '
 import { LoadingOverlay } from './components/ui/LoadingStates'
 import { AdvancedSearchInterface } from './components/search/AdvancedSearchInterface'
 import type { SearchResult, SearchFilters } from './components/search/AdvancedSearchInterface'
+import { getZIndexClass } from './constants/zIndex'
+import { useBlockingOverlay } from './hooks/useBrowserViewVisibility'
 
 // Lazy load heavy components to reduce initial bundle size
 const MailLayout = lazy(() => import('./components/mail/MailLayout').then(m => ({ default: m.MailLayout })))
@@ -90,6 +92,13 @@ function AppContent() {
   const [showEditServiceModal, setShowEditServiceModal] = useState(false)
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null)
   const [showAccessibilitySettings, setShowAccessibilitySettings] = useState(false)
+
+  // BrowserView visibility management for proper z-index layering
+  useBlockingOverlay('search-overlay', showSearchOverlay, 'SEARCH_OVERLAY')
+  useBlockingOverlay('add-service-modal', showAddServiceModal, 'MODAL')
+  useBlockingOverlay('edit-service-modal', showEditServiceModal, 'MODAL')
+  useBlockingOverlay('accessibility-settings', showAccessibilitySettings, 'ACCESSIBILITY_OVERLAY')
+  useBlockingOverlay('global-loading', globalLoading, 'LOADING_OVERLAY')
 
   // Global search functionality
   const handleGlobalSearch = useCallback(async (query: string, filters: SearchFilters): Promise<SearchResult[]> => {
@@ -367,7 +376,7 @@ function AppContent() {
         <ColorBlindnessFilters />
 
       {/* Primary Sidebar (Far Left) - Mail, Calendar, Workspaces */}
-      <nav id="navigation" role="navigation" aria-label="Main navigation">
+      <nav id="navigation" role="navigation" aria-label="Main navigation" className={getZIndexClass('NAVIGATION')}>
         <FlowDeskLeftRail
           onViewSelect={setActiveView}
           onWorkspaceSelect={(workspaceId) => {
@@ -381,7 +390,8 @@ function AppContent() {
 
       {/* Secondary Sidebar - Services for Selected Workspace */}
       {activeView === 'workspace' && (
-        <ServicesSidebar
+        <div className={getZIndexClass('SIDEBAR')}>
+          <ServicesSidebar
           workspaceId={activeWorkspaceId}
           workspaceName={currentWorkspace?.name || 'Workspace'}
           services={currentWorkspace?.services || []}
@@ -417,12 +427,13 @@ function AppContent() {
             console.log('Workspace settings functionality to be implemented:', workspaceId);
           }}
         />
+        </div>
       )}
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Main App View */}
-        <main id="main-content" className="flex-1 overflow-hidden relative" role="main" aria-label="Main application content">
+        <main id="main-content" className={cn("flex-1 overflow-hidden relative", getZIndexClass('MAIN_CONTENT'))} role="main" aria-label="Main application content">
           {renderMainContent}
           
           {/* Plugin Panels Overlay */}
@@ -438,7 +449,7 @@ function AppContent() {
       {/* Advanced Search Overlay */}
       {showSearchOverlay && (
         <div 
-          className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-start justify-center pt-20"
+          className={cn("fixed inset-0 bg-background/80 backdrop-blur-sm flex items-start justify-center pt-20", getZIndexClass('SEARCH_OVERLAY'))}
           role="dialog"
           aria-modal="true"
           aria-labelledby="search-title"
@@ -464,7 +475,7 @@ function AppContent() {
       {/* Notifications Overlay */}
       {showNotifications && (
         <aside 
-          className="fixed top-4 right-4 z-50 w-96"
+          className={cn("fixed top-4 right-4 w-96", getZIndexClass('NOTIFICATIONS'))}
           role="complementary"
           aria-label="Notifications"
         >
@@ -481,7 +492,7 @@ function AppContent() {
       {/* Accessibility Settings Overlay */}
       {showAccessibilitySettings && (
         <div 
-          className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4"
+          className={cn("fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4", getZIndexClass('ACCESSIBILITY_OVERLAY'))}
           role="dialog"
           aria-modal="true"
           aria-labelledby="accessibility-title"

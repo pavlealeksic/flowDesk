@@ -18,7 +18,7 @@ import {
   Activity,
   TrendingUp
 } from 'lucide-react'
-import { Button, Card, Input, Avatar } from '../ui'
+import { Button, Card, Input, Avatar, ServiceIcon } from '../ui'
 import { cn } from '../ui/utils'
 import { useNotifications } from '../ui/NotificationSystem'
 import { SmartLoading } from '../ui/LoadingStates'
@@ -191,6 +191,11 @@ const WorkspaceCard: React.FC<{
                     )}
                     title={`${service.name} - ${status?.status || 'unknown'}`}
                   >
+                    <ServiceIcon 
+                      serviceId={service.type + '-template'}
+                      size="sm"
+                      fallbackText={service.name}
+                    />
                     {status && getStatusIcon(status.status)}
                     <span className="truncate max-w-20">{service.name}</span>
                   </div>
