@@ -501,9 +501,17 @@ class FlowDeskApp {
       log.info('Flow Desk main window ready');
     });
 
-    // Handle window resize for browser views
+    // Handle window resize for browser views with throttling
+    let resizeTimeout: NodeJS.Timeout | null = null;
     this.mainWindow.on('resize', () => {
-      this.resizeBrowserViews();
+      // Debounce resize calls to prevent excessive updates
+      if (resizeTimeout) {
+        clearTimeout(resizeTimeout);
+      }
+      resizeTimeout = setTimeout(() => {
+        this.resizeBrowserViews();
+        resizeTimeout = null;
+      }, 100); // Wait 100ms after user stops resizing
     });
 
     // Handle window maximize/unmaximize for browser views
@@ -3669,27 +3677,44 @@ class FlowDeskApp {
     
     if (!this.mainWindow) return;
 
-    // Remove any existing browser view
+    // Store current view on the main window for workspace manager access
+    (this.mainWindow as any).currentView = view;
+
+    log.info(`Switching to view: ${view}`);
+
+    // ALWAYS completely remove BrowserView - this is critical for proper layering
     if (this.mainWindow.getBrowserView()) {
       this.mainWindow.setBrowserView(null);
+      log.info('Forcibly removed BrowserView from main window');
     }
 
+    // Also hide through workspace manager for double safety
+    this.workspaceManager.hideAllBrowserViews(this.mainWindow);
+
     if (view === 'workspace') {
-      // Show active workspace service if any
-      const activeWorkspace = this.workspaceManager.getActiveWorkspace();
-      if (activeWorkspace && activeWorkspace.services.length > 0) {
-        // Load first service by default
-        await this.workspaceManager.loadService(
-          activeWorkspace.id, 
-          activeWorkspace.services[0].id, 
-          this.mainWindow
-        );
+      log.info('Workspace view activated - all BrowserViews hidden, ready for manual service selection');
+      // Don't auto-load any services - user must explicitly select
+    } else {
+      log.info(`${view} view activated - BrowserViews permanently hidden`);
+      // For mail/calendar, completely disable BrowserView functionality
+      
+      // Close any active services to prevent them from interfering
+      const allBrowserViews = this.workspaceManager.getAllBrowserViews();
+      for (const browserView of allBrowserViews) {
+        try {
+          if (this.mainWindow.getBrowserView() === browserView) {
+            this.mainWindow.setBrowserView(null);
+            log.info('Detached BrowserView during view switch');
+          }
+        } catch (error) {
+          log.warn('Error detaching BrowserView:', error);
+        }
       }
     }
 
     // Notify renderer about view change
     this.mainWindow.webContents.send('view-changed', view);
-    log.debug(`Switched to view: ${view}`);
+    log.info(`Successfully switched to view: ${view}`);
   }
 
   private resizeBrowserViews() {

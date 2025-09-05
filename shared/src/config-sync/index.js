@@ -19,8 +19,8 @@ class ConfigSyncEngine extends events_1.EventEmitter {
         this.initialized = false;
         this.syncState = {
             status: 'idle',
-            lastSync: null,
-            lastError: null,
+            lastSync: undefined,
+            lastError: undefined,
             stats: {
                 totalSyncs: 0,
                 successfulSyncs: 0,

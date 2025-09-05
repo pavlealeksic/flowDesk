@@ -5,7 +5,6 @@
  * type-safe interface for all calendar operations.
  */
 import { CalendarAccount, CalendarEvent, Calendar, CalendarProvider, CreateCalendarEventInput, UpdateCalendarEventInput, CreateCalendarAccountInput, UpdateCalendarAccountInput, CalendarPrivacySync, FreeBusyQuery, FreeBusyResponse, CalendarMetrics, CalendarSyncStatus } from '../types/calendar';
-declare let calendarEngine: any;
 /**
  * Configuration for the calendar engine
  */

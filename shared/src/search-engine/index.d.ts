@@ -76,7 +76,6 @@ export declare class SearchEngine {
     getConfiguration(): SearchConfiguration | null;
     private ensureInitialized;
     private loadNativeModule;
-    private createMockNativeModule;
     private convertToNativeConfig;
     private convertToNativeQuery;
     private convertToNativeDocument;
@@ -92,5 +91,4 @@ export declare function getSearchEngine(): SearchEngine;
  */
 export declare function initializeSearchEngine(config: SearchConfiguration): Promise<void>;
 export * from '../types/search';
-export { SearchEngineError, SearchEngineNotInitializedError, SearchEngineIndexError, SearchEngineQueryError, };
 //# sourceMappingURL=index.d.ts.map

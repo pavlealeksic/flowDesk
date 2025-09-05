@@ -45,29 +45,32 @@ export const SimpleMailAccountModal: React.FC<SimpleMailAccountModalProps> = ({
     setError('');
 
     try {
-      // Check if email provider is supported
-      const providerInfo = await window.flowDesk?.simpleMail?.detectEmailProvider(formData.email);
-      
-      if (!providerInfo) {
-        throw new Error('Email provider not supported. Supported providers: Gmail, Outlook, Yahoo, iCloud, and FastMail.');
-      }
-
-      // Test connection first
-      const connectionTest = await window.flowDesk?.simpleMail?.testConnection(
-        formData.email,
-        formData.password
-      );
-
-      if (!connectionTest) {
-        throw new Error('Authentication failed. Please check your email and password. For Gmail and Outlook, you may need to use an app-specific password.');
-      }
-
-      // Add the account
-      const account = await window.flowDesk?.simpleMail?.addAccount({
+      const credentials = {
         email: formData.email,
         password: formData.password,
         displayName: formData.displayName || formData.email
-      });
+      };
+
+      const testResult = await window.flowDesk?.productionEmail?.testEmailSetup(credentials);
+      
+      if (!testResult || !testResult.success) {
+        throw new Error(testResult?.error || 'Email configuration test failed. Please check your credentials.');
+      }
+
+      const accountResult = await window.flowDesk?.productionEmail?.setupAccount('current-user', credentials);
+      
+      if (!accountResult || !accountResult.success) {
+        throw new Error(accountResult?.error || 'Failed to add email account.');
+      }
+
+      const account = {
+        id: accountResult.accountId || 'new-account',
+        email: formData.email,
+        password: formData.password,
+        displayName: formData.displayName || formData.email,
+        provider: testResult.serverConfig?.provider || 'auto',
+        isEnabled: true
+      };
       
       console.log('Simple mail account added:', account);
       onSuccess?.(account);

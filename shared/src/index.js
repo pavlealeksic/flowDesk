@@ -23,8 +23,9 @@ exports.VERSION = void 0;
 exports.init = init;
 // Re-export everything from sub-modules
 __exportStar(require("./types"), exports);
-__exportStar(require("./crypto"), exports);
+// export * from './crypto' // Temporarily disabled due to TypeScript compatibility issues
 __exportStar(require("./utils"), exports);
+__exportStar(require("./config/service-icons.js"), exports);
 // Version information
 exports.VERSION = '0.1.0';
 // Library initialization

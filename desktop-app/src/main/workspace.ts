@@ -368,6 +368,14 @@ export class WorkspaceManager extends EventEmitter {
       return;
     }
 
+    // Only allow service loading if we're actually in workspace view
+    // This prevents BrowserViews from appearing in mail/calendar views
+    const currentView = (mainWindow as any).currentView;
+    if (currentView && currentView !== 'workspace') {
+      log.warn(`Attempted to load service while in ${currentView} view - blocked`);
+      return;
+    }
+
     const service = workspace.services.find(s => s.id === serviceId);
     if (!service) {
       log.warn(`Service not found: ${serviceId} in workspace ${workspaceId}`);
@@ -561,6 +569,7 @@ export class WorkspaceManager extends EventEmitter {
         webSecurity: true,
         allowRunningInsecureContent: false,
         experimentalFeatures: false,
+        backgroundThrottling: false, // Keep responsive
         ...service.config.webviewOptions
       }
     });
@@ -636,13 +645,20 @@ export class WorkspaceManager extends EventEmitter {
   private configureBrowserViewBounds(browserView: BrowserView, mainWindow: BrowserWindow): void {
     const contentBounds = mainWindow.getContentBounds();
     
-    // Calculate main content area bounds (after sidebar) using layout constants
+    // Calculate main content area bounds accounting for both sidebars in workspace view
     const mainContentArea = {
-      x: LAYOUT_CONSTANTS.BROWSER_VIEW_OFFSET_X,
-      y: LAYOUT_CONSTANTS.BROWSER_VIEW_OFFSET_Y,
-      width: Math.max(0, contentBounds.width - LAYOUT_CONSTANTS.SIDEBAR_WIDTH),
-      height: Math.max(0, contentBounds.height - LAYOUT_CONSTANTS.TOP_BAR_HEIGHT)
+      x: LAYOUT_CONSTANTS.BROWSER_VIEW_OFFSET_X, // 320px (both sidebars)
+      y: LAYOUT_CONSTANTS.BROWSER_VIEW_OFFSET_Y, // 0px (no top bar)
+      width: Math.max(200, contentBounds.width - LAYOUT_CONSTANTS.TOTAL_SIDEBAR_WIDTH), // Minimum 200px width
+      height: Math.max(100, contentBounds.height - LAYOUT_CONSTANTS.TOP_BAR_HEIGHT) // Minimum 100px height
     };
+    
+    // Ensure bounds are valid
+    if (mainContentArea.width <= 0 || mainContentArea.height <= 0) {
+      log.warn('Invalid BrowserView bounds calculated, hiding BrowserView');
+      mainWindow.setBrowserView(null);
+      return;
+    }
     
     browserView.setBounds(mainContentArea);
     
@@ -651,6 +667,46 @@ export class WorkspaceManager extends EventEmitter {
       layoutConstants: LAYOUT_CONSTANTS,
       calculatedBounds: mainContentArea
     });
+  }
+
+  /**
+   * Hide all BrowserViews from the main window
+   */
+  hideAllBrowserViews(mainWindow: BrowserWindow): void {
+    if (!mainWindow) return;
+    
+    // Remove any currently attached BrowserView
+    if (mainWindow.getBrowserView()) {
+      mainWindow.setBrowserView(null);
+      log.debug('Removed BrowserView from main window');
+    }
+  }
+
+  /**
+   * Get all active BrowserViews for cleanup
+   */
+  getAllBrowserViews(): BrowserView[] {
+    return Array.from(this.browserViews.values());
+  }
+  
+  /**
+   * Show a specific service BrowserView (only for workspace view)
+   */
+  async showServiceBrowserView(workspaceId: string, serviceId: string, mainWindow: BrowserWindow): Promise<void> {
+    if (!mainWindow) return;
+    
+    const browserViewKey = `${workspaceId}:${serviceId}`;
+    const browserView = this.browserViews.get(browserViewKey);
+    
+    if (browserView) {
+      // First hide any existing BrowserView
+      this.hideAllBrowserViews(mainWindow);
+      
+      // Then show the requested one
+      mainWindow.setBrowserView(browserView);
+      this.configureBrowserViewBounds(browserView, mainWindow);
+      log.debug(`Showed BrowserView for service: ${serviceId}`);
+    }
   }
 
   async closeService(workspaceId: string, serviceId: string): Promise<void> {

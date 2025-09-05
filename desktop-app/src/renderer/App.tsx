@@ -378,7 +378,11 @@ function AppContent() {
       {/* Primary Sidebar (Far Left) - Mail, Calendar, Workspaces */}
       <nav id="navigation" role="navigation" aria-label="Main navigation" className={getZIndexClass('NAVIGATION')}>
         <FlowDeskLeftRail
-          onViewSelect={setActiveView}
+          onViewSelect={(view) => {
+            setActiveView(view);
+            // Notify main process about view change to handle BrowserView visibility
+            window.flowDesk?.view?.switch(view);
+          }}
           onWorkspaceSelect={(workspaceId) => {
             // Use Redux dispatch to switch workspace
             dispatch(switchWorkspace(workspaceId));

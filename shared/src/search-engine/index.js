@@ -200,8 +200,7 @@ class SearchEngine {
     }
     async loadNativeModule() {
         try {
-            // Try to load the native module
-            // This would typically be a .node file compiled from Rust
+            // Load the native module - this MUST be available
             const nativeModule = require('@flow-desk/search-native');
             // Initialize logging
             if (nativeModule.initLogging) {
@@ -210,74 +209,13 @@ class SearchEngine {
             return new nativeModule.JsSearchEngine();
         }
         catch (error) {
-            // Fallback for development - use mock implementation
-            console.warn('Native search module not available, using mock implementation');
-            return this.createMockNativeModule();
+            throw new SearchEngineError('Rust search engine is required but not available. Please ensure the native module is properly installed.', 'NATIVE_MODULE_UNAVAILABLE', error instanceof Error ? error : undefined);
         }
-    }
-    createMockNativeModule() {
-        // Mock implementation for development/testing
-        return {
-            async initialize(_config) {
-                console.log('Mock search engine initialized');
-            },
-            async search(query) {
-                return {
-                    results: [
-                        {
-                            id: 'mock-1',
-                            title: `Mock result for: ${query.query}`,
-                            description: 'This is a mock search result',
-                            content: 'Mock content...',
-                            url: 'https://example.com',
-                            contentType: 'document',
-                            providerId: 'mock',
-                            providerType: 'local_files',
-                            score: 0.9,
-                            createdAt: new Date().toISOString(),
-                            lastModified: new Date().toISOString(),
-                        },
-                    ],
-                    totalCount: 1,
-                    executionTimeMs: 50,
-                    suggestions: [`${query.query} suggestion`],
-                };
-            },
-            async indexDocument(_document) {
-                console.log('Mock: Document indexed');
-            },
-            async indexDocuments(documents) {
-                console.log(`Mock: ${documents.length} documents indexed`);
-                return documents.length;
-            },
-            async deleteDocument(_documentId) {
-                console.log('Mock: Document deleted');
-                return true;
-            },
-            async getSuggestions(partialQuery, limit) {
-                return Array.from({ length: Math.min(limit || 5, 3) }, (_, i) => `${partialQuery} suggestion ${i + 1}`);
-            },
-            async getAnalytics() {
-                return {
-                    totalQueries: 100,
-                    avgResponseTimeMs: 150,
-                    successRate: 0.95,
-                    popularQueries: ['test', 'search', 'document'],
-                    errorRate: 0.05,
-                };
-            },
-            async optimizeIndices() {
-                console.log('Mock: Indices optimized');
-            },
-            async clearCache() {
-                console.log('Mock: Cache cleared');
-            },
-        };
     }
     convertToNativeConfig(config) {
         return {
-            indexDir: config.global.indexDir || './search_indices',
-            maxMemoryMb: config.indexing.maxMemoryMb || 512,
+            indexDir: './search_indices',
+            maxMemoryMb: 512,
             maxResponseTimeMs: config.global.timeout || 300,
             numThreads: config.providers.maxConcurrent || 4,
             enableAnalytics: config.global.analytics || true,
@@ -289,7 +227,7 @@ class SearchEngine {
     convertToNativeQuery(query) {
         return {
             query: query.query,
-            contentTypes: query.contentTypes?.map(t => typeof t === 'string' ? t : t.toString()),
+            contentTypes: query.contentTypes?.map(t => String(t)),
             providerIds: query.providers,
             limit: query.limit,
             offset: query.offset,
@@ -304,15 +242,15 @@ class SearchEngine {
             id: document.id,
             title: document.title,
             content: document.content || '',
-            summary: document.description,
-            contentType: typeof document.contentType === 'string' ? document.contentType : document.contentType.toString(),
+            summary: document.summary,
+            contentType: String(document.contentType),
             providerId: document.provider,
-            providerType: typeof document.providerType === 'string' ? document.providerType : document.providerType.toString(),
+            providerType: String(document.providerType),
             url: document.url,
-            author: document.metadata?.author,
-            tags: document.metadata?.tags,
-            categories: document.metadata?.categories,
-            metadata: document.metadata?.custom,
+            author: document.author,
+            tags: document.tags || [],
+            categories: document.categories || [],
+            metadata: document.metadata,
         };
     }
     convertFromNativeResponse(nativeResponse) {
@@ -351,11 +289,11 @@ class SearchEngine {
                 createdAt: new Date(result.createdAt),
                 lastModified: new Date(result.lastModified),
             })),
-            totalCount: nativeResponse.totalCount,
-            executionTimeMs: nativeResponse.executionTimeMs,
+            total: nativeResponse.totalCount,
+            took: nativeResponse.executionTimeMs,
             facets: undefined,
             suggestions: nativeResponse.suggestions,
-            debugInfo: undefined,
+            debug: undefined,
             nextPageToken: undefined,
             providerResponses: undefined,
         };

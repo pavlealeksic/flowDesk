@@ -8,13 +8,12 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CalendarEngineClass = exports.calendarEngine = exports.CalendarWebhookHandler = exports.CalendarEventListener = exports.CalendarEngine = void 0;
 // Import the compiled Rust NAPI module
-let calendarEngine;
+let rustCalendarEngine;
 try {
-    calendarEngine = require('../../rust-lib/index.node');
+    rustCalendarEngine = require('../../rust-lib/index.node');
 }
 catch (error) {
-    console.warn('Calendar engine native module not found, using mock implementation');
-    calendarEngine = null;
+    throw new Error('Rust calendar engine is required but not available. Please ensure the native module is properly installed.');
 }
 /**
  * Main calendar engine class providing unified calendar operations
@@ -22,12 +21,11 @@ catch (error) {
 class CalendarEngine {
     constructor() {
         this.initialized = false;
-        if (calendarEngine) {
-            this.engine = new calendarEngine.CalendarEngineJs();
+        if (rustCalendarEngine) {
+            this.engine = new rustCalendarEngine.CalendarEngineJs();
         }
         else {
-            // Mock implementation for development/testing
-            this.engine = new MockCalendarEngine();
+            throw new Error('Rust calendar engine is required but not available. Please ensure the native module is properly installed.');
         }
     }
     /**
@@ -273,37 +271,21 @@ class CalendarEngine {
      * Get supported calendar providers
      */
     static getSupportedProviders() {
-        if (calendarEngine) {
-            const resultJson = calendarEngine.CalendarEngineJs.getSupportedProviders();
+        if (rustCalendarEngine) {
+            const resultJson = rustCalendarEngine.CalendarEngineJs.getSupportedProviders();
             return JSON.parse(resultJson);
         }
-        return ['google', 'outlook', 'caldav', 'icloud', 'fastmail'];
+        throw new Error('Rust calendar engine is required but not available.');
     }
     /**
      * Get provider capabilities
      */
     static getProviderCapabilities(provider) {
-        if (calendarEngine) {
-            const resultJson = calendarEngine.CalendarEngineJs.getProviderCapabilities(provider);
+        if (rustCalendarEngine) {
+            const resultJson = rustCalendarEngine.CalendarEngineJs.getProviderCapabilities(provider);
             return JSON.parse(resultJson);
         }
-        // Mock capabilities for development
-        return {
-            supportsWebhooks: provider === 'google' || provider === 'outlook',
-            supportsPushNotifications: provider === 'google' || provider === 'outlook',
-            supportsRecurringEvents: true,
-            supportsAttendees: true,
-            supportsFreeBusy: true,
-            supportsConferencing: provider === 'google' || provider === 'outlook',
-            supportsAttachments: provider === 'google' || provider === 'outlook',
-            supportsReminders: true,
-            supportsColors: true,
-            supportsMultipleCalendars: true,
-            supportsCalendarSharing: provider === 'google' || provider === 'outlook',
-            maxEventDurationDays: provider.startsWith('caldav') ? null : 365,
-            rateLimitRpm: provider === 'google' ? 300 : provider === 'outlook' ? 600 : 60,
-            batchOperations: provider === 'google' || provider === 'outlook',
-        };
+        throw new Error('Rust calendar engine is required but not available.');
     }
     ensureInitialized() {
         if (!this.initialized) {
@@ -355,8 +337,11 @@ exports.CalendarEventListener = CalendarEventListener;
  */
 class CalendarWebhookHandler {
     constructor() {
-        if (calendarEngine) {
-            this.handler = new calendarEngine.CalendarWebhookHandler();
+        if (rustCalendarEngine) {
+            this.handler = new rustCalendarEngine.CalendarWebhookHandler();
+        }
+        else {
+            throw new Error('Rust calendar engine is required but not available.');
         }
     }
     /**
@@ -385,107 +370,7 @@ class CalendarWebhookHandler {
     }
 }
 exports.CalendarWebhookHandler = CalendarWebhookHandler;
-// Mock implementation for development/testing when native module isn't available
-class MockCalendarEngine {
-    constructor() {
-        this.accounts = new Map();
-        this.calendars = new Map();
-        this.events = new Map();
-    }
-    async initialize(_configJson) {
-        console.warn('Using mock calendar engine - no actual calendar operations will be performed');
-    }
-    async start() { }
-    async stop() { }
-    async createAccount(accountJson) {
-        const account = JSON.parse(accountJson);
-        const createdAccount = {
-            id: `mock-account-${Date.now()}`,
-            userId: account.userId,
-            name: account.name,
-            email: account.email,
-            provider: account.provider,
-            config: account.config,
-            credentials: account.credentials,
-            status: account.status,
-            defaultCalendarId: account.defaultCalendarId,
-            lastSyncAt: account.lastSyncAt,
-            nextSyncAt: account.nextSyncAt,
-            syncIntervalMinutes: account.syncIntervalMinutes,
-            isEnabled: account.isEnabled,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        };
-        this.accounts.set(createdAccount.id, createdAccount);
-        return JSON.stringify(createdAccount);
-    }
-    async getAccount(accountId) {
-        const account = this.accounts.get(accountId);
-        if (!account) {
-            throw new Error(`Account not found: ${accountId}`);
-        }
-        return JSON.stringify(account);
-    }
-    async getUserAccounts(userId) {
-        const userAccounts = Array.from(this.accounts.values())
-            .filter(account => account.userId === userId);
-        return JSON.stringify(userAccounts);
-    }
-    // Additional mock methods would go here...
-    async updateAccount(accountId, updatesJson) {
-        throw new Error('Mock implementation');
-    }
-    async deleteAccount(accountId) {
-        this.accounts.delete(accountId);
-    }
-    async listCalendars(accountId) {
-        return JSON.stringify([]);
-    }
-    async getCalendar(calendarId) {
-        throw new Error('Mock implementation');
-    }
-    async createCalendar(calendarJson) {
-        throw new Error('Mock implementation');
-    }
-    async createEvent(eventJson) {
-        throw new Error('Mock implementation');
-    }
-    async updateEvent(calendarId, eventId, updatesJson) {
-        throw new Error('Mock implementation');
-    }
-    async deleteEvent(calendarId, eventId) { }
-    async getEventsInRange(calendarIdsJson, timeMinIso, timeMaxIso) {
-        return JSON.stringify([]);
-    }
-    async queryFreeBusy(queryJson) {
-        throw new Error('Mock implementation');
-    }
-    async syncAccount(accountId, force) {
-        throw new Error('Mock implementation');
-    }
-    async getAllSyncStatus() {
-        return JSON.stringify({});
-    }
-    async createPrivacySyncRule(ruleJson) {
-        return `mock-rule-${Date.now()}`;
-    }
-    async executePrivacySync() {
-        return JSON.stringify([]);
-    }
-    async executePrivacySyncRule(ruleId) {
-        throw new Error('Mock implementation');
-    }
-    async searchEvents(query, limit) {
-        return JSON.stringify([]);
-    }
-    async searchCalendars(query) {
-        return JSON.stringify([]);
-    }
-    async getMetrics() {
-        throw new Error('Mock implementation');
-    }
-}
 // Export singleton instance
 exports.calendarEngine = new CalendarEngine();
-exports.default = calendarEngine;
+exports.default = exports.calendarEngine;
 //# sourceMappingURL=index.js.map

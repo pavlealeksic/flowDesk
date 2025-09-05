@@ -132,7 +132,7 @@ class CrossPlatformSyncCoordinator extends events_1.EventEmitter {
         catch (error) {
             session.endTime = Date.now();
             session.status = 'failed';
-            session.errors.push(error.message);
+            session.errors.push(error instanceof Error ? error.message : String(error));
             this.statistics.failedSessions++;
             this.emit('syncFailed', { error, sessionId });
             return {
