@@ -170,10 +170,20 @@ const MessageContent: React.FC<{
       
       {/* Attachments */}
       {message.attachments && message.attachments.length > 0 && (
-        <AttachmentList
-          attachments={message.attachments}
-          onDownload={onDownloadAttachment}
-        />
+        <div className="flex flex-wrap gap-2">
+          {message.attachments.map((attachment, index) => (
+            <Button
+              key={index}
+              variant="outline"
+              size="sm"
+              onClick={() => onDownloadAttachment?.(attachment)}
+              className="text-xs"
+            >
+              <Paperclip className="h-3 w-3 mr-1" />
+              {attachment.filename}
+            </Button>
+          ))}
+        </div>
       )}
     </div>
   )

@@ -25,7 +25,8 @@
   },
   "include": [
     "src/renderer/**/*",
-    "src/types/**/*"
+    "src/types/**/*",
+    "../shared/src/**/*"
   ],
   "types": [
     "node",
@@ -44,9 +45,6 @@
     "src/main/plugin-runtime/**/*",
     "src/main/providers/**/*",
     "src/main/**/test*",
-    "../shared/**/*",
-    "src/renderer/components/calendar/AttendeeManager.tsx",
-    "src/renderer/components/calendar/CalendarNotificationCenter.tsx",
-    "src/renderer/components/calendar/ConferencingSetup.tsx"
+    "src/renderer/components/calendar/CalendarNotificationCenter.tsx"
   ]
 }

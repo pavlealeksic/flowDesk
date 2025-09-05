@@ -342,7 +342,7 @@ export const RecurrenceEditor: React.FC<RecurrenceEditorProps> = ({
               </SelectTrigger>
               <SelectContent>
                 {MONTHS.map((month, index) => (
-                  <SelectItem key={index} value={(index + 1).toString()}>
+                  <SelectItem key={index.toString()} value={(index + 1).toString()}>
                     {month}
                   </SelectItem>
                 ))}

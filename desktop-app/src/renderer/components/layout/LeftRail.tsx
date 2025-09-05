@@ -231,7 +231,7 @@ export const LeftRail: React.FC<LeftRailProps> = ({
     id: ws.id,
     name: ws.name,
     icon: ws.icon,
-    type: ws.type,
+    type: (ws.type as 'personal' | 'team' | 'organization') || 'personal',
     isActive: ws.id === currentWorkspaceId,
     // Add unread count logic here based on your business logic
     unreadCount: 0

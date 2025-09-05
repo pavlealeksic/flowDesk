@@ -12,6 +12,8 @@ export interface EmailTemplate {
   updatedAt: Date
   usageCount: number
   accountId?: string
+  tags?: string[]
+  isPublic?: boolean
 }
 
 export interface TemplateVariable {
@@ -19,7 +21,9 @@ export interface TemplateVariable {
   placeholder: string
   defaultValue?: string
   required: boolean
-  type: 'text' | 'email' | 'date' | 'number'
+  type: 'text' | 'email' | 'date' | 'number' | 'select'
+  label?: string
+  options?: string[]
 }
 
 export interface TextSnippet {
@@ -32,6 +36,16 @@ export interface TextSnippet {
   usageCount: number
   createdAt: Date
   updatedAt: Date
+  isHtml?: boolean
+  variables?: SnippetVariable[]
+}
+
+export interface SnippetVariable {
+  name: string
+  placeholder: string
+  defaultValue?: string
+  required: boolean
+  type: 'text' | 'email' | 'date' | 'number'
 }
 
 export interface EmailRule {
@@ -115,6 +129,11 @@ export interface MeetingInvite {
   description?: string
   icsData?: string
   status: 'pending' | 'accepted' | 'declined' | 'tentative'
+  event?: any
+  type?: string
+  extractedData?: any
+  userResponse?: string
+  eventId?: string
 }
 
 export interface ExtractedEvent {
@@ -127,4 +146,36 @@ export interface ExtractedEvent {
   confidence: number
   extractedText: string
   status: 'suggested' | 'created' | 'ignored'
+}
+
+// Re-export calendar types for compatibility
+export interface CalendarEvent {
+  id: string
+  calendarId: string
+  title: string
+  description?: string
+  startTime: Date
+  endTime: Date
+  location?: string
+  attendees: EventAttendee[]
+  organizer?: EventAttendee
+  isAllDay: boolean
+  recurrence?: string
+  status?: 'confirmed' | 'tentative' | 'cancelled'
+  visibility?: 'private' | 'public' | 'confidential'
+  reminders?: EventReminder[]
+  createdAt?: Date
+  updatedAt?: Date
+}
+
+export interface EventAttendee {
+  email: string
+  name?: string
+  responseStatus: 'needsAction' | 'declined' | 'tentative' | 'accepted'
+  optional?: boolean
+}
+
+export interface EventReminder {
+  method: 'email' | 'popup' | 'sms'
+  minutesBefore: number
 }

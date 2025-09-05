@@ -62,8 +62,8 @@ export const CreateEventModal: React.FC<CreateEventModalProps> = ({
   const dispatch = useAppDispatch()
   const { calendars, isLoading } = useAppSelector(state => state.calendar)
   
-  // Get all calendars as a flat list
-  const allCalendars = Object.values(calendars).flat()
+  // Get all calendars as a flat list - memoized to prevent re-creation on every render
+  const allCalendars = React.useMemo(() => Object.values(calendars).flat(), [calendars])
   
   // Helper function to safely get date string from Date object
   const getDateString = useCallback((date?: Date | null): string => {
@@ -73,7 +73,7 @@ export const CreateEventModal: React.FC<CreateEventModalProps> = ({
     return new Date().toISOString().split('T')[0]
   }, [])
   
-  const [formData, setFormData] = useState<EventFormData>({
+  const [formData, setFormData] = useState<EventFormData>(() => ({
     title: '',
     description: '',
     location: '',
@@ -81,7 +81,7 @@ export const CreateEventModal: React.FC<CreateEventModalProps> = ({
     startTime: '09:00',
     endDate: getDateString(selectedDate),
     endTime: '10:00',
-    calendarId: selectedCalendarId || (allCalendars[0]?.id || ''),
+    calendarId: selectedCalendarId || '',
     attendees: [],
     reminders: DEFAULT_REMINDERS,
     isAllDay: false,
@@ -89,7 +89,7 @@ export const CreateEventModal: React.FC<CreateEventModalProps> = ({
       frequency: 'none',
       interval: 1
     }
-  })
+  }))
 
   const [attendeeInput, setAttendeeInput] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -98,18 +98,16 @@ export const CreateEventModal: React.FC<CreateEventModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       const defaultStartDate = getDateString(selectedDate)
-      const defaultCalendarId = selectedCalendarId || allCalendars[0]?.id || ''
       
       setFormData(prev => ({
         ...prev,
         startDate: defaultStartDate,
         endDate: defaultStartDate,
-        calendarId: defaultCalendarId
+        calendarId: selectedCalendarId || prev.calendarId || ''
       }))
       setError(null)
     } else {
       // Reset form on close
-      const defaultCalendarId = allCalendars[0]?.id || ''
       const currentDateString = getDateString(new Date())
       setFormData({
         title: '',
@@ -119,7 +117,7 @@ export const CreateEventModal: React.FC<CreateEventModalProps> = ({
         startTime: '09:00',
         endDate: currentDateString,
         endTime: '10:00',
-        calendarId: defaultCalendarId,
+        calendarId: '',
         attendees: [],
         reminders: DEFAULT_REMINDERS,
         isAllDay: false,
@@ -131,22 +129,15 @@ export const CreateEventModal: React.FC<CreateEventModalProps> = ({
       setAttendeeInput('')
       setError(null)
     }
-  }, [isOpen, selectedDate, selectedCalendarId, getDateString, allCalendars])
+  }, [isOpen, selectedDate, selectedCalendarId, getDateString])
 
-  // Update calendar selection when calendars change but only if current selection is invalid
-  useEffect(() => {
-    if (allCalendars.length > 0 && !formData.calendarId) {
-      const defaultCalendarId = selectedCalendarId || allCalendars[0]?.id || ''
-      if (defaultCalendarId) {
-        setFormData(prev => ({ ...prev, calendarId: defaultCalendarId }))
-      }
-    }
-  }, [allCalendars, formData.calendarId, selectedCalendarId])
+  // Get the effective calendar ID to use
+  const effectiveCalendarId = formData.calendarId || selectedCalendarId || allCalendars[0]?.id || ''
 
   const handleInputChange = useCallback((field: keyof EventFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }))
-    if (error) setError(null)
-  }, [error])
+    setError(null) // Always clear error on any input change
+  }, [])
 
   const handleToggleAllDay = useCallback(() => {
     setFormData(prev => {
@@ -206,7 +197,7 @@ export const CreateEventModal: React.FC<CreateEventModalProps> = ({
     if (!formData.title.trim()) {
       return 'Event title is required'
     }
-    if (!formData.calendarId) {
+    if (!effectiveCalendarId) {
       return 'Please select a calendar'
     }
     
@@ -219,7 +210,7 @@ export const CreateEventModal: React.FC<CreateEventModalProps> = ({
     }
     
     return null
-  }, [formData])
+  }, [formData, effectiveCalendarId])
 
   const handleSubmit = useCallback(async () => {
     const validationError = validateForm()
@@ -233,8 +224,8 @@ export const CreateEventModal: React.FC<CreateEventModalProps> = ({
       const endDateTime = new Date(`${formData.endDate}T${formData.endTime}`)
 
       const eventData: CreateCalendarEventInput = {
-        calendarId: formData.calendarId,
-        providerId: `${formData.calendarId}-${Date.now()}`,
+        calendarId: effectiveCalendarId,
+        providerId: `${effectiveCalendarId}-${Date.now()}`,
         title: formData.title.trim(),
         description: formData.description.trim() || undefined,
         location: formData.location.trim() || undefined,
@@ -271,9 +262,9 @@ export const CreateEventModal: React.FC<CreateEventModalProps> = ({
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to create event')
     }
-  }, [dispatch, formData, validateForm, onSuccess, onClose])
+  }, [dispatch, formData, validateForm, onSuccess, onClose, effectiveCalendarId])
 
-  const selectedCalendar = allCalendars.find(cal => cal.id === formData.calendarId)
+  const selectedCalendar = allCalendars.find(cal => cal.id === effectiveCalendarId)
 
   return (
     <Modal
@@ -299,7 +290,7 @@ export const CreateEventModal: React.FC<CreateEventModalProps> = ({
 
           <div>
             <label className="block text-sm font-medium mb-2">Calendar *</label>
-            <Select value={formData.calendarId} onValueChange={(value) => handleInputChange('calendarId', value)}>
+            <Select value={effectiveCalendarId} onValueChange={(value) => handleInputChange('calendarId', value)}>
               <SelectTrigger>
                 <SelectValue placeholder="Select calendar" />
               </SelectTrigger>
@@ -541,7 +532,7 @@ export const CreateEventModal: React.FC<CreateEventModalProps> = ({
           <Button variant="outline" onClick={onClose} disabled={isLoading}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isLoading || !formData.title.trim()}>
+          <Button onClick={handleSubmit} disabled={isLoading || !formData.title.trim() || !effectiveCalendarId}>
             {isLoading ? 'Creating...' : 'Create Event'}
           </Button>
         </div>

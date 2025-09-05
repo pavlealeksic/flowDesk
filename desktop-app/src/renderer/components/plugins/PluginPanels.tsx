@@ -130,6 +130,8 @@ const DraggablePluginPanel: React.FC<DraggablePluginPanelProps> = ({
         document.body.style.cursor = ''
       }
     }
+    
+    return undefined;
   }, [isDragging, isResizing, handleMouseMove, handleMouseUp])
 
   if (plugin.isMinimized) {

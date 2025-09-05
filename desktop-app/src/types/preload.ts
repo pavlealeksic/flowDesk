@@ -58,6 +58,7 @@ export interface EmailMessage {
     isRead: boolean;
     isStarred: boolean;
     hasAttachments: boolean;
+    isFlagged?: boolean;
   };
   attachments?: EmailAttachment[];
   accountId: string;

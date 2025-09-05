@@ -13,7 +13,9 @@ import {
   Tag,
   Settings,
   ChevronDown,
-  ChevronRight
+  Star,
+  ChevronRight,
+  MousePointer
 } from '../ui'
 import { type BaseComponentProps } from '../ui/types'
 import {
@@ -32,6 +34,7 @@ interface QuickSnippetsPanelProps extends BaseComponentProps {
   onInsertSnippet: (snippet: TextSnippet) => void
   onClose: () => void
   showManageButton?: boolean
+  compact?: boolean
 }
 
 interface SnippetItemProps {
@@ -74,7 +77,7 @@ const SnippetItem: React.FC<SnippetItemProps> = ({
             {snippet.content.length > 80 && '...'}
           </p>
           
-          {snippet.variables.length > 0 && (
+          {snippet.variables && snippet.variables.length > 0 && (
             <div className="flex items-center gap-1 mt-1">
               <Edit className="h-3 w-3 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">

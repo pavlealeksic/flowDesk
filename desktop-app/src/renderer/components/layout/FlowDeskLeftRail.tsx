@@ -122,6 +122,8 @@ export const FlowDeskLeftRail: React.FC<FlowDeskLeftRailProps> = ({
       document.addEventListener('click', handleClickOutside);
       return () => document.removeEventListener('click', handleClickOutside);
     }
+    
+    return undefined;
   }, [contextMenuWorkspace]);
 
   return (
@@ -141,8 +143,6 @@ export const FlowDeskLeftRail: React.FC<FlowDeskLeftRailProps> = ({
         onClick={() => onViewSelect('mail')}
         aria-label="Mail view"
         aria-pressed={activeView === 'mail'}
-        role="tab"
-        aria-selected={activeView === 'mail'}
         aria-controls="main-content"
       >
         <Mail className="h-5 w-5" aria-hidden="true" />
@@ -159,8 +159,6 @@ export const FlowDeskLeftRail: React.FC<FlowDeskLeftRailProps> = ({
         onClick={() => onViewSelect('calendar')}
         aria-label="Calendar view"
         aria-pressed={activeView === 'calendar'}
-        role="tab"
-        aria-selected={activeView === 'calendar'}
         aria-controls="main-content"
       >
         <Calendar className="h-5 w-5" aria-hidden="true" />

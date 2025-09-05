@@ -205,7 +205,7 @@ const TemplateEditor: React.FC<{
             className="w-full px-3 py-2 border border-border rounded-md"
           >
             {categories.map(cat => (
-              <option key={cat.id} value={cat.id}>{cat.name}</option>
+              <option key={cat} value={cat}>{cat}</option>
             ))}
           </select>
         </div>
@@ -533,19 +533,18 @@ export const EmailTemplatesModal: React.FC<EmailTemplatesModalProps> = ({
                 
                 {categories.map(category => (
                   <button
-                    key={category.id}
-                    onClick={() => setSelectedCategory(category.id)}
+                    key={category}
+                    onClick={() => setSelectedCategory(category)}
                     className={cn(
                       'w-full text-left px-2 py-1.5 rounded text-sm hover:bg-muted transition-colors',
-                      selectedCategory === category.id && 'bg-muted'
+                      selectedCategory === category && 'bg-muted'
                     )}
                   >
                     <span className="flex items-center justify-between">
                       <span className="flex items-center gap-2">
-                        <span>{category.icon}</span>
-                        {category.name}
+                        {category}
                       </span>
-                      <span className="text-muted-foreground">{category.templateCount}</span>
+                      <span className="text-muted-foreground">0</span>
                     </span>
                   </button>
                 ))}

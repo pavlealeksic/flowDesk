@@ -15,6 +15,7 @@ import {
   AlertCircle,
   ArrowLeft
 } from '../ui'
+import { Modal } from '../ui/Modal'
 import { type BaseComponentProps } from '../ui/types'
 import { addMailAccount, selectIsLoadingMail, selectMailError } from '../../store/slices/mailSlice'
 import type { MailProvider } from '@flow-desk/shared'
@@ -457,8 +458,6 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({
     }
   }, [handleClose])
 
-  if (!isOpen) return null
-
   const getStepTitle = () => {
     switch (step) {
       case 'provider': return 'Add Mail Account'
@@ -468,49 +467,44 @@ export const AddAccountModal: React.FC<AddAccountModalProps> = ({
     }
   }
 
-  return (
-    <div 
-      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
-      onClick={handleBackdropClick}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="modal-title"
-    >
-      <Card className={cn('w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-card border-border', className)} onClick={(e) => e.stopPropagation()}>
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 id="modal-title" className="text-xl font-semibold">{getStepTitle()}</h2>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleClose}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+  const getStepDescription = () => {
+    switch (step) {
+      case 'provider': return 'Choose your email provider to get started'
+      case 'credentials': return 'Enter your account credentials'
+      case 'success': return 'Your email account has been added successfully'
+      default: return 'Add a new email account'
+    }
+  }
 
-          <div className="min-h-[400px]">
-            {step === 'provider' && (
-              <ProviderSelection onSelectProvider={handleSelectProvider} />
-            )}
-            
-            {step === 'credentials' && selectedProvider && (
-              <CredentialsSetup
-                provider={selectedProvider}
-                onBack={handleBack}
-                onSuccess={handleSuccess}
-              />
-            )}
-            
-            {step === 'success' && selectedProvider && (
-              <SuccessStep
-                provider={selectedProvider}
-                onClose={handleClose}
-              />
-            )}
-          </div>
-        </div>
-      </Card>
-    </div>
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title={getStepTitle()}
+      description={getStepDescription()}
+      size="lg"
+      className="max-w-2xl"
+    >
+      <div className="min-h-[400px]">
+        {step === 'provider' && (
+          <ProviderSelection onSelectProvider={handleSelectProvider} />
+        )}
+        
+        {step === 'credentials' && selectedProvider && (
+          <CredentialsSetup
+            provider={selectedProvider}
+            onBack={handleBack}
+            onSuccess={handleSuccess}
+          />
+        )}
+        
+        {step === 'success' && selectedProvider && (
+          <SuccessStep
+            provider={selectedProvider}
+            onClose={handleClose}
+          />
+        )}
+      </div>
+    </Modal>
   )
 }

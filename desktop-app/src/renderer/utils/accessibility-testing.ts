@@ -495,7 +495,7 @@ function isDecorativeImage(img: HTMLImageElement): boolean {
   return src.includes('decoration') || src.includes('icon') || src.includes('logo')
 }
 
-function hasAssociatedLabel(element: HTMLFormElement): boolean {
+function hasAssociatedLabel(element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLFormElement): boolean {
   if (!element.id) return false
   return !!document.querySelector(`label[for="${element.id}"]`)
 }

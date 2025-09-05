@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import dayjs from 'dayjs'
 import AddCalendarAccountModal from './CalendarAccountModal'
+import { CreateEventModal } from './CreateEventModal'
 import { useAppSelector, useAppDispatch } from '../../store'
 import { useCalendarSync } from '../../hooks/useCalendarSync'
 import {
@@ -576,6 +577,8 @@ export const CalendarViews: React.FC<CalendarViewsProps> = ({
   
   // Local state for modals
   const [showAddAccountModal, setShowAddAccountModal] = useState(false)
+  const [showCreateEventModal, setShowCreateEventModal] = useState(false)
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   
   // Get state from Redux store
   const {
@@ -638,6 +641,12 @@ export const CalendarViews: React.FC<CalendarViewsProps> = ({
       dispatch(setCurrentDate(date.toISOString().split('T')[0]))
     }
   }, [onDateSelect, viewType, dispatch])
+
+  const handleCreateEvent = useCallback((date?: Date) => {
+    setSelectedDate(date || new Date())
+    setShowCreateEventModal(true)
+    onCreateEvent?.()
+  }, [onCreateEvent])
   
   const handleViewChange = useCallback((view: ViewType) => {
     dispatch(setCurrentView(view))
@@ -784,7 +793,7 @@ export const CalendarViews: React.FC<CalendarViewsProps> = ({
                         className="h-16 border-b border-border p-1 hover:bg-accent/50 cursor-pointer relative"
                         onClick={() => {
                           const eventTime = day.hour(hour).minute(0);
-                          onCreateEvent?.();
+                          handleCreateEvent(eventTime.toDate());
                         }}
                       >
                         {/* Render events for this time slot */}
@@ -847,7 +856,7 @@ export const CalendarViews: React.FC<CalendarViewsProps> = ({
         onDateChange={handleDateChange}
         onViewChange={handleViewChange}
         onToday={handleToday}
-        onCreateEvent={() => onCreateEvent?.()}
+        onCreateEvent={handleCreateEvent}
         onAddAccount={() => setShowAddAccountModal(true)}
       />
       
@@ -860,6 +869,21 @@ export const CalendarViews: React.FC<CalendarViewsProps> = ({
           console.log('Calendar account added successfully:', account);
           // Refresh calendar accounts
           dispatch(fetchUserAccounts('default-user'));
+        }}
+      />
+
+      <CreateEventModal
+        isOpen={showCreateEventModal}
+        onClose={() => {
+          setShowCreateEventModal(false)
+          setSelectedDate(null)
+        }}
+        selectedDate={selectedDate || undefined}
+        selectedCalendarId={Object.values(calendars).flat()[0]?.id}
+        onSuccess={(event) => {
+          console.log('Event created successfully:', event)
+          setShowCreateEventModal(false)
+          setSelectedDate(null)
         }}
       />
     </div>

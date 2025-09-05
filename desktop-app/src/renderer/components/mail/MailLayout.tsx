@@ -818,7 +818,8 @@ export const MailLayout: React.FC<MailLayoutProps> = ({
         onClose={() => setShowAddAccountModal(false)}
         onSuccess={(account) => {
           console.log('Mail account added successfully:', account);
-          // TODO: Refresh mail accounts
+          dispatch(fetchMailAccounts()); // Refresh mail accounts list
+          setShowAddAccountModal(false);
         }}
       />
 

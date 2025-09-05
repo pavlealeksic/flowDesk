@@ -98,6 +98,25 @@ impl IndexManager {
         tokio::fs::metadata(&meta_path).await.is_ok()
     }
     
+    /// Check if the error indicates missing index files
+    fn is_missing_index_file_error(error: &TantivyError) -> bool {
+        let error_msg = error.to_string();
+        error_msg.contains("meta.json") 
+            || error_msg.contains("FileDoesNotExist")
+            || error_msg.contains("No such file")
+            || match error {
+                TantivyError::IoError(io_err) => io_err.kind() == std::io::ErrorKind::NotFound,
+                _ => false
+            }
+    }
+    
+    /// Check if schemas are compatible
+    fn is_schema_compatible(existing: &Schema, required: &Schema) -> bool {
+        // For now, do a simple field count comparison
+        // In production, you'd want more sophisticated schema compatibility checking
+        existing.fields().count() >= required.fields().count()
+    }
+    
     /// Clean up and recreate index directory
     async fn recreate_index_directory(path: &Path) -> SearchResultType<()> {
         if path.exists() {
@@ -119,11 +138,14 @@ impl IndexManager {
     pub async fn new(index_dir: &Path, max_memory_mb: u64) -> SearchResultType<Self> {
         info!("Initializing index manager at: {:?}", index_dir);
         
-        // Validate and normalize the index directory path
-        let index_path = index_dir.canonicalize().unwrap_or_else(|_| {
-            // If canonicalize fails, use the path as-is
+        // Normalize the index directory path (create absolute path if needed)
+        let index_path = if index_dir.is_absolute() {
             index_dir.to_path_buf()
-        });
+        } else {
+            std::env::current_dir()
+                .map_err(|e| SearchError::index_error(format!("Cannot get current directory: {}", e)))?
+                .join(index_dir)
+        };
         
         // Ensure index directory exists with proper permissions
         if let Err(e) = tokio::fs::create_dir_all(&index_path).await {
@@ -133,68 +155,60 @@ impl IndexManager {
             )));
         }
         
-        // Validate if existing index is present and valid
-        let has_valid_index = Self::validate_index_directory(&index_path).await;
-        
-        if has_valid_index {
-            debug!("Valid index found in directory, attempting to open existing index");
-        } else {
-            debug!("No valid index found, will create new index");
-        }
-        
-        // Build schema
+        // Build schema first - we need this for both creating and opening indices
         let schema = Self::build_schema();
         let fields = Self::extract_fields(&schema);
         
-        // Create or open index with robust error handling
-        let main_index = if !has_valid_index {
-            // No valid index found, create new one
-            info!("Creating new search index");
-            Self::recreate_index_directory(&index_path).await?;
-            Index::create_in_dir(&index_path, schema.clone())?
-        } else {
-            // Valid index directory found, try to open existing index
-            match Index::open_in_dir(&index_path) {
-                Ok(index) => {
-                    info!("Successfully opened existing search index");
-                    index
-                }
-                Err(TantivyError::OpenDirectoryError(_)) => {
-                    warn!("Directory error opening index, creating new one");
-                    Self::recreate_index_directory(&index_path).await?;
-                    Index::create_in_dir(&index_path, schema.clone())?
-                }
-                Err(ref e) if e.to_string().contains("meta.json") || e.to_string().contains("FileDoesNotExist") => {
-                    warn!("Index file missing ({}), creating new index", e);
-                    Self::recreate_index_directory(&index_path).await?;
-                    Index::create_in_dir(&index_path, schema.clone())?
-                }
-                Err(TantivyError::IoError(ref io_err)) if io_err.kind() == std::io::ErrorKind::NotFound => {
-                    info!("Index files not found, creating new index");
-                    Self::recreate_index_directory(&index_path).await?;
-                    Index::create_in_dir(&index_path, schema.clone())?
-                }
-                Err(e) => {
-                    error!("Failed to open search index: {}", e);
-                    warn!("Attempting to create new index as fallback");
-                    
-                    // Clean up and try to create a fresh index
-                    Self::recreate_index_directory(&index_path).await?;
-                    
-                    match Index::create_in_dir(&index_path, schema.clone()) {
-                        Ok(index) => {
-                            info!("Successfully created new index after error recovery");
+        // Always try to create a fresh index first, fallback to opening existing if needed
+        let main_index = match Index::create_in_dir(&index_path, schema.clone()) {
+            Ok(index) => {
+                info!("Successfully created new search index at: {:?}", index_path);
+                index
+            }
+            Err(TantivyError::IndexAlreadyExists) => {
+                // Index already exists, try to open it
+                info!("Index already exists, attempting to open existing index");
+                match Index::open_in_dir(&index_path) {
+                    Ok(index) => {
+                        info!("Successfully opened existing search index");
+                        
+                        // Verify that the opened index has a compatible schema
+                        let existing_schema = index.schema();
+                        if Self::is_schema_compatible(&existing_schema, &schema) {
                             index
-                        }
-                        Err(create_err) => {
-                            error!("Failed to create fallback index: {}", create_err);
-                            return Err(SearchError::index_error(format!(
-                                "Failed to open existing index ({}) and failed to create new index ({})", 
-                                e, create_err
-                            )));
+                        } else {
+                            warn!("Index schema is incompatible, recreating index");
+                            Self::recreate_index_directory(&index_path).await?;
+                            Index::create_in_dir(&index_path, schema.clone())
+                                .map_err(|e| SearchError::index_error(format!("Failed to recreate index after schema mismatch: {}", e)))?
                         }
                     }
+                    Err(ref e) if Self::is_missing_index_file_error(e) => {
+                        warn!("Index files corrupted or missing ({}), recreating index", e);
+                        Self::recreate_index_directory(&index_path).await?;
+                        Index::create_in_dir(&index_path, schema.clone())
+                            .map_err(|e| SearchError::index_error(format!("Failed to recreate index after corruption: {}", e)))?
+                    }
+                    Err(e) => {
+                        error!("Failed to open existing index: {}", e);
+                        warn!("Attempting to recreate index as fallback");
+                        
+                        // Clean up and try to create a fresh index
+                        Self::recreate_index_directory(&index_path).await?;
+                        
+                        Index::create_in_dir(&index_path, schema.clone())
+                            .map_err(|create_err| SearchError::index_error(format!(
+                                "Failed to open existing index ({}) and failed to create new index ({})", 
+                                e, create_err
+                            )))?
+                    }
                 }
+            }
+            Err(e) => {
+                error!("Failed to create new index: {}", e);
+                return Err(SearchError::index_error(format!(
+                    "Cannot create new index at {:?}: {}", index_path, e
+                )));
             }
         };
         

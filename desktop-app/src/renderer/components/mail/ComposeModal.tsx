@@ -18,6 +18,7 @@ import {
   AlignCenter,
   AlignRight,
   Image,
+  Edit,
   Loader2,
   AlertCircle,
   Minimize2,

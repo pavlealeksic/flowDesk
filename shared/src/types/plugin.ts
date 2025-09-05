@@ -116,6 +116,7 @@ export type PluginPermission =
   // System access
   | 'network'
   | 'filesystem'
+  | 'storage'
   | 'notifications'
   | 'clipboard'
   | 'keychain'

@@ -80,7 +80,7 @@ export const loadWorkspaces = createAsyncThunk(
       window.flowDesk.workspace.listPartitions()
     ])
     
-    const partitionsMap = partitions.reduce((acc, partition) => {
+    const partitionsMap = partitions.reduce((acc: Record<string, WorkspacePartitionConfig>, partition: any) => {
       acc[partition.id] = partition
       return acc
     }, {} as Record<string, WorkspacePartitionConfig>)

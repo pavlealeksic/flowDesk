@@ -198,7 +198,7 @@ const EventQuickCreate: React.FC<{
       title: title.trim(),
       startTime: startDateTime,
       endTime: endDateTime,
-      allDay: false,
+      isAllDay: false,
       description: '',
       location: '',
       attendees: []

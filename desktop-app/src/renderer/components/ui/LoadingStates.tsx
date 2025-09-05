@@ -148,7 +148,7 @@ export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
       )}
     >
       <div className="text-center space-y-4">
-        <LoadingSpinner size="lg" variant="primary" />
+        <LoadingSpinner size="lg" variant="default" />
         <div className="space-y-2">
           <p className="text-sm font-medium">{message}</p>
           {progress !== undefined && (

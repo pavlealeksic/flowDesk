@@ -177,6 +177,37 @@ pub async fn test_calendar_connection() -> Result<String> {
     Ok("Calendar connection test passed".to_string())
 }
 
+/// Initialize the search engine with proper configuration
+#[napi]
+pub async fn init_search_engine(index_dir: String) -> Result<String> {
+    use crate::search::{SearchConfig, SearchEngine};
+    use std::path::PathBuf;
+    
+    tracing::info!("Initializing search engine at: {}", index_dir);
+    
+    let config = SearchConfig {
+        index_dir: PathBuf::from(index_dir),
+        max_memory_mb: 256, // Default memory limit
+        max_response_time_ms: 500,
+        num_threads: num_cpus::get().min(4), // Use up to 4 threads
+        enable_analytics: true,
+        enable_suggestions: true,
+        enable_realtime: true,
+        providers: Vec::new(), // No providers by default
+    };
+    
+    match SearchEngine::new(config).await {
+        Ok(_engine) => {
+            tracing::info!("Search engine initialized successfully");
+            Ok("Search engine initialized successfully".to_string())
+        }
+        Err(e) => {
+            tracing::error!("Failed to initialize search engine: {}", e);
+            Err(Error::from_reason(format!("Search engine initialization failed: {}", e)))
+        }
+    }
+}
+
 /// Simple search test (placeholder for now)
 #[napi]
 pub async fn test_search_engine() -> Result<String> {

@@ -68,6 +68,8 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
       document.addEventListener('click', handleClickOutside);
       return () => document.removeEventListener('click', handleClickOutside);
     }
+    
+    return undefined;
   }, [contextMenuService, showWorkspaceActions]);
   
   const getServiceIcon = useCallback((type: string) => {

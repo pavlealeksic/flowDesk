@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback, useState, useRef, useEffect } from 'react'
-import { FixedSizeList as List, ListChildComponentProps } from 'react-window'
+import { List } from 'react-window'
 import { motion } from 'framer-motion'
 import { 
   Star, 
@@ -35,7 +35,9 @@ interface VirtualizedMessageListProps {
 
 type MessageDensity = 'comfortable' | 'compact' | 'spacious'
 
-interface MessageItemProps extends ListChildComponentProps {
+interface MessageItemProps {
+  index: number;
+  style: React.CSSProperties;
   data: {
     messages: EmailMessage[]
     selectedMessageId: string | null
@@ -299,7 +301,7 @@ export const VirtualizedMessageList: React.FC<VirtualizedMessageListProps> = ({
   showDensityControls = false
 }) => {
   const [density, setDensity] = useState<MessageDensity>('comfortable')
-  const listRef = useRef<List>(null)
+  const listRef = useRef<List<any>>(null)
   const { info } = useNotifications()
 
   // Filter and sort messages

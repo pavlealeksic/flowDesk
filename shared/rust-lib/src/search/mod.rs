@@ -29,6 +29,9 @@ pub mod integration;
 #[cfg(feature = "napi")]
 pub mod napi;
 
+#[cfg(test)]
+pub mod test_init;
+
 // Re-export core types
 pub use engine::SearchEngine;
 pub use error::{SearchError, SearchResult, ErrorContext, SearchErrorContext};

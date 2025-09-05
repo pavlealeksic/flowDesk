@@ -14,6 +14,7 @@ import {
   cn,
   X
 } from '../ui'
+import { Modal } from '../ui/Modal'
 import type {
   CalendarProvider,
   CreateCalendarAccountInput
@@ -203,207 +204,159 @@ export const AddCalendarAccountModal: React.FC<AddCalendarAccountModalProps> = (
     onClose()
   }, [resetForm, onClose])
 
-  // Add ESC key handling and prevent body scroll
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && isOpen) {
-        handleClose()
-      }
-    }
-
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = 'hidden'
-    }
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = 'unset'
-    }
-  }, [isOpen, handleClose])
-
-  // Handle backdrop click
-  const handleBackdropClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      handleClose()
-    }
-  }, [handleClose])
-
-  if (!isOpen) return null
-
   return (
-    <div 
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      onClick={handleBackdropClick}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="add-calendar-modal-title"
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Add Calendar Account"
+      description="Connect your calendar account to sync events and manage your schedule"
+      size="lg"
+      className="max-w-2xl"
     >
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-card border-border" onClick={(e) => e.stopPropagation()}>
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 id="add-calendar-modal-title" className="text-xl font-semibold">Add Calendar Account</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Connect your calendar account to sync events and manage your schedule
-              </p>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleClose}
-              className="h-8 w-8 p-0"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          
-          <div className="space-y-6">
-          {/* Provider Selection */}
-          <div>
-            <h3 className="text-sm font-medium mb-3">Select Calendar Provider</h3>
-            <div className="grid grid-cols-1 gap-3">
-              {(Object.entries(PROVIDER_INFO) as [CalendarProvider, any][]).map(([provider, info]) => (
-                <div
-                  key={provider}
-                  className={cn(
-                    'p-3 border rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md',
-                    selectedProvider === provider ? 'border-primary bg-primary/10' : 'border-border'
-                  )}
-                  onClick={() => handleProviderSelect(provider)}
-                >
-                  <div className="flex items-center space-x-3">
-                    <span className="text-2xl">{info.icon}</span>
-                    <div className="flex-1">
-                      <h4 className="font-medium text-sm">{info.name}</h4>
-                      <p className="text-xs text-muted-foreground">{info.description}</p>
-                    </div>
+      <div className="space-y-6">
+        {/* Provider Selection */}
+        <div>
+          <h3 className="text-sm font-medium mb-3">Select Calendar Provider</h3>
+          <div className="grid grid-cols-1 gap-3">
+            {(Object.entries(PROVIDER_INFO) as [CalendarProvider, any][]).map(([provider, info]) => (
+              <div
+                key={provider}
+                className={cn(
+                  'p-3 border rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md',
+                  selectedProvider === provider ? 'border-primary bg-primary/10' : 'border-border'
+                )}
+                onClick={() => handleProviderSelect(provider)}
+              >
+                <div className="flex items-center space-x-3">
+                  <span className="text-2xl">{info.icon}</span>
+                  <div className="flex-1">
+                    <h4 className="font-medium text-sm">{info.name}</h4>
+                    <p className="text-xs text-muted-foreground">{info.description}</p>
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
+        </div>
 
-          {/* Account Configuration */}
-          {selectedProvider && (
-            <div className="space-y-4">
-              <h3 className="text-sm font-medium">Account Configuration</h3>
-              
+        {/* Account Configuration */}
+        {selectedProvider && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-medium">Account Configuration</h3>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Account Name</label>
+              <input
+                type="text"
+                value={accountName}
+                onChange={(e) => setAccountName(e.target.value)}
+                placeholder="Enter a name for this account"
+                required
+                className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground"
+              />
+            </div>
+
+            {selectedProvider !== 'caldav' && (
               <div className="space-y-2">
-                <label className="text-sm font-medium">Account Name</label>
+                <label className="text-sm font-medium">Email Address</label>
                 <input
-                  type="text"
-                  value={accountName}
-                  onChange={(e) => setAccountName(e.target.value)}
-                  placeholder="Enter a name for this account"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your.email@example.com"
                   required
                   className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground"
                 />
               </div>
+            )}
 
-              {selectedProvider !== 'caldav' && (
+            {selectedProvider === 'caldav' && (
+              <>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Email Address</label>
+                  <label className="text-sm font-medium">CalDAV Server URL</label>
                   <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="your.email@example.com"
+                    type="url"
+                    value={serverUrl}
+                    onChange={(e) => setServerUrl(e.target.value)}
+                    placeholder="https://caldav.example.com/calendar"
                     required
                     className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground"
                   />
                 </div>
-              )}
-
-              {selectedProvider === 'caldav' && (
-                <>
+                
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">CalDAV Server URL</label>
+                    <label className="text-sm font-medium">Username</label>
                     <input
-                      type="url"
-                      value={serverUrl}
-                      onChange={(e) => setServerUrl(e.target.value)}
-                      placeholder="https://caldav.example.com/calendar"
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="your.username"
                       required
                       className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground"
                     />
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Username</label>
-                      <input
-                        type="text"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        placeholder="your.username"
-                        required
-                        className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground"
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Password</label>
-                      <input
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="your.password"
-                        required
-                        className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground"
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* OAuth2 Info */}
-              {(selectedProvider === 'google' || selectedProvider === 'outlook') && (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-start space-x-2">
-                    <span className="text-blue-500">ℹ️</span>
-                    <div className="text-sm">
-                      <p className="font-medium text-blue-800">OAuth2 Authentication</p>
-                      <p className="text-blue-700 mt-1">
-                        After clicking "Add Account", you'll be redirected to {PROVIDER_INFO[selectedProvider].name} 
-                        to grant calendar access permissions.
-                      </p>
-                    </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Password</label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="your.password"
+                      required
+                      className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground"
+                    />
                   </div>
                 </div>
-              )}
-            </div>
-          )}
+              </>
+            )}
 
-          {/* Error Display */}
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <div className="flex items-center space-x-2">
-                <span className="text-red-500">⚠️</span>
-                <p className="text-sm text-red-800">{error}</p>
+            {/* OAuth2 Info */}
+            {(selectedProvider === 'google' || selectedProvider === 'outlook') && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-start space-x-2">
+                  <span className="text-blue-500">ℹ️</span>
+                  <div className="text-sm">
+                    <p className="font-medium text-blue-800">OAuth2 Authentication</p>
+                    <p className="text-blue-700 mt-1">
+                      After clicking "Add Account", you'll be redirected to {PROVIDER_INFO[selectedProvider].name} 
+                      to grant calendar access permissions.
+                    </p>
+                  </div>
+                </div>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* Error Display */}
+        {error && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-center space-x-2">
+              <span className="text-red-500">⚠️</span>
+              <p className="text-sm text-red-800">{error}</p>
             </div>
-          )}
           </div>
+        )}
+        
+        <div className="flex justify-end space-x-3 pt-6 border-t">
+          <Button
+            variant="outline"
+            onClick={handleClose}
+            disabled={isLoading}
+          >
+            Cancel
+          </Button>
           
-          <div className="flex justify-end space-x-3 pt-6 border-t">
-            <Button
-              variant="outline"
-              onClick={handleClose}
-              disabled={isLoading}
-            >
-              Cancel
-            </Button>
-            
-            <Button
-              onClick={handleSubmit}
-              disabled={!selectedProvider || isLoading}
-            >
-              {isLoading ? 'Adding Account...' : 'Add Account'}
-            </Button>
-          </div>
+          <Button
+            onClick={handleSubmit}
+            disabled={!selectedProvider || isLoading}
+          >
+            {isLoading ? 'Adding Account...' : 'Add Account'}
+          </Button>
         </div>
-      </Card>
-    </div>
+      </div>
+    </Modal>
   )
 }

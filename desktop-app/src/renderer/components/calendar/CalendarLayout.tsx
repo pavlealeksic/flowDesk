@@ -25,6 +25,7 @@ import {
 } from '../ui'
 import { CalendarViews } from './CalendarViews'
 import { AddCalendarAccountModal } from './AddCalendarAccountModal'
+import { CreateEventModal } from './CreateEventModal'
 import { PrivacySyncSettings } from './PrivacySyncSettings'
 import type { CalendarEvent } from '@flow-desk/shared'
 
@@ -49,8 +50,10 @@ export const CalendarLayout: React.FC<CalendarLayoutProps> = ({
   } = useAppSelector(state => state.calendar)
 
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false)
+  const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('calendar')
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
 
   // Initialize calendar data on mount
   useEffect(() => {
@@ -68,14 +71,15 @@ export const CalendarLayout: React.FC<CalendarLayoutProps> = ({
   }, [])
 
   // Handle create event
-  const handleCreateEvent = useCallback(() => {
-    // TODO: Open create event modal
-    console.log('Create event clicked')
+  const handleCreateEvent = useCallback((date?: Date) => {
+    setSelectedDate(date || new Date())
+    setIsCreateEventModalOpen(true)
   }, [])
 
   // Handle date select
   const handleDateSelect = useCallback((date: Date) => {
-    console.log('Date selected:', date)
+    setSelectedDate(date)
+    setIsCreateEventModalOpen(true)
   }, [])
 
   // Handle calendar visibility toggle
@@ -264,6 +268,22 @@ export const CalendarLayout: React.FC<CalendarLayoutProps> = ({
         onSuccess={() => {
           // Reload data after adding account
           loadInitialData('current_user')
+        }}
+      />
+
+      {/* Create Event Modal */}
+      <CreateEventModal
+        isOpen={isCreateEventModalOpen}
+        onClose={() => {
+          setIsCreateEventModalOpen(false)
+          setSelectedDate(null)
+        }}
+        selectedDate={selectedDate || undefined}
+        selectedCalendarId={allCalendars[0]?.id}
+        onSuccess={(event) => {
+          console.log('Event created successfully:', event)
+          setIsCreateEventModalOpen(false)
+          setSelectedDate(null)
         }}
       />
     </div>

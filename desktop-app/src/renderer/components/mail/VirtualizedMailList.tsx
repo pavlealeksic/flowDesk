@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
-import { List, ListChildComponentProps } from 'react-window'
+import { List } from 'react-window'
 import { 
   Avatar,
   Button,
@@ -39,7 +39,11 @@ interface MessageItemData {
   showQuickActions?: boolean
 }
 
-type MessageItemProps = ListChildComponentProps<MessageItemData>
+type MessageItemProps = {
+  index: number;
+  style: React.CSSProperties;
+  data: MessageItemData;
+}
 
 const ITEM_HEIGHT = 80 // Height of each message item in pixels
 
@@ -235,7 +239,7 @@ export const VirtualizedMailList: React.FC<VirtualizedMailListProps> = ({
   className,
   showQuickActions = false
 }) => {
-  const listRef = useRef<List<MessageItemData>>(null)
+  const listRef = useRef<any>(null)
 
   // Scroll to selected message when selection changes
   useEffect(() => {

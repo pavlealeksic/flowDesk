@@ -102,6 +102,47 @@ export {
   Volume2,
   VolumeX,
   
+  // Missing icons that components are importing
+  MapPin,
+  Bell,
+  MoreVertical,
+  Grid,
+  UserPlus,
+  Loader2,
+  FileText,
+  Maximize2,
+  Minimize2,
+  ExternalLink,
+  
+  // Text formatting icons
+  Bold,
+  Italic,
+  Underline,
+  Link,
+  List,
+  ListOrdered,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  
+  // Additional UI icons
+  Archive,
+  Keyboard,
+  Laptop,
+  Maximize,
+  Minimize,
+  Monitor,
+  Moon,
+  MoreHorizontal,
+  MousePointer,
+  Move,
+  Palette,
+  Pin,
+  RefreshCw,
+  Shield,
+  Sliders,
+  Sun,
+  
   // Additional icons
   RotateCcw as Sync,
   File as Template,
@@ -113,8 +154,7 @@ export {
 // Icon aliases for backward compatibility - import directly from lucide-react
 export { RotateCcw as Refresh } from 'lucide-react';
 
-// For backwards compatibility, still provide the complete export but warn about bundle size
-export * from 'lucide-react'
+// Note: Removed complete lucide-react export to avoid Badge naming conflict with our UI Badge component
 
 // Lazy-loaded icon groups for better code splitting
 export const getNavigationIcons = async () => {

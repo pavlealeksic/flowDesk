@@ -799,6 +799,7 @@ impl DkimSigner {
 mod tests {
     use super::*;
     use secrecy::Secret;
+    use chrono::Utc;
 
     fn create_test_config() -> SmtpConfig {
         SmtpConfig {

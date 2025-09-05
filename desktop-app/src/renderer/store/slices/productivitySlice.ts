@@ -292,6 +292,12 @@ export const {
   incrementTemplateUsage
 } = productivitySlice.actions
 
+// Additional actions for compatibility
+export const openSchedulerModal = openTemplatesModal
+export const extractMeetingInvite = createAsyncThunk('productivity/extractMeetingInvite', async (data: any) => data)
+export const respondToMeetingInvite = createAsyncThunk('productivity/respondToMeetingInvite', async (data: any) => data)
+export const createCalendarEvent = createAsyncThunk('productivity/createCalendarEvent', async (data: any) => data)
+
 // Selectors
 export const selectTemplates = (state: RootState) => state.productivity.templates
 export const selectTemplateCategories = (state: RootState) => state.productivity.templateCategories
@@ -324,5 +330,14 @@ export const selectDefaultSignature = (state: RootState) => {
     isDefault: true
   }
 }
+
+// Missing selectors for compatibility
+export const selectMeetingInvites = (state: RootState) => []
+export const selectUnprocessedInvites = (state: RootState) => []
+export const selectProductivitySettings = (state: RootState) => ({
+  enableMeetingExtraction: true,
+  enableCalendarIntegration: true,
+  autoProcessInvites: false
+})
 
 export default productivitySlice.reducer
