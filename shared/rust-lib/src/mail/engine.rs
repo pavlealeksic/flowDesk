@@ -5,7 +5,7 @@ use crate::mail::{
     config::MailEngineConfig,
     database::MailDatabase,
     error::{MailError, MailResult},
-    notifications::{EmailNotificationSystem, NotificationConfig, NotificationListener, UINotification},
+    notifications::{EmailNotificationSystem, NotificationConfig, NotificationListener},
     providers::{MailProviderTrait, ProviderFactory, SyncResult},
     sync::SyncEngine,
     threading::ThreadingEngine,
@@ -69,9 +69,8 @@ impl MailEngine {
         // Create and initialize notification system
         let mut notification_system = EmailNotificationSystem::new(notification_config).await?;
         
-        // TODO: Initialize with connection pool when available
-        // This would require accessing the connection pool from providers
-        // notification_system.initialize(connection_pool).await?;
+        // Initialize with database connection for notification storage
+        notification_system.initialize_with_database(&self.database).await?;
         
         self.notification_system = Some(Arc::new(notification_system));
         

@@ -95,11 +95,18 @@ export class FlowDeskRustEngine {
 
   constructor() {
     try {
-      // Try to load the Rust library
-      const libPath = path.join(__dirname, 'index.js');
-      this.rustLib = require(libPath);
+      // Try to load the Rust library using the proper NAPI loading mechanism
+      const rustIndex = require('./index');
+      
+      // Check if we successfully loaded the NAPI interface
+      if (rustIndex && rustIndex.FlowDesk && rustIndex.available) {
+        console.log(`✅ FlowDesk Rust Engine loaded via ${rustIndex.integrationMethod}`);
+        this.rustLib = rustIndex.FlowDesk;
+      } else {
+        throw new Error('NAPI interface not available');
+      }
     } catch (error) {
-      console.warn('Failed to load Rust library, using mock implementation:', error);
+      console.warn('Failed to load Rust NAPI library, using mock implementation:', error);
       this.rustLib = this.createMockImplementation();
     }
   }

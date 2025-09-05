@@ -4,7 +4,7 @@ use super::ImapConfig;
 use crate::mail::error::{MailError, MailResult};
 use async_imap::{Client, Session, imap_proto};
 use async_native_tls::{TlsConnector, TlsStream};
-use tokio_util::compat::{Compat, TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt, FuturesAsyncReadCompatExt};
+use tokio_util::compat::{Compat, TokioAsyncReadCompatExt, FuturesAsyncReadCompatExt};
 use tokio::net::TcpStream;
 use secrecy::ExposeSecret;
 use std::{
@@ -247,11 +247,8 @@ impl ImapSession {
     }
 }
 
-use tokio::{
-    sync::{Mutex, RwLock, Semaphore},
-    time::sleep,
-};
-use tracing::{debug, error, info, warn};
+use tokio::sync::{Mutex, RwLock, Semaphore};
+use tracing::{debug, info, warn};
 use futures::{AsyncRead, AsyncWrite, StreamExt, TryStreamExt};
 
 /// IMAP connection wrapper with automatic reconnection
@@ -397,7 +394,7 @@ impl ImapConnection {
 
     /// Close the connection gracefully
     pub async fn close(&mut self) {
-        if let Some(mut session) = self.session.take() {
+        if let Some(session) = self.session.take() {
             if let Err(e) = session.logout().await {
                 warn!("Failed to logout from IMAP session {}: {:?}", self.connection_id, e);
             }

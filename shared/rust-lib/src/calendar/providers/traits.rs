@@ -6,12 +6,11 @@
  */
 
 use async_trait::async_trait;
-use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::calendar::{
-    CalendarResult, CalendarError, Calendar, CalendarEvent,
+    CalendarResult, Calendar, CalendarEvent,
     CreateCalendarEventInput, UpdateCalendarEventInput,
     FreeBusyQuery, FreeBusyResponse, EventAttendee,
     CalendarProvider

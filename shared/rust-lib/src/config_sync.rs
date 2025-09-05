@@ -430,7 +430,7 @@ impl ConfigSyncEngine {
         let config_str = serde_json::to_string(&config)?;
         let config_hash = hash_to_hex(config_str.as_bytes());
         
-        let mut vector_clock = if let Some(current) = self.current_config.read().await.as_ref() {
+        let vector_clock = if let Some(current) = self.current_config.read().await.as_ref() {
             let mut clock = current.vector_clock.clone();
             clock.increment(&self.device_info.device_id);
             clock
@@ -475,7 +475,7 @@ impl ConfigSyncEngine {
         }
         
         let mut total_bytes = 0u64;
-        let mut conflicts_detected = 0u32;
+        let conflicts_detected = 0u32;
         let mut last_error = None;
         
         // Sync with all available transports
@@ -656,7 +656,7 @@ impl ConfigSyncEngine {
     }
     
     /// Create a backup of current configuration
-    pub async fn create_backup(&self, description: Option<String>) -> Result<String> {
+    pub async fn create_backup(&self, _description: Option<String>) -> Result<String> {
         if let Some(config) = self.current_config.read().await.as_ref() {
             let backup_id = self.storage.create_backup(config).await?;
             Ok(backup_id)

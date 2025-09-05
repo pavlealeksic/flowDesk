@@ -19,10 +19,19 @@ static CALENDAR_ENGINES: Lazy<Mutex<HashMap<usize, calendar::CalendarEngine>>> =
 static NEXT_HANDLE: Lazy<Mutex<usize>> = Lazy::new(|| Mutex::new(1));
 
 fn get_next_handle() -> usize {
-    let mut handle = NEXT_HANDLE.lock().unwrap();
-    let current = *handle;
-    *handle += 1;
-    current
+    match NEXT_HANDLE.lock() {
+        Ok(mut handle) => {
+            let current = *handle;
+            *handle += 1;
+            current
+        }
+        Err(_) => {
+            // In case of lock poisoning, return a fallback value
+            // This is a critical error but we don't want to panic in FFI
+            eprintln!("WARNING: Handle mutex poisoned, returning fallback handle");
+            0
+        }
+    }
 }
 
 /// Initialize the library
@@ -35,8 +44,16 @@ pub extern "C" fn flow_desk_init() -> c_int {
 /// Get library version
 #[no_mangle]
 pub extern "C" fn flow_desk_version() -> *const c_char {
-    let version = CString::new(crate::VERSION).unwrap();
-    version.into_raw()
+    match CString::new(crate::VERSION) {
+        Ok(version) => version.into_raw(),
+        Err(_) => {
+            // If version string contains null bytes, return a safe fallback
+            match CString::new("unknown") {
+                Ok(fallback) => fallback.into_raw(),
+                Err(_) => std::ptr::null(), // Last resort
+            }
+        }
+    }
 }
 
 /// Free a string allocated by Rust
@@ -180,21 +197,39 @@ pub extern "C" fn flow_desk_search_create() -> usize {
         providers: vec![],
     };
     
-    let rt = tokio::runtime::Runtime::new().unwrap();
+    let rt = match tokio::runtime::Runtime::new() {
+        Ok(rt) => rt,
+        Err(_) => {
+            eprintln!("WARNING: Failed to create tokio runtime for search engine");
+            return 0; // Return invalid handle
+        }
+    };
     let engine = match rt.block_on(search::SearchEngine::new(config)) {
         Ok(engine) => engine,
         Err(_) => return 0, // Error - return invalid handle
     };
     
     let handle = get_next_handle();
-    let mut engines = SEARCH_ENGINES.lock().unwrap();
+    let mut engines = match SEARCH_ENGINES.lock() {
+        Ok(engines) => engines,
+        Err(_) => {
+            eprintln!("WARNING: Search engines mutex poisoned");
+            return 0; // Return invalid handle
+        }
+    };
     engines.insert(handle, engine);
     handle
 }
 
 #[no_mangle]
 pub extern "C" fn flow_desk_search_destroy(handle: usize) {
-    let mut engines = SEARCH_ENGINES.lock().unwrap();
+    let mut engines = match SEARCH_ENGINES.lock() {
+        Ok(engines) => engines,
+        Err(_) => {
+            eprintln!("WARNING: Search engines mutex poisoned");
+            return 0; // Return invalid handle
+        }
+    };
     engines.remove(&handle);
 }
 
@@ -282,9 +317,21 @@ pub extern "C" fn flow_desk_search_add_document(
         },
     };
 
-    let mut engines = SEARCH_ENGINES.lock().unwrap();
+    let mut engines = match SEARCH_ENGINES.lock() {
+        Ok(engines) => engines,
+        Err(_) => {
+            eprintln!("WARNING: Search engines mutex poisoned");
+            return 0; // Return invalid handle
+        }
+    };
     if let Some(engine) = engines.get_mut(&handle) {
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = match tokio::runtime::Runtime::new() {
+            Ok(rt) => rt,
+            Err(_) => {
+                eprintln!("WARNING: Failed to create tokio runtime for indexing");
+                return -1;
+            }
+        };
         match rt.block_on(engine.index_document(document)) {
             Ok(_) => 0,
             Err(_) => -1,
@@ -322,9 +369,21 @@ pub extern "C" fn flow_desk_search_query(
         options: search::SearchOptions::default(),
     };
 
-    let mut engines = SEARCH_ENGINES.lock().unwrap();
+    let mut engines = match SEARCH_ENGINES.lock() {
+        Ok(engines) => engines,
+        Err(_) => {
+            eprintln!("WARNING: Search engines mutex poisoned");
+            return 0; // Return invalid handle
+        }
+    };
     if let Some(engine) = engines.get_mut(&handle) {
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = match tokio::runtime::Runtime::new() {
+            Ok(rt) => rt,
+            Err(_) => {
+                eprintln!("WARNING: Failed to create tokio runtime for search query");
+                return std::ptr::null_mut();
+            }
+        };
         match rt.block_on(engine.search(search_query)) {
             Ok(results) => {
                 match serde_json::to_string(&results) {
@@ -354,7 +413,13 @@ pub extern "C" fn flow_desk_mail_create_engine() -> usize {
 
 #[no_mangle]
 pub extern "C" fn flow_desk_mail_destroy_engine(handle: usize) {
-    let mut engines = MAIL_ENGINES.lock().unwrap();
+    let mut engines = match MAIL_ENGINES.lock() {
+        Ok(engines) => engines,
+        Err(_) => {
+            eprintln!("WARNING: Mail engines mutex poisoned");
+            return 0; // Return invalid handle
+        }
+    };
     engines.remove(&handle);
 }
 
@@ -415,7 +480,13 @@ pub extern "C" fn flow_desk_calendar_create_engine() -> usize {
 
 #[no_mangle]
 pub extern "C" fn flow_desk_calendar_destroy_engine(handle: usize) {
-    let mut engines = CALENDAR_ENGINES.lock().unwrap();
+    let mut engines = match CALENDAR_ENGINES.lock() {
+        Ok(engines) => engines,
+        Err(_) => {
+            eprintln!("WARNING: Calendar engines mutex poisoned");
+            return 0; // Return invalid handle
+        }
+    };
     engines.remove(&handle);
 }
 

@@ -1,11 +1,10 @@
 //! Real-time indexing and background processing for the search engine
 
 use crate::search::{
-    SearchDocument, SearchError, SearchResult as SearchResultType, 
-    ErrorContext, SearchErrorContext, ProviderManager
+    SearchDocument, SearchError, SearchResult as SearchResultType, ProviderManager
 };
 use std::sync::Arc;
-use tokio::sync::{RwLock, mpsc, Semaphore};
+use tokio::sync::{RwLock, Semaphore};
 use tokio_util::task::TaskTracker;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};

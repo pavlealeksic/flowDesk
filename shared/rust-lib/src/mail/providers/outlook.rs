@@ -2,13 +2,11 @@
 
 use crate::mail::{error::{MailResult, MailError}, providers::{MailProviderTrait, ProviderCapabilities, SyncResult, SyncChange}, types::*};
 use async_trait::async_trait;
-use std::collections::HashMap;
 use uuid::Uuid;
 use reqwest::{Client, header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE}};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
 use base64::{Engine, engine::general_purpose};
 
 pub struct OutlookProvider {
@@ -278,6 +276,8 @@ impl OutlookProvider {
                 is_draft: graph_msg.is_draft,
                 is_sent: false,
                 has_attachments: graph_msg.has_attachments,
+                is_replied: false,
+                is_forwarded: false,
             },
             labels: vec![], // Outlook uses categories, not labels
             folder: graph_msg.parent_folder_id.clone(),
@@ -538,6 +538,8 @@ impl MailProviderTrait for OutlookProvider {
                 is_draft: graph_msg.is_draft,
                 is_sent: false,
                 has_attachments: graph_msg.has_attachments,
+                is_replied: false,
+                is_forwarded: false,
             },
             labels: vec![],
             folder: graph_msg.parent_folder_id.clone(),
@@ -1031,6 +1033,8 @@ impl MailProviderTrait for OutlookProvider {
                     is_draft: graph_msg.is_draft,
                     is_sent: false,
                     has_attachments: graph_msg.has_attachments,
+                    is_replied: false,
+                    is_forwarded: false,
                 },
                 labels: vec![],
                 folder: graph_msg.parent_folder_id.clone(),

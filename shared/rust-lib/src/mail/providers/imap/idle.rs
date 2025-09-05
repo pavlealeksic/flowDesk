@@ -200,11 +200,8 @@
 //! - Support for all standard unsolited responses
 //! - Proper multiplexing and connection management
 
-use crate::mail::{error::{MailError, MailResult}, types::*};
-use async_imap::{
-    types::UnsolicitedResponse,
-    extensions::idle::IdleResponse,
-};
+use crate::mail::error::{MailError, MailResult};
+use async_imap::extensions::idle::IdleResponse;
 use std::{
     collections::HashMap,
     sync::{Arc, atomic::{AtomicBool, Ordering}},
@@ -861,7 +858,9 @@ mod tests {
                 assert_eq!(id1, id2);
                 assert_eq!(f1, f2);
             }
-            _ => panic!("Event serialization failed"),
+            _ => {
+                assert!(false, "Event serialization failed - mismatched event types after serialization/deserialization");
+            }
         }
     }
 }

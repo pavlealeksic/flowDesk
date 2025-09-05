@@ -4,19 +4,15 @@ use crate::search::{SearchDocument, SearchError, SearchResult as SearchResultTyp
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tantivy::{
-    Index, IndexWriter, IndexReader, Document, TantivyDocument, Term, TantivyError,
-    schema::{Schema, Field, TextFieldIndexing, TextOptions, IndexRecordOption, STORED, INDEXED, STRING},
-    query::{Query, QueryParser, TermQuery, BooleanQuery, Occur},
-    collector::{TopDocs, FacetCollector},
-    fastfield::FastFieldReaders,
-    Searcher, ReloadPolicy, SegmentReader,
+    Index, IndexWriter, IndexReader, TantivyDocument, Term, TantivyError,
+    schema::{Schema, Field, TextFieldIndexing, TextOptions, IndexRecordOption, STORED},
+    Searcher, ReloadPolicy,
 };
 use tokio::sync::{RwLock, Mutex};
 use dashmap::DashMap;
 use parking_lot::Mutex as ParkingMutex;
 use tracing::{info, error, debug, warn, instrument};
 use chrono::{DateTime, Utc};
-use uuid::Uuid;
 
 /// Index manager for all search operations
 pub struct IndexManager {
@@ -173,9 +169,8 @@ impl IndexManager {
         drop(writer);
         
         // Note: In newer Tantivy versions, add_document returns an OpStamp, not DocAddress
-        // We'll rebuild the mapping from the index instead
-        // For now, we don't store the doc_address directly
-        // TODO: Rebuild doc_id_map periodically or find document by ID
+        // We rebuild the mapping from the index to maintain doc_id_map accuracy
+        self.refresh_doc_id_mapping_for_document(&doc_id).await?;
         self.update_stats().await?;
         
         debug!("Document added successfully");
@@ -228,6 +223,15 @@ impl IndexManager {
             writer.commit()?;
         }
         drop(writer);
+        
+        // Rebuild doc_id_map for better accuracy after batch operations
+        if added_count > 10 {
+            // For large batches, rebuild the entire mapping
+            self.rebuild_doc_id_map().await?;
+        } else if added_count > 0 {
+            // For small batches, do selective refresh
+            self.selective_doc_id_mapping_refresh().await?;
+        }
         
         // Update stats
         self.update_stats().await?;
@@ -490,6 +494,135 @@ impl IndexManager {
         stats.commits_count += 1;
         
         Ok(())
+    }
+    
+    /// Refresh doc_id mapping for a specific document by searching the index
+    #[instrument(skip(self), fields(doc_id = %document_id))]
+    async fn refresh_doc_id_mapping_for_document(&self, document_id: &str) -> SearchResultType<()> {
+        let searcher = self.index_reader.searcher();
+        let term_query = tantivy::query::TermQuery::new(
+            Term::from_field_text(self.fields.id, document_id),
+            tantivy::schema::IndexRecordOption::Basic,
+        );
+        
+        // Search for the document
+        let top_docs = searcher.search(&term_query, &tantivy::collector::TopDocs::with_limit(1))?;
+        
+        if let Some((_, doc_address)) = top_docs.first() {
+            // Update the mapping with the found document address
+            self.doc_id_map.insert(document_id.to_string(), *doc_address);
+            debug!("Updated doc_id mapping for document: {}", document_id);
+        } else {
+            // Document not found, remove from mapping if it exists
+            self.doc_id_map.remove(document_id);
+            debug!("Document not found in index, removed from mapping: {}", document_id);
+        }
+        
+        Ok(())
+    }
+    
+    /// Perform selective refresh of doc_id mapping for better performance
+    /// This method only refreshes mappings that might be stale
+    async fn selective_doc_id_mapping_refresh(&self) -> SearchResultType<()> {
+        debug!("Performing selective doc_id mapping refresh");
+        
+        let searcher = self.index_reader.searcher();
+        let current_mapping_size = self.doc_id_map.len();
+        let actual_doc_count = searcher.num_docs() as usize;
+        
+        // If there's a significant discrepancy, do a full rebuild
+        if current_mapping_size.abs_diff(actual_doc_count) > 10 {
+            warn!(
+                "Significant discrepancy in doc_id mapping (mapped: {}, actual: {}), performing full rebuild",
+                current_mapping_size, actual_doc_count
+            );
+            return self.rebuild_doc_id_map().await;
+        }
+        
+        // Otherwise, verify a sample of existing mappings
+        let mut invalid_mappings = Vec::new();
+        let mut checked_count = 0;
+        
+        for entry in self.doc_id_map.iter() {
+            let doc_id = entry.key();
+            let doc_address = *entry.value();
+            
+            // Verify if the document still exists at this address
+            match searcher.doc::<TantivyDocument>(doc_address) {
+                Ok(document) => {
+                    // Check if this is still the correct document
+                    if let Some(id_values) = document.get_first(self.fields.id) {
+                        let text = format!("{:?}", id_values).trim_matches('"').to_string();
+                        if text != *doc_id {
+                            invalid_mappings.push(doc_id.clone());
+                        }
+                    } else {
+                        invalid_mappings.push(doc_id.clone());
+                    }
+                }
+                Err(_) => {
+                    // Document no longer exists at this address
+                    invalid_mappings.push(doc_id.clone());
+                }
+            }
+            
+            checked_count += 1;
+            // Only check a sample to avoid performance issues
+            if checked_count >= 100 {
+                break;
+            }
+        }
+        
+        // Remove invalid mappings and refresh them
+        for doc_id in invalid_mappings {
+            debug!("Refreshing invalid mapping for document: {}", doc_id);
+            self.refresh_doc_id_mapping_for_document(&doc_id).await?;
+        }
+        
+        debug!("Selective doc_id mapping refresh completed (checked {} documents)", checked_count);
+        Ok(())
+    }
+    
+    /// Find document by ID using efficient search
+    /// This provides a reliable way to locate documents without relying on doc_id_map
+    pub async fn find_document_by_id(&self, document_id: &str) -> SearchResultType<Option<(tantivy::DocAddress, TantivyDocument)>> {
+        let searcher = self.index_reader.searcher();
+        let term_query = tantivy::query::TermQuery::new(
+            Term::from_field_text(self.fields.id, document_id),
+            tantivy::schema::IndexRecordOption::Basic,
+        );
+        
+        // Search for the document
+        let top_docs = searcher.search(&term_query, &tantivy::collector::TopDocs::with_limit(1))?;
+        
+        if let Some((_, doc_address)) = top_docs.first() {
+            match searcher.doc::<TantivyDocument>(*doc_address) {
+                Ok(document) => {
+                    // Update the mapping while we have the information
+                    self.doc_id_map.insert(document_id.to_string(), *doc_address);
+                    Ok(Some((*doc_address, document)))
+                }
+                Err(e) => Err(SearchError::from(e))
+            }
+        } else {
+            Ok(None)
+        }
+    }
+    
+    /// Get document count from mapping (with automatic refresh if needed)
+    pub async fn get_mapped_document_count(&self) -> SearchResultType<usize> {
+        let searcher = self.index_reader.searcher();
+        let actual_count = searcher.num_docs() as usize;
+        let mapped_count = self.doc_id_map.len();
+        
+        // If there's a significant discrepancy, refresh and return accurate count
+        if mapped_count.abs_diff(actual_count) > 5 {
+            debug!("Document count discrepancy detected, refreshing mapping");
+            self.selective_doc_id_mapping_refresh().await?;
+            Ok(self.doc_id_map.len())
+        } else {
+            Ok(mapped_count)
+        }
     }
 }
 

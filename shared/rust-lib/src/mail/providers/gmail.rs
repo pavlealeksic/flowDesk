@@ -7,7 +7,6 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use reqwest::Client;
 use uuid::Uuid;
-use base64::prelude::*;
 // chrono::Utc import removed - unused
 
 pub struct GmailProvider {
@@ -370,6 +369,8 @@ impl GmailProvider {
                 is_draft,
                 is_sent,
                 has_attachments: !attachments.is_empty(),
+                is_replied: false, // Default - would need additional logic
+                is_forwarded: false, // Default - would need additional logic
             },
             labels: label_ids,
             folder: folder.to_string(),
@@ -475,6 +476,8 @@ impl GmailProvider {
                 has_attachments: payload["parts"].as_array()
                     .map(|parts| !parts.is_empty())
                     .unwrap_or(false),
+                is_replied: false,
+                is_forwarded: false,
             },
             labels: label_ids,
             folder: folder.to_string(),
@@ -515,12 +518,25 @@ impl MailProviderTrait for GmailProvider {
     }
     
     async fn get_account_info(&self) -> MailResult<MailAccount> {
-        // TODO: Implement actual account info retrieval
+        // Get Gmail profile information using the Gmail API
+        let response = self.gmail_api_request("profile").await
+            .map_err(|e| MailError::provider_api("gmail", &format!("Failed to fetch profile: {}", e), "profile_fetch_failed"))?;
+
+        let email = response["emailAddress"].as_str()
+            .ok_or_else(|| MailError::provider_api("gmail", "No email address in profile response", "missing_email"))?;
+        
+        let messages_total = response["messagesTotal"].as_u64().unwrap_or(0);
+        let threads_total = response["threadsTotal"].as_u64().unwrap_or(0);
+        let history_id = response["historyId"].as_str().map(|s| s.to_string());
+
+        tracing::info!("Retrieved Gmail account info for {}: {} messages, {} threads", 
+                      email, messages_total, threads_total);
+
         Ok(MailAccount {
             id: Uuid::new_v4(),
             user_id: Uuid::new_v4(),
-            name: "Gmail Account".to_string(),
-            email: "user@gmail.com".to_string(),
+            name: format!("Gmail - {}", email),
+            email: email.to_string(),
             provider: crate::mail::types::MailProvider::Gmail,
             status: crate::mail::types::MailAccountStatus::Active,
             last_sync_at: None,
@@ -531,18 +547,26 @@ impl MailProviderTrait for GmailProvider {
             updated_at: chrono::Utc::now(),
             provider_config: crate::mail::types::ProviderAccountConfig::Gmail {
                 client_id: String::new(),
-                scopes: vec!["https://www.googleapis.com/auth/gmail.readonly".to_string()],
+                scopes: vec![
+                    "https://www.googleapis.com/auth/gmail.readonly".to_string(),
+                    "https://www.googleapis.com/auth/gmail.send".to_string(),
+                    "https://www.googleapis.com/auth/gmail.modify".to_string(),
+                ],
                 enable_push_notifications: false,
-                history_id: None,
+                history_id: history_id.clone(),
             },
             config: crate::mail::types::ProviderAccountConfig::Gmail {
                 client_id: String::new(),
-                scopes: vec!["https://www.googleapis.com/auth/gmail.readonly".to_string()],
+                scopes: vec![
+                    "https://www.googleapis.com/auth/gmail.readonly".to_string(),
+                    "https://www.googleapis.com/auth/gmail.send".to_string(),
+                    "https://www.googleapis.com/auth/gmail.modify".to_string(),
+                ],
                 enable_push_notifications: false,
-                history_id: None,
+                history_id,
             },
             sync_status: None,
-            display_name: "Gmail Account".to_string(),
+            display_name: email.to_string(),
             oauth_tokens: None,
             imap_config: None,
             smtp_config: None,
@@ -722,13 +746,74 @@ impl MailProviderTrait for GmailProvider {
         Ok(message_id)
     }
     
-    async fn update_message_flags(&self, _message_id: &str, _flags: MessageFlags) -> MailResult<()> {
-        // TODO: Implement flag updates
+    async fn update_message_flags(&self, message_id: &str, flags: MessageFlags) -> MailResult<()> {
+        let tokens = self.tokens.lock().await;
+        let token = &tokens.access_token;
+
+        let mut add_labels = Vec::new();
+        let mut remove_labels = Vec::new();
+
+        // Map MessageFlags to Gmail labels
+        if flags.is_seen {
+            remove_labels.push("UNREAD");
+        } else {
+            add_labels.push("UNREAD");
+        }
+
+        if flags.is_flagged {
+            add_labels.push("STARRED");
+        } else {
+            remove_labels.push("STARRED");
+        }
+
+        // MessageFlags doesn't have is_important, using flagged as a proxy
+        if flags.is_flagged {
+            add_labels.push("IMPORTANT");
+        }
+
+        // Create request body
+        let modify_request = serde_json::json!({
+            "addLabelIds": add_labels,
+            "removeLabelIds": remove_labels
+        });
+
+        let response = self.client
+            .post(&format!("https://gmail.googleapis.com/gmail/v1/users/me/messages/{}/modify", message_id))
+            .bearer_auth(token)
+            .json(&modify_request)
+            .send()
+            .await
+            .map_err(|e| MailError::provider_api("gmail", &format!("Failed to update message flags: {}", e), "flag_update_failed"))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(MailError::provider_api("gmail", &format!("Gmail API error {}: {}", status, error_text), "api_error"));
+        }
+
+        tracing::info!("Successfully updated flags for message {}", message_id);
         Ok(())
     }
     
-    async fn delete_message(&self, _message_id: &str) -> MailResult<()> {
-        // TODO: Implement message deletion
+    async fn delete_message(&self, message_id: &str) -> MailResult<()> {
+        let tokens = self.tokens.lock().await;
+        let token = &tokens.access_token;
+
+        // Gmail uses trash/delete - move to trash first
+        let response = self.client
+            .post(&format!("https://gmail.googleapis.com/gmail/v1/users/me/messages/{}/trash", message_id))
+            .bearer_auth(token)
+            .send()
+            .await
+            .map_err(|e| MailError::provider_api("gmail", &format!("Failed to delete message: {}", e), "delete_failed"))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(MailError::provider_api("gmail", &format!("Gmail API error {}: {}", status, error_text), "api_error"));
+        }
+
+        tracing::info!("Successfully moved message {} to trash", message_id);
         Ok(())
     }
     
@@ -804,9 +889,13 @@ impl MailProviderTrait for GmailProvider {
         }
     }
     
-    async fn get_message(&self, _message_id: &str) -> MailResult<MailMessage> {
-        // TODO: Implement single message retrieval
-        Err(crate::mail::error::MailError::Api("Not implemented".to_string()))
+    async fn get_message(&self, message_id: &str) -> MailResult<MailMessage> {
+        let response = self.gmail_api_request(&format!("messages/{}", message_id)).await
+            .map_err(|e| MailError::provider_api("gmail", &format!("Failed to fetch message: {}", e), "message_fetch_failed"))?;
+
+        // Parse the Gmail message response into our MailMessage format
+        self.parse_gmail_message_full(&response, "INBOX")
+            .map_err(|e| MailError::provider_api("gmail", &format!("Failed to parse message: {}", e), "message_parse_failed"))
     }
     
     async fn get_message_raw(&self, message_id: &str) -> MailResult<String> {
@@ -829,43 +918,215 @@ impl MailProviderTrait for GmailProvider {
         }
     }
     
-    async fn save_draft(&self, _message: &NewMessage) -> MailResult<String> {
-        // TODO: Implement draft saving
-        Ok("draft_id".to_string())
+    async fn save_draft(&self, message: &NewMessage) -> MailResult<String> {
+        let tokens = self.tokens.lock().await;
+        let token = &tokens.access_token;
+
+        // Create email content similar to send_message
+        let to_addresses = message.to.join(", ");
+        let cc_addresses = if message.cc.is_empty() { String::new() } else { message.cc.join(", ") };
+        let bcc_addresses = if message.bcc.is_empty() { String::new() } else { message.bcc.join(", ") };
+
+        let mut email_content = format!(
+            "To: {}\r\n",
+            to_addresses
+        );
+
+        if !cc_addresses.is_empty() {
+            email_content.push_str(&format!("Cc: {}\r\n", cc_addresses));
+        }
+
+        if !bcc_addresses.is_empty() {
+            email_content.push_str(&format!("Bcc: {}\r\n", bcc_addresses));
+        }
+
+        email_content.push_str(&format!(
+            "Subject: {}\r\n\r\n",
+            message.subject
+        ));
+
+        if let Some(text) = &message.body_text {
+            email_content.push_str(text);
+        } else if let Some(html) = &message.body_html {
+            email_content.push_str("Content-Type: text/html\r\n\r\n");
+            email_content.push_str(html);
+        }
+
+        // Base64 encode the email
+        let encoded_message = base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, email_content.as_bytes());
+
+        let draft_request = serde_json::json!({
+            "message": {
+                "raw": encoded_message
+            }
+        });
+
+        let response = self.client
+            .post("https://gmail.googleapis.com/gmail/v1/users/me/drafts")
+            .bearer_auth(token)
+            .json(&draft_request)
+            .send()
+            .await
+            .map_err(|e| MailError::provider_api("gmail", &format!("Failed to save draft: {}", e), "draft_save_failed"))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(MailError::provider_api("gmail", &format!("Gmail API error {}: {}", status, error_text), "api_error"));
+        }
+
+        let result: serde_json::Value = response.json().await
+            .map_err(|e| MailError::provider_api("gmail", &format!("Failed to parse draft response: {}", e), "response_parse_failed"))?;
+
+        let draft_id = result["id"].as_str().unwrap_or("unknown").to_string();
+        tracing::info!("Successfully saved draft with ID: {}", draft_id);
+        
+        Ok(draft_id)
     }
     
-    async fn move_message(&self, _message_id: &str, _target_folder: &str) -> MailResult<()> {
-        // TODO: Implement message moving
+    async fn move_message(&self, message_id: &str, target_folder: &str) -> MailResult<()> {
+        // Gmail doesn't have traditional folders, it uses labels
+        // Moving means adding the target label and potentially removing others
+        let tokens = self.tokens.lock().await;
+        let token = &tokens.access_token;
+
+        let modify_request = serde_json::json!({
+            "addLabelIds": [target_folder],
+            "removeLabelIds": ["INBOX"] // Remove from inbox when moving
+        });
+
+        let response = self.client
+            .post(&format!("https://gmail.googleapis.com/gmail/v1/users/me/messages/{}/modify", message_id))
+            .bearer_auth(token)
+            .json(&modify_request)
+            .send()
+            .await
+            .map_err(|e| MailError::provider_api("gmail", &format!("Failed to move message: {}", e), "move_failed"))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(MailError::provider_api("gmail", &format!("Gmail API error {}: {}", status, error_text), "api_error"));
+        }
+
+        tracing::info!("Successfully moved message {} to {}", message_id, target_folder);
         Ok(())
     }
     
-    async fn copy_message(&self, _message_id: &str, _target_folder: &str) -> MailResult<()> {
-        // TODO: Implement message copying
+    async fn copy_message(&self, message_id: &str, target_folder: &str) -> MailResult<()> {
+        // Gmail copying is just adding a label without removing others
+        self.add_label(message_id, target_folder).await
+    }
+    
+    async fn add_label(&self, message_id: &str, label: &str) -> MailResult<()> {
+        let tokens = self.tokens.lock().await;
+        let token = &tokens.access_token;
+
+        let modify_request = serde_json::json!({
+            "addLabelIds": [label]
+        });
+
+        let response = self.client
+            .post(&format!("https://gmail.googleapis.com/gmail/v1/users/me/messages/{}/modify", message_id))
+            .bearer_auth(token)
+            .json(&modify_request)
+            .send()
+            .await
+            .map_err(|e| MailError::provider_api("gmail", &format!("Failed to add label: {}", e), "label_add_failed"))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(MailError::provider_api("gmail", &format!("Gmail API error {}: {}", status, error_text), "api_error"));
+        }
+
+        tracing::info!("Successfully added label {} to message {}", label, message_id);
         Ok(())
     }
     
-    async fn add_label(&self, _message_id: &str, _label: &str) -> MailResult<()> {
-        // TODO: Implement label adding
-        Ok(())
-    }
-    
-    async fn remove_label(&self, _message_id: &str, _label: &str) -> MailResult<()> {
-        // TODO: Implement label removal
+    async fn remove_label(&self, message_id: &str, label: &str) -> MailResult<()> {
+        let tokens = self.tokens.lock().await;
+        let token = &tokens.access_token;
+
+        let modify_request = serde_json::json!({
+            "removeLabelIds": [label]
+        });
+
+        let response = self.client
+            .post(&format!("https://gmail.googleapis.com/gmail/v1/users/me/messages/{}/modify", message_id))
+            .bearer_auth(token)
+            .json(&modify_request)
+            .send()
+            .await
+            .map_err(|e| MailError::provider_api("gmail", &format!("Failed to remove label: {}", e), "label_remove_failed"))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(MailError::provider_api("gmail", &format!("Gmail API error {}: {}", status, error_text), "api_error"));
+        }
+
+        tracing::info!("Successfully removed label {} from message {}", label, message_id);
         Ok(())
     }
 
     async fn mark_important(&self, message_id: &str, is_important: bool) -> MailResult<()> {
-        // TODO: Implement Gmail importance marking
-        Ok(())
+        if is_important {
+            self.add_label(message_id, "IMPORTANT").await
+        } else {
+            self.remove_label(message_id, "IMPORTANT").await
+        }
     }
 
     async fn add_labels(&self, message_id: &str, labels: &[String]) -> MailResult<()> {
-        // TODO: Implement adding multiple labels
+        let tokens = self.tokens.lock().await;
+        let token = &tokens.access_token;
+
+        let modify_request = serde_json::json!({
+            "addLabelIds": labels
+        });
+
+        let response = self.client
+            .post(&format!("https://gmail.googleapis.com/gmail/v1/users/me/messages/{}/modify", message_id))
+            .bearer_auth(token)
+            .json(&modify_request)
+            .send()
+            .await
+            .map_err(|e| MailError::provider_api("gmail", &format!("Failed to add labels: {}", e), "labels_add_failed"))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(MailError::provider_api("gmail", &format!("Gmail API error {}: {}", status, error_text), "api_error"));
+        }
+
+        tracing::info!("Successfully added {} labels to message {}", labels.len(), message_id);
         Ok(())
     }
 
     async fn remove_labels(&self, message_id: &str, labels: &[String]) -> MailResult<()> {
-        // TODO: Implement removing multiple labels
+        let tokens = self.tokens.lock().await;
+        let token = &tokens.access_token;
+
+        let modify_request = serde_json::json!({
+            "removeLabelIds": labels
+        });
+
+        let response = self.client
+            .post(&format!("https://gmail.googleapis.com/gmail/v1/users/me/messages/{}/modify", message_id))
+            .bearer_auth(token)
+            .json(&modify_request)
+            .send()
+            .await
+            .map_err(|e| MailError::provider_api("gmail", &format!("Failed to remove labels: {}", e), "labels_remove_failed"))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(MailError::provider_api("gmail", &format!("Gmail API error {}: {}", status, error_text), "api_error"));
+        }
+
+        tracing::info!("Successfully removed {} labels from message {}", labels.len(), message_id);
         Ok(())
     }
 

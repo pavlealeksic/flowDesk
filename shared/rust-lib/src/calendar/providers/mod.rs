@@ -19,17 +19,12 @@ pub use traits::*;
 pub use caldav::CalDavProvider;
 pub use detection::{ProviderDetector, DetectionResult, AutoDetectedConfig};
 
-use async_trait::async_trait;
-use std::collections::HashMap;
 use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::calendar::{
-    CalendarResult, CalendarError, CalendarAccount, Calendar, 
-    CalendarEvent, CreateCalendarEventInput, UpdateCalendarEventInput,
-    FreeBusyQuery, FreeBusyResponse, CalendarProvider, 
-    EventReminder, ConferencingInfo
+    CalendarResult, CalendarError, CalendarAccount, CreateCalendarEventInput, UpdateCalendarEventInput, CalendarProvider
 };
 
 // Note: SyncStatus, BatchOperationRequest, BatchOperationResult, WebhookNotification, and WebhookSubscription are defined later in this file
@@ -364,7 +359,9 @@ mod tests {
         
         match deserialized {
             BatchOperation::CreateEvent(_) => {}, // Expected
-            _ => panic!("Unexpected operation type"),
+            _ => {
+                assert!(false, "Unexpected operation type after deserialization - expected CreateEvent");
+            }
         }
     }
 }

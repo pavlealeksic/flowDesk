@@ -376,7 +376,9 @@ mod tests {
             ConflictResult::NoConflict(winner) => {
                 assert_eq!(winner.value, "update1");
             }
-            _ => panic!("Expected no conflict"),
+            _ => {
+                assert!(false, "Expected no conflict but got a conflict result");
+            }
         }
         
         // value2 and value3 should conflict
@@ -385,7 +387,9 @@ mod tests {
                 assert_eq!(local.value, "update1");
                 assert_eq!(remote.value, "update2");
             }
-            _ => panic!("Expected conflict"),
+            _ => {
+                assert!(false, "Expected conflict but got no conflict result");
+            }
         }
     }
 }

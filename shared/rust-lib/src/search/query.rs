@@ -3,22 +3,21 @@
 use crate::search::{
     SearchQuery, SearchResponse, SearchHighlight, SearchFacet, FacetValue, FacetType, 
     SearchDebugInfo, ParsingInfo, ExecutionInfo, IndexManager, ContentType, ProviderType, 
-    DocumentMetadata, SearchOptions, FilterOperator,
+    DocumentMetadata, FilterOperator,
     types::SearchResult as SearchResultItem,
     error::{SearchError, SearchResult as SearchResultType},
 };
 use std::sync::Arc;
 use std::collections::HashMap;
 use tantivy::{
-    query::{QueryParser, Query, BooleanQuery, TermQuery, FuzzyTermQuery, RangeQuery, Occur, PhraseQuery},
+    query::{QueryParser, Query, BooleanQuery, TermQuery, FuzzyTermQuery, Occur},
     collector::{TopDocs, FacetCollector, Count},
-    Searcher, Term, Score, TantivyError, Document, TantivyDocument,
-    schema::{Field, Schema, IndexRecordOption},
+    Searcher, Term, Score,
+    schema::{Field, IndexRecordOption},
     tokenizer::TokenizerManager,
 };
 use tracing::{debug, error, instrument};
 use chrono::{DateTime, Utc};
-use regex::Regex;
 
 /// Query processor for executing search queries
 pub struct QueryProcessor {

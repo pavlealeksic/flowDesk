@@ -12,17 +12,14 @@ use sqlx::{sqlite::SqlitePool, Row, Transaction, Sqlite};
 use serde_json;
 use chrono::{DateTime, Utc, NaiveDateTime};
 use uuid::Uuid;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info};
 
 use crate::calendar::{
     CalendarAccount, CalendarEvent, Calendar, CalendarProvider,
     CalendarPrivacySync, CalendarResult, CalendarError,
-    FreeBusySlot, WebhookSubscription, CalendarSyncStatus,
-    CalendarAccessLevel, CalendarType,
-    EventAttendee, RecurrenceRule, ConferencingInfo, 
-    EventAttachment, EventReminder, CreateCalendarEventInput,
-    UpdateCalendarEventInput, CreateCalendarAccountInput,
-    UpdateCalendarAccountInput
+    CalendarAccessLevel, CalendarType, CreateCalendarEventInput, CreateCalendarAccountInput,
+    UpdateCalendarAccountInput, EventAttendee, EventAttachment, EventRecurrence, EventStatus,
+    EventVisibility, AttendeeResponseStatus, EventReminder, ReminderMethod, CalendarSyncStatus
 };
 
 /// Database connection and operations manager
@@ -556,7 +553,7 @@ impl CalendarDatabase {
             })?;
 
         let credentials = if let Some(creds_json) = row.try_get::<Option<String>, _>("credentials")? {
-            Some(serde_json::from_str(&creds_json)
+            Some(serde_json::from_str::<()>(&creds_json)
                 .map_err(|e| CalendarError::SerializationError {
                     message: format!("Failed to deserialize credentials: {}", e),
                     data_type: "CalendarAccountCredentials".to_string(),
@@ -649,9 +646,9 @@ impl CalendarDatabase {
         let access_level_str: String = row.get("access_level");
         let access_level = match access_level_str.as_str() {
             "owner" => CalendarAccessLevel::Owner,
-            "writer" => CalendarAccessLevel::Writer,
-            "reader" => CalendarAccessLevel::Reader,
-            "freeBusyReader" => CalendarAccessLevel::FreeBusyReader,
+            "writer" | "write" => CalendarAccessLevel::Writer,
+            "reader" | "read" => CalendarAccessLevel::Reader,
+            "freeBusyReader" | "freebusyreader" => CalendarAccessLevel::FreeBusyReader,
             _ => return Err(CalendarError::ValidationError {
                 message: format!("Invalid access level: {}", access_level_str),
                 provider: None,
@@ -786,7 +783,32 @@ impl CalendarDatabase {
                     .map(|dt| DateTime::from_naive_utc_and_offset(dt, Utc)),
                 is_being_synced: row.get("is_being_synced"),
                 sync_error: row.get("sync_error"),
-                sync_status: None, // TODO: Parse from database if available
+                sync_status: {
+                    // Create sync status from available database fields
+                    let last_sync_at = row.get::<Option<chrono::NaiveDateTime>, _>("last_sync_at")
+                        .map(|dt| DateTime::from_naive_utc_and_offset(dt, Utc));
+                    let is_syncing: bool = row.get("is_being_synced");
+                    let error_message: Option<String> = row.get("sync_error");
+                    let status = if is_syncing { 
+                        "syncing".to_string() 
+                    } else if error_message.is_some() { 
+                        "error".to_string() 
+                    } else { 
+                        "idle".to_string() 
+                    };
+                    
+                    Some(crate::calendar::CalendarSyncStatus {
+                        account_id: row.get::<String, _>("account_id"),
+                        last_sync_at,
+                        last_sync: last_sync_at,
+                        is_syncing,
+                        error: error_message.clone(),
+                        error_message: error_message.clone(),
+                        status,
+                        total_calendars: 0, // Not tracked at calendar level
+                        total_events: 0,    // Would require additional query
+                    })
+                },
                 location_data: None,
                 created_at: DateTime::from_naive_utc_and_offset(row.get("created_at"), Utc),
                 updated_at: DateTime::from_naive_utc_and_offset(row.get("updated_at"), Utc),
@@ -794,6 +816,52 @@ impl CalendarDatabase {
         }
 
         Ok(calendars)
+    }
+
+    /// Update an existing calendar
+    pub async fn update_calendar(&self, calendar: Calendar) -> CalendarResult<Calendar> {
+        let now = Utc::now();
+        
+        sqlx::query(r#"
+            UPDATE calendars 
+            SET name = ?, description = ?, color = ?, timezone = ?, 
+                is_primary = ?, access_level = ?, is_visible = ?, 
+                can_sync = ?, calendar_type = ?, is_selected = ?, 
+                updated_at = ?
+            WHERE id = ?
+        "#)
+        .bind(&calendar.name)
+        .bind(&calendar.description)
+        .bind(&calendar.color)
+        .bind(&calendar.timezone)
+        .bind(calendar.is_primary)
+        .bind(match calendar.access_level {
+            CalendarAccessLevel::Owner => "owner",
+            CalendarAccessLevel::Read => "read",
+            CalendarAccessLevel::Write => "write",
+            CalendarAccessLevel::Reader => "reader",
+            CalendarAccessLevel::Writer => "writer",
+            CalendarAccessLevel::FreeBusyReader => "freebusyreader",
+        })
+        .bind(calendar.is_visible)
+        .bind(calendar.can_sync)
+        .bind(match calendar.type_ {
+            CalendarType::Primary => "primary",
+            CalendarType::Secondary => "secondary",
+            CalendarType::Shared => "shared",
+            CalendarType::Public => "public",
+            CalendarType::Resource => "resource",
+            CalendarType::Holiday => "holiday",
+            CalendarType::Birthdays => "birthdays",
+        })
+        .bind(calendar.is_selected)
+        .bind(now.naive_utc())
+        .bind(&calendar.id)
+        .execute(&*self.pool)
+        .await?;
+        
+        // Return updated calendar
+        self.get_calendar(&calendar.id).await
     }
 
     // === Event Operations ===
@@ -937,9 +1005,115 @@ impl CalendarDatabase {
 
     // Helper method to convert database row to CalendarEvent
     fn row_to_calendar_event(&self, row: sqlx::sqlite::SqliteRow) -> CalendarResult<CalendarEvent> {
-        // This would deserialize all the JSON fields back to their types
-        // Implementation details omitted for brevity but would follow same pattern
-        todo!("Implementation would deserialize all fields from database row")
+        // Extract all fields from the database row
+        let id: String = row.try_get("id")?;
+        let calendar_id: String = row.try_get("calendar_id")?;
+        let provider_id: String = row.try_get("provider_id")?;
+        let title: String = row.try_get("title")?;
+        let description: Option<String> = row.try_get("description")?;
+        let location: Option<String> = row.try_get("location")?;
+        
+        // Parse JSON fields
+        let location_data: Option<serde_json::Value> = row.try_get::<Option<String>, _>("location_data")?
+            .and_then(|s| serde_json::from_str(&s).ok());
+            
+        let start_time_naive: NaiveDateTime = row.try_get("start_time")?;
+        let start_time = DateTime::from_naive_utc_and_offset(start_time_naive, Utc);
+        
+        let end_time_naive: NaiveDateTime = row.try_get("end_time")?;
+        let end_time = DateTime::from_naive_utc_and_offset(end_time_naive, Utc);
+        
+        let timezone: String = row.try_get("timezone")?;
+        let is_all_day: bool = row.try_get("is_all_day")?;
+        
+        // Parse status
+        let status_str: String = row.try_get("status")?;
+        let status = match status_str.as_str() {
+            "confirmed" => EventStatus::Confirmed,
+            "tentative" => EventStatus::Tentative,
+            "cancelled" => EventStatus::Cancelled,
+            _ => EventStatus::Confirmed,
+        };
+        
+        // Parse visibility
+        let visibility_str: String = row.try_get("visibility")?;
+        let visibility = match visibility_str.as_str() {
+            "public" => EventVisibility::Public,
+            "private" => EventVisibility::Private,
+            "confidential" => EventVisibility::Confidential,
+            _ => EventVisibility::Default,
+        };
+        
+        // Parse attendees JSON
+        let attendees: Vec<EventAttendee> = row.try_get::<Option<String>, _>("attendees")?
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
+            
+        // Parse recurrence JSON
+        let recurrence: Option<EventRecurrence> = row.try_get::<Option<String>, _>("recurrence")?
+            .and_then(|s| serde_json::from_str(&s).ok());
+            
+        let recurring_event_id: Option<String> = row.try_get("recurring_event_id")?;
+        
+        let original_start_time: Option<DateTime<Utc>> = row.try_get::<Option<NaiveDateTime>, _>("original_start_time")?
+            .map(|naive| DateTime::from_naive_utc_and_offset(naive, Utc));
+            
+        // Parse attachments JSON
+        let attachments: Vec<EventAttachment> = row.try_get::<Option<String>, _>("attachments")?
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
+            
+        // Parse extended properties JSON
+        let extended_properties: Option<serde_json::Value> = row.try_get::<Option<String>, _>("extended_properties")?
+            .and_then(|s| serde_json::from_str(&s).ok());
+            
+        let color: Option<String> = row.try_get("color")?;
+        let uid: Option<String> = row.try_get("uid")?;
+        
+        let created_at_naive: NaiveDateTime = row.try_get("created_at")?;
+        let created_at = DateTime::from_naive_utc_and_offset(created_at_naive, Utc);
+        
+        let updated_at_naive: NaiveDateTime = row.try_get("updated_at")?;
+        let updated_at = DateTime::from_naive_utc_and_offset(updated_at_naive, Utc);
+
+        // Get account_id from the joined calendars table
+        let account_id_str: String = row.try_get("account_id")?;
+        let account_id = Uuid::parse_str(&account_id_str)
+            .map_err(|e| CalendarError::DatabaseError {
+                message: format!("Invalid account_id UUID format: {}", e),
+                operation: "parse_uuid".to_string(),
+                table: Some("calendars".to_string()),
+                constraint_violation: false,
+                source_description: Some(e.to_string()),
+            })?;
+        
+        Ok(CalendarEvent {
+            id,
+            calendar_id,
+            account_id,
+            title,
+            description,
+            start_time,
+            end_time,
+            all_day: is_all_day,
+            location,
+            attendees,
+            status,
+            visibility,
+            provider_id,
+            location_data,
+            timezone,
+            is_all_day,
+            color,
+            uid,
+            extended_properties,
+            attachments,
+            recurrence,
+            recurring_event_id,
+            original_start_time,
+            created_at,
+            updated_at,
+        })
     }
 
     /// Get events in time range for a calendar
@@ -950,18 +1124,19 @@ impl CalendarDatabase {
         end: DateTime<Utc>,
     ) -> CalendarResult<Vec<CalendarEvent>> {
         let rows = sqlx::query(r#"
-            SELECT id, calendar_id, provider_id, title, description, location, location_data,
-                   start_time, end_time, timezone, is_all_day, status, visibility,
-                   creator, organizer, attendees, recurrence, recurring_event_id,
-                   original_start_time, reminders, conferencing, attachments,
-                   extended_properties, source, color, transparency, uid, sequence,
-                   created_at, updated_at
-            FROM calendar_events 
-            WHERE calendar_id = ?
-              AND ((start_time >= ? AND start_time < ?) 
-                OR (end_time > ? AND end_time <= ?)
-                OR (start_time < ? AND end_time > ?))
-            ORDER BY start_time ASC
+            SELECT e.id, e.calendar_id, e.provider_id, e.title, e.description, e.location, e.location_data,
+                   e.start_time, e.end_time, e.timezone, e.is_all_day, e.status, e.visibility,
+                   e.creator, e.organizer, e.attendees, e.recurrence, e.recurring_event_id,
+                   e.original_start_time, e.reminders, e.conferencing, e.attachments,
+                   e.extended_properties, e.source, e.color, e.transparency, e.uid, e.sequence,
+                   e.created_at, e.updated_at, c.account_id
+            FROM calendar_events e
+            INNER JOIN calendars c ON e.calendar_id = c.id
+            WHERE e.calendar_id = ?
+              AND ((e.start_time >= ? AND e.start_time < ?) 
+                OR (e.end_time > ? AND e.end_time <= ?)
+                OR (e.start_time < ? AND e.end_time > ?))
+            ORDER BY e.start_time ASC
         "#)
         .bind(calendar_id)
         .bind(start.naive_utc())
@@ -989,29 +1164,30 @@ impl CalendarDatabase {
         end: Option<DateTime<Utc>>,
     ) -> CalendarResult<Vec<CalendarEvent>> {
         let mut query = r#"
-            SELECT id, calendar_id, provider_id, title, description, location, location_data,
-                   start_time, end_time, timezone, is_all_day, status, visibility,
-                   creator, organizer, attendees, recurrence, recurring_event_id,
-                   original_start_time, reminders, conferencing, attachments, extended_properties,
-                   source, color, transparency, uid, sequence, sync_hash, privacy_sync_marker,
-                   created_at, updated_at
-            FROM calendar_events 
-            WHERE calendar_id = ?
+            SELECT e.id, e.calendar_id, e.provider_id, e.title, e.description, e.location, e.location_data,
+                   e.start_time, e.end_time, e.timezone, e.is_all_day, e.status, e.visibility,
+                   e.creator, e.organizer, e.attendees, e.recurrence, e.recurring_event_id,
+                   e.original_start_time, e.reminders, e.conferencing, e.attachments, e.extended_properties,
+                   e.source, e.color, e.transparency, e.uid, e.sequence, e.sync_hash, e.privacy_sync_marker,
+                   e.created_at, e.updated_at, c.account_id
+            FROM calendar_events e
+            INNER JOIN calendars c ON e.calendar_id = c.id
+            WHERE e.calendar_id = ?
         "#.to_string();
 
         let mut bind_values: Vec<Box<dyn sqlx::Encode<'_, sqlx::Sqlite> + Send>> = vec![Box::new(calendar_id.to_string())];
 
         if let Some(start_time) = start {
-            query.push_str(" AND end_time >= ?");
+            query.push_str(" AND e.end_time >= ?");
             bind_values.push(Box::new(start_time.naive_utc()));
         }
 
         if let Some(end_time) = end {
-            query.push_str(" AND start_time <= ?");
+            query.push_str(" AND e.start_time <= ?");
             bind_values.push(Box::new(end_time.naive_utc()));
         }
 
-        query.push_str(" ORDER BY start_time ASC");
+        query.push_str(" ORDER BY e.start_time ASC");
 
         let mut query_builder = sqlx::query(&query).bind(calendar_id);
         

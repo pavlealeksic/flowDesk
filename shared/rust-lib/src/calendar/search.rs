@@ -8,7 +8,7 @@
 use std::sync::Arc;
 use std::collections::HashMap;
 use crate::calendar::{CalendarResult, CalendarError, CalendarEvent, Calendar, CalendarDatabase};
-use crate::search::{SearchEngine, SearchDocument, ContentType, DocumentMetadata, LocationInfo, ProviderType, IndexingInfo, IndexType};
+use crate::search::{SearchEngine, SearchDocument, ContentType, DocumentMetadata, ProviderType, IndexingInfo, IndexType};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 

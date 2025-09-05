@@ -8,10 +8,8 @@
 //! 
 //! Files are encrypted end-to-end and stored as config.json + secrets.bin
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::collections::HashMap;
-use std::fs;
-use std::time::SystemTime;
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -23,6 +21,9 @@ use std::io::{Write, Read};
 
 use crate::crypto::*;
 use crate::config_sync::*;
+
+#[cfg(test)]
+use crate::vector_clock::VectorClock;
 
 /// Cloud storage provider types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

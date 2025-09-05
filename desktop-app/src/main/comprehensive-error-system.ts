@@ -20,10 +20,6 @@ import {
   formatErrorForUser
 } from './rust-error-handler';
 import {
-  getGracefulDegradationManager,
-  GracefulDegradationManager
-} from './graceful-degradation';
-import {
   getUserNotificationManager,
   UserNotificationManager,
   NotificationType
@@ -31,7 +27,6 @@ import {
 
 export interface ErrorSystemConfig {
   enableCircuitBreakers: boolean;
-  enableGracefulDegradation: boolean;
   enableUserNotifications: boolean;
   retryAttempts: number;
   circuitBreakerThreshold: number;
@@ -41,7 +36,6 @@ export interface ErrorSystemConfig {
 
 export const DEFAULT_ERROR_SYSTEM_CONFIG: ErrorSystemConfig = {
   enableCircuitBreakers: true,
-  enableGracefulDegradation: true,
   enableUserNotifications: true,
   retryAttempts: 3,
   circuitBreakerThreshold: 5,
@@ -53,7 +47,6 @@ export class ComprehensiveErrorSystem {
   private config: ErrorSystemConfig;
   private mainWindow?: BrowserWindow;
   private errorHandler: RustErrorHandler;
-  private degradationManager: GracefulDegradationManager;
   private notificationManager: UserNotificationManager;
   private healthMonitor: SystemHealthMonitor;
   private enhancedServices: {

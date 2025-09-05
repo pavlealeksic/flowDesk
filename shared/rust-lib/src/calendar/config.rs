@@ -4,8 +4,8 @@
  * Configuration management for calendar engine settings.
  */
 
-use serde::{Deserialize, Serialize};
-use crate::calendar::{CalendarConfig, PrivacySyncConfig, RateLimitConfig, WebhookConfig};
+use std::env;
+use crate::calendar::{CalendarConfig, PrivacySyncConfig, RateLimitConfig};
 
 impl Default for CalendarConfig {
     fn default() -> Self {
@@ -24,8 +24,55 @@ impl Default for CalendarConfig {
 
 /// Load configuration from file or environment
 pub fn load_config() -> CalendarConfig {
-    // TODO: Load from config file or environment variables
-    CalendarConfig::default()
+    let mut config = CalendarConfig::default();
+    
+    // Load from environment variables with fallback to defaults
+    if let Ok(database_url) = env::var("CALENDAR_DATABASE_URL") {
+        config.database_url = database_url;
+    }
+    
+    if let Ok(max_syncs) = env::var("CALENDAR_MAX_CONCURRENT_SYNCS") {
+        if let Ok(value) = max_syncs.parse::<usize>() {
+            config.max_concurrent_syncs = value;
+        }
+    }
+    
+    if let Ok(sync_interval) = env::var("CALENDAR_DEFAULT_SYNC_INTERVAL_MINUTES") {
+        if let Ok(value) = sync_interval.parse::<u64>() {
+            config.default_sync_interval_minutes = value;
+        }
+    }
+    
+    if let Ok(timezone) = env::var("CALENDAR_SERVER_TIMEZONE") {
+        config.server_timezone = timezone;
+    }
+    
+    if let Ok(debug) = env::var("CALENDAR_DEBUG") {
+        config.debug = debug.to_lowercase() == "true" || debug == "1";
+    }
+    
+    // Load privacy sync configuration from environment
+    let mut privacy_sync = PrivacySyncConfig::default();
+    if let Ok(default_title) = env::var("CALENDAR_PRIVACY_SYNC_DEFAULT_TITLE") {
+        privacy_sync.default_privacy_title = default_title;
+    }
+    config.privacy_sync = privacy_sync;
+    
+    // Load rate limiting configuration from environment
+    let mut rate_limits = RateLimitConfig::default();
+    if let Ok(google_rpm) = env::var("CALENDAR_RATE_LIMIT_GOOGLE_RPM") {
+        if let Ok(value) = google_rpm.parse::<u32>() {
+            rate_limits.google_calendar_rpm = value;
+        }
+    }
+    if let Ok(burst_capacity) = env::var("CALENDAR_RATE_LIMIT_BURST_CAPACITY") {
+        if let Ok(value) = burst_capacity.parse::<u32>() {
+            rate_limits.burst_capacity = value;
+        }
+    }
+    config.rate_limits = rate_limits;
+    
+    config
 }
 
 /// Validate configuration settings

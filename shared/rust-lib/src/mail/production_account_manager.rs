@@ -8,17 +8,16 @@
 
 use super::{
     server_configs::{get_config_by_domain, get_predefined_configs, ServerConfig, SecurityType, AuthMethod},
-    types::{MailAccount, MailProvider, MailAccountStatus, ProviderAccountConfig, ImapConfig, SmtpConfig, OAuthTokens},
-    auth::{AuthManager, AuthCredentials},
-    error::MailError,
+    types::{MailAccount, MailProvider, MailAccountStatus, ProviderAccountConfig, ImapConfig, SmtpConfig},
+    auth::AuthManager,
 };
 use crate::crypto::KeychainManager;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 use anyhow::{Context, Result};
-use tracing::{debug, info, warn, error};
+use tracing::{debug, info, warn};
 
 /// Production email account credentials
 #[derive(Debug, Clone, Serialize, Deserialize)]

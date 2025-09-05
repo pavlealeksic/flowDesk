@@ -7,7 +7,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
 use sqlx::{SqlitePool, Row};
-use uuid::Uuid;
 use std::collections::HashMap;
 
 /// Migration definition
@@ -212,6 +211,30 @@ impl MigrationManager {
                     DROP INDEX IF EXISTS idx_attachments_content_type;
                     DROP INDEX IF EXISTS idx_attachments_message_id;
                     DROP TABLE IF EXISTS attachments;
+                "#.to_string()),
+            },
+            Migration {
+                id: "003_add_message_headers_size".to_string(),
+                description: "Add headers and size fields to messages table".to_string(),
+                version: 3,
+                database: "mail".to_string(),
+                sql: r#"
+                    -- Add missing columns to messages table if they don't exist
+                    ALTER TABLE messages ADD COLUMN headers TEXT NOT NULL DEFAULT '{}';
+                    ALTER TABLE messages ADD COLUMN size INTEGER NOT NULL DEFAULT 0;
+                    
+                    -- Add additional indexes for performance
+                    CREATE INDEX IF NOT EXISTS idx_messages_subject ON messages (subject);
+                    CREATE INDEX IF NOT EXISTS idx_messages_from_address ON messages (from_address);
+                    CREATE INDEX IF NOT EXISTS idx_messages_is_read ON messages (is_read);
+                    CREATE INDEX IF NOT EXISTS idx_messages_is_starred ON messages (is_starred);
+                "#.to_string(),
+                rollback: Some(r#"
+                    DROP INDEX IF EXISTS idx_messages_is_starred;
+                    DROP INDEX IF EXISTS idx_messages_is_read;
+                    DROP INDEX IF EXISTS idx_messages_from_address;
+                    DROP INDEX IF EXISTS idx_messages_subject;
+                    -- Note: SQLite doesn't support DROP COLUMN, so we can't remove the added columns
                 "#.to_string()),
             },
         ]

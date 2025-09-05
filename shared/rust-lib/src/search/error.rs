@@ -1,6 +1,5 @@
 //! Search system error types and handling
 
-use std::fmt;
 use thiserror::Error;
 use tantivy::TantivyError;
 

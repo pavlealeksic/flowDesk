@@ -11,15 +11,16 @@ const os = require('os');
 
 const RUST_LIB_PATH = path.join(__dirname, '../../shared/rust-lib');
 const DIST_BINARIES_PATH = path.join(__dirname, '../dist/binaries');
+const DIST_SHARED_PATH = path.join(__dirname, '../dist/shared/rust-lib');
 
 // Platform and architecture mappings
 const PLATFORM_MAP = {
-  'darwin-x64': { target: 'x86_64-apple-darwin', ext: '' },
-  'darwin-arm64': { target: 'aarch64-apple-darwin', ext: '' },
-  'win32-x64': { target: 'x86_64-pc-windows-gnu', ext: '.exe' },
-  'win32-ia32': { target: 'i686-pc-windows-gnu', ext: '.exe' },
-  'linux-x64': { target: 'x86_64-unknown-linux-gnu', ext: '' },
-  'linux-arm64': { target: 'aarch64-unknown-linux-gnu', ext: '' }
+  'darwin-x64': { target: 'x86_64-apple-darwin', ext: '', napiSuffix: 'darwin-x64' },
+  'darwin-arm64': { target: 'aarch64-apple-darwin', ext: '', napiSuffix: 'darwin-arm64' },
+  'win32-x64': { target: 'x86_64-pc-windows-gnu', ext: '.exe', napiSuffix: 'win32-x64' },
+  'win32-ia32': { target: 'i686-pc-windows-gnu', ext: '.exe', napiSuffix: 'win32-ia32' },
+  'linux-x64': { target: 'x86_64-unknown-linux-gnu', ext: '', napiSuffix: 'linux-x64' },
+  'linux-arm64': { target: 'aarch64-unknown-linux-gnu', ext: '', napiSuffix: 'linux-arm64' }
 };
 
 function getCurrentPlatformKey() {
@@ -97,21 +98,113 @@ function copyBinary(platformKey) {
   }
 }
 
-function main() {
-  console.log('🔧 Copying Rust CLI binaries...');
+function copyNapiBinary(platformKey) {
+  const config = PLATFORM_MAP[platformKey];
+  if (!config) {
+    console.error(`Unsupported platform: ${platformKey}`);
+    return false;
+  }
+
+  const napiName = `flow-desk-shared.${config.napiSuffix}.node`;
+  const sourcePath = path.join(RUST_LIB_PATH, napiName);
   
-  // Ensure destination directory exists
+  if (!fs.existsSync(sourcePath)) {
+    console.warn(`NAPI binary not found at: ${sourcePath}`);
+    console.warn('This is expected if NAPI bindings are not built for this platform.');
+    return false;
+  }
+
+  // Create destination directory
+  ensureDirectoryExists(DIST_SHARED_PATH);
+  
+  const destPath = path.join(DIST_SHARED_PATH, napiName);
+  
+  try {
+    fs.copyFileSync(sourcePath, destPath);
+    
+    console.log(`✓ Copied NAPI binary ${napiName} to ${destPath}`);
+    console.log(`  Size: ${(fs.statSync(destPath).size / 1024 / 1024).toFixed(2)} MB`);
+    
+    return true;
+  } catch (error) {
+    console.error(`Failed to copy NAPI binary: ${error.message}`);
+    return false;
+  }
+}
+
+function copyRustWrapperFiles() {
+  console.log('🔧 Copying Rust wrapper files...');
+  
+  // Create destination directory
+  ensureDirectoryExists(DIST_SHARED_PATH);
+  
+  // Files to copy from shared/rust-lib to dist/shared/rust-lib
+  const filesToCopy = [
+    'index.js',
+    'index.d.ts',
+    'package.json'
+  ];
+  
+  let success = true;
+  
+  for (const fileName of filesToCopy) {
+    const sourcePath = path.join(RUST_LIB_PATH, fileName);
+    const destPath = path.join(DIST_SHARED_PATH, fileName);
+    
+    if (!fs.existsSync(sourcePath)) {
+      console.warn(`Warning: ${fileName} not found at ${sourcePath}`);
+      continue;
+    }
+    
+    try {
+      fs.copyFileSync(sourcePath, destPath);
+      console.log(`✓ Copied ${fileName} to ${path.relative(__dirname, destPath)}`);
+    } catch (error) {
+      console.error(`Failed to copy ${fileName}: ${error.message}`);
+      success = false;
+    }
+  }
+  
+  return success;
+}
+
+function main() {
+  console.log('🔧 Copying Rust binaries and wrappers...');
+  
+  // Ensure destination directories exist
   ensureDirectoryExists(DIST_BINARIES_PATH);
+  ensureDirectoryExists(DIST_SHARED_PATH);
   
   // Get current platform
   const currentPlatform = getCurrentPlatformKey();
   console.log(`Current platform: ${currentPlatform}`);
   
-  // Copy binary for current platform
-  if (copyBinary(currentPlatform)) {
-    console.log('✅ Binary copy completed successfully');
+  // Copy CLI binary for current platform
+  const cliBinarySuccess = copyBinary(currentPlatform);
+  
+  // Copy NAPI binary for current platform
+  const napiBinarySuccess = copyNapiBinary(currentPlatform);
+  
+  // Copy Rust wrapper files (index.js, package.json, etc.)
+  const wrapperFilesSuccess = copyRustWrapperFiles();
+  
+  if (cliBinarySuccess) {
+    console.log('✅ CLI binary copy completed successfully');
   } else {
-    console.error('❌ Binary copy failed');
+    console.error('❌ CLI binary copy failed');
+    process.exit(1);
+  }
+  
+  if (napiBinarySuccess) {
+    console.log('✅ NAPI binary copy completed successfully');
+  } else {
+    console.log('ℹ️  NAPI binary copy skipped (not available for this platform)');
+  }
+  
+  if (wrapperFilesSuccess) {
+    console.log('✅ Wrapper files copy completed successfully');
+  } else {
+    console.error('❌ Wrapper files copy failed');
     process.exit(1);
   }
 }
@@ -120,4 +213,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { copyBinary, getCurrentPlatformKey };
+module.exports = { copyBinary, copyNapiBinary, copyRustWrapperFiles, getCurrentPlatformKey };

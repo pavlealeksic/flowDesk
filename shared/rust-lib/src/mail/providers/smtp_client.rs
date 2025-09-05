@@ -1,13 +1,13 @@
 use async_trait::async_trait;
 use lettre::{
-    SmtpTransport, Transport, Message, Address,
+    SmtpTransport, Transport, Message,
     transport::smtp::{
         authentication::Credentials,
         client::{Tls, TlsParameters}
     },
     message::{header::ContentType, MultiPart, SinglePart, Mailbox}
 };
-use crate::mail::{SmtpConfig, MailMessage, MailAttachment};
+use crate::mail::{SmtpConfig, MailMessage};
 use crate::mail::providers::traits::SmtpProvider;
 use std::sync::Arc;
 

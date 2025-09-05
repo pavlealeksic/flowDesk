@@ -6,7 +6,7 @@
 use napi::{
     bindgen_prelude::*,
     Result as NapiResult,
-    Env, JsObject, Error,
+    Error,
 };
 #[cfg(feature = "napi")]
 use napi_derive::napi;
@@ -16,11 +16,10 @@ use crate::mail::{
     config::MailEngineConfig,
     engine::MailEngine,
     types::*,
-    MailResult,
 };
 
 #[cfg(feature = "napi")]
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 #[cfg(feature = "napi")]
 use tokio::sync::RwLock;
@@ -248,9 +247,12 @@ impl MailEngineWrapper {
             .as_ref()
             .ok_or_else(|| Error::from_reason("Engine not initialized"))?;
 
-        // TODO: Provider should be passed as parameter or determined from account
-        // For now, defaulting to Gmail as the most common provider
-        let provider = crate::mail::types::MailProvider::Gmail;
+        // Determine provider from account
+        let account = engine.get_account(account_uuid).await
+            .map_err(|e| Error::from_reason(format!("Failed to get account: {}", e)))?
+            .ok_or_else(|| Error::from_reason("Account not found"))?;
+        
+        let provider = account.provider;
         let redirect_uri = "http://localhost:8080/auth/callback";
         
         let credentials = engine

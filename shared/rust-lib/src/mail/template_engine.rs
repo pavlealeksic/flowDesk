@@ -5,7 +5,6 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use std::collections::HashMap;
 use regex::Regex;
-use uuid::Uuid;
 
 /// Template engine errors
 #[derive(Debug, thiserror::Error)]
@@ -67,21 +66,30 @@ pub struct TemplateEngine {
 
 impl Default for TemplateEngine {
     fn default() -> Self {
-        Self::new()
+        // Create a template engine with fallback error handling
+        // In case regex compilation fails, we'll panic here since this is a critical error
+        Self::new().expect("Failed to create default TemplateEngine - regex compilation failed")
     }
 }
 
 impl TemplateEngine {
-    pub fn new() -> Self {
+    pub fn new() -> Result<Self, TemplateEngineError> {
+        let variable_regex = Regex::new(r"\{\{([^}]+)\}\}")
+            .map_err(|e| TemplateEngineError::ParseError(format!("Failed to compile variable regex: {}", e)))?;
+        let conditional_regex = Regex::new(r"\{\%\s*(if|elif|else|endif)\s*([^%]*)\%\}")
+            .map_err(|e| TemplateEngineError::ParseError(format!("Failed to compile conditional regex: {}", e)))?;
+        let loop_regex = Regex::new(r"\{\%\s*for\s+(\w+)\s+in\s+(\w+)\s*\%\}(.*?)\{\%\s*endfor\s*\%\}")
+            .map_err(|e| TemplateEngineError::ParseError(format!("Failed to compile loop regex: {}", e)))?;
+        
         let mut engine = Self {
-            variable_regex: Regex::new(r"\{\{([^}]+)\}\}").unwrap(),
-            conditional_regex: Regex::new(r"\{\%\s*(if|elif|else|endif)\s*([^%]*)\%\}").unwrap(),
-            loop_regex: Regex::new(r"\{\%\s*for\s+(\w+)\s+in\s+(\w+)\s*\%\}(.*?)\{\%\s*endfor\s*\%\}").unwrap(),
+            variable_regex,
+            conditional_regex,
+            loop_regex,
             formatters: HashMap::new(),
         };
         
         engine.register_default_formatters();
-        engine
+        Ok(engine)
     }
     
     /// Register default formatters
@@ -215,12 +223,19 @@ impl TemplateEngine {
         
         // This is a simplified implementation
         // In a real implementation, you'd have a proper parser for conditionals
-        let if_regex = Regex::new(r"\{\%\s*if\s+([^%]+)\s*\%\}(.*?)\{\%\s*endif\s*\%\}").unwrap();
+        let if_regex = Regex::new(r"\{\%\s*if\s+([^%]+)\s*\%\}(.*?)\{\%\s*endif\s*\%\}")
+            .map_err(|e| TemplateEngineError::ParseError(format!("Failed to compile if regex: {}", e)))?;
         
         while let Some(captures) = if_regex.captures(&result) {
-            let condition = captures.get(1).unwrap().as_str().trim();
-            let content = captures.get(2).unwrap().as_str();
-            let full_match = captures.get(0).unwrap().as_str();
+            let condition = captures.get(1)
+                .ok_or_else(|| TemplateEngineError::ParseError("Failed to extract condition from if statement".to_string()))?
+                .as_str().trim();
+            let content = captures.get(2)
+                .ok_or_else(|| TemplateEngineError::ParseError("Failed to extract content from if statement".to_string()))?
+                .as_str();
+            let full_match = captures.get(0)
+                .ok_or_else(|| TemplateEngineError::ParseError("Failed to extract full match from if statement".to_string()))?
+                .as_str();
             
             let should_include = self.evaluate_condition(condition, context)?;
             let replacement = if should_include { content } else { "" };
@@ -240,10 +255,18 @@ impl TemplateEngine {
         let mut result = text.to_string();
         
         while let Some(captures) = self.loop_regex.captures(&result) {
-            let var_name = captures.get(1).unwrap().as_str();
-            let collection_name = captures.get(2).unwrap().as_str();
-            let loop_content = captures.get(3).unwrap().as_str();
-            let full_match = captures.get(0).unwrap().as_str();
+            let var_name = captures.get(1)
+                .ok_or_else(|| TemplateEngineError::ParseError("Failed to extract variable name from loop".to_string()))?
+                .as_str();
+            let collection_name = captures.get(2)
+                .ok_or_else(|| TemplateEngineError::ParseError("Failed to extract collection name from loop".to_string()))?
+                .as_str();
+            let loop_content = captures.get(3)
+                .ok_or_else(|| TemplateEngineError::ParseError("Failed to extract loop content".to_string()))?
+                .as_str();
+            let full_match = captures.get(0)
+                .ok_or_else(|| TemplateEngineError::ParseError("Failed to extract full loop match".to_string()))?
+                .as_str();
             
             let collection = context.variables.get(collection_name)
                 .and_then(|v| v.as_array())
@@ -276,8 +299,13 @@ impl TemplateEngine {
         let mut result = text.to_string();
         
         for captures in self.variable_regex.captures_iter(text) {
-            let full_match = captures.get(0).unwrap().as_str();
-            let variable_expr = captures.get(1).unwrap().as_str().trim();
+            let full_match = captures.get(0)
+                .ok_or_else(|| TemplateEngineError::ParseError("Failed to extract full variable match".to_string()))?
+                .as_str();
+            let variable_expr = captures.get(1)
+                .ok_or_else(|| TemplateEngineError::ParseError("Failed to extract variable expression".to_string()))?
+                .as_str()
+                .trim();
             
             let replacement = self.process_variable_expression(variable_expr, context, options)?;
             result = result.replace(full_match, &replacement);

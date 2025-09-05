@@ -22,13 +22,13 @@ use reqwest::{Client, Method, RequestBuilder, header::{HeaderMap, HeaderValue, A
 use std::{
     collections::HashMap,
     sync::Arc,
-    time::{Duration, SystemTime},
+    time::Duration,
 };
-use tokio::sync::{Mutex, RwLock};
-use tracing::{debug, error, info, warn};
+use tokio::sync::RwLock;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, TimeZone};
 use tokio::time::{sleep, Duration as TokioDuration};
+use rrule::{RRule, RRuleSet};
 
 /// CalDAV server capabilities discovered during connection setup
 #[derive(Debug, Clone)]
@@ -115,14 +115,11 @@ impl Default for RetryConfig {
         }
     }
 }
-use secrecy::{ExposeSecret, Secret};
 use url::Url;
 use icalendar::{
-    Calendar as IcalCalendar, Component, Property, Event as IcalEvent, 
-    CalendarComponent, DatePerhapsTime, EventLike
+    Calendar as IcalCalendar, Component, Event as IcalEvent, EventLike
 };
 use base64::{Engine as _, engine::general_purpose};
-use quick_xml::{Reader, events::Event as XmlEvent};
 
 /// CalDAV provider for calendar operations
 pub struct CalDavProvider {
@@ -842,7 +839,7 @@ impl CalDavProvider {
 
     /// Parse calendar list from PROPFIND response
     fn parse_calendar_list(&self, xml_response: &str) -> CalendarResult<Vec<Calendar>> {
-        use std::io::Cursor;
+        
         use quick_xml::events::Event;
         use quick_xml::Reader;
         
@@ -1906,16 +1903,40 @@ impl CalendarProviderTrait for CalDavProvider {
 
     async fn get_recurring_event_instances(&mut self, calendar_id: &str, recurring_event_id: &str, time_min: DateTime<Utc>, time_max: DateTime<Utc>) -> CalendarResult<Vec<CalendarEvent>> {
         // For CalDAV, we need to expand recurring events manually
-        // This is a simplified implementation
         let base_event = self.get_event(calendar_id, recurring_event_id).await?;
         
-        if base_event.recurrence.is_none() {
-            return Ok(vec![base_event]);
+        let recurrence = match &base_event.recurrence {
+            Some(recurrence) => recurrence,
+            None => return Ok(vec![base_event]),
+        };
+        
+        // For now, use a simple expansion approach
+        // TODO: Implement proper RRULE parsing with the rrule crate
+        let mut instances = vec![base_event.clone()];
+        
+        // Basic daily recurrence expansion (simplified for now)
+        if recurrence.rule.contains("FREQ=DAILY") {
+            let mut current_time = base_event.start_time;
+            let event_duration = base_event.end_time - base_event.start_time;
+            
+            // Generate up to 30 occurrences or until time_max
+            for i in 1..30 {
+                current_time = current_time + chrono::Duration::days(1);
+                if current_time > time_max {
+                    break;
+                }
+                if current_time >= time_min {
+                    let mut instance = base_event.clone();
+                    instance.id = format!("{}_{}", base_event.id, i);
+                    instance.start_time = current_time;
+                    instance.end_time = current_time + event_duration;
+                    instance.original_start_time = Some(current_time);
+                    instances.push(instance);
+                }
+            }
         }
         
-        // TODO: Implement proper RRULE expansion using the rrule crate
-        // For now, return just the base event
-        Ok(vec![base_event])
+        Ok(instances)
     }
 
     async fn update_recurring_event_instance(&mut self, calendar_id: &str, recurring_event_id: &str, instance_id: &str, updates: &UpdateCalendarEventInput) -> CalendarResult<CalendarEvent> {

@@ -8,14 +8,12 @@
 
 use super::{
     production_account_manager::{ProductionAccountManager, EmailCredentials, AccountSetupResult},
-    server_configs::{ServerConfig, SecurityType},
+    server_configs::SecurityType,
     types::{
-        MailAccount, EmailMessage, EmailFlags, EmailAddress, MailFolder, MailFolderType,
-        ImapConfig, SmtpConfig, NewMessage, MessageFlags,
+        EmailMessage, MailFolder, MailFolderType,
+        ImapConfig, SmtpConfig, NewMessage,
     },
-    error::{MailError, MailResult},
 };
-use crate::crypto::KeychainManager;
 
 use anyhow::{Context, Result};
 use async_imap::{Client as ImapClient, Session as ImapSession};
@@ -26,11 +24,10 @@ use lettre::{
     transport::smtp::authentication::{Credentials, Mechanism},
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
-use mailparse::{parse_mail, MailHeaderMap};
 use std::{collections::HashMap, sync::Arc};
 use tokio::{net::TcpStream, sync::RwLock};
-use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
-use tracing::{debug, error, info, warn};
+use tokio_util::compat::TokioAsyncReadCompatExt;
+use tracing::{debug, info};
 use uuid::Uuid;
 
 /// Connection status for IMAP/SMTP

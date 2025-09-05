@@ -1,7 +1,7 @@
-use sqlx::{SqlitePool, Row};
+use sqlx::{SqlitePool, Row, ConnectOptions};
 use crate::mail::{MailMessage, MailFolder, types::EmailThread};
 use crate::mail::types::{EmailAddress, EmailFlags, MessageImportance, MessagePriority, MailFolderType, FolderSyncStatus, MailAccount};
-use std::{path::Path, collections::HashMap};
+use std::{path::Path, collections::HashMap, str::FromStr};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
@@ -17,8 +17,16 @@ impl MailDatabase {
             tokio::fs::create_dir_all(parent).await?;
         }
 
-        let database_url = format!("sqlite:{}", database_path);
-        let pool = SqlitePool::connect(&database_url).await?;
+        let database_url = format!("sqlite:{}?mode=rwc", database_path);
+        let pool = SqlitePool::connect_with(
+            sqlx::sqlite::SqliteConnectOptions::from_str(&database_url)?
+                .create_if_missing(true)
+                .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+                .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
+                .pragma("cache_size", "-64000") // 64MB cache
+                .pragma("temp_store", "memory")
+                .pragma("mmap_size", "268435456") // 256MB mmap
+        ).await?;
         
         let database = Self { pool };
         database.init_schema().await?;
@@ -72,6 +80,8 @@ impl MailDatabase {
                 message_id TEXT,
                 in_reply_to TEXT,
                 references TEXT NOT NULL DEFAULT '[]',
+                headers TEXT NOT NULL DEFAULT '{}',
+                size INTEGER NOT NULL DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (account_id) REFERENCES accounts (id)
@@ -144,6 +154,16 @@ impl MailDatabase {
             .execute(&self.pool).await?;
             
         sqlx::query("CREATE INDEX IF NOT EXISTS idx_threads_account_last_message ON threads (account_id, last_message_at)")
+            .execute(&self.pool).await?;
+            
+        // Additional indexes for search performance
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_subject ON messages (subject)")
+            .execute(&self.pool).await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_from_address ON messages (from_address)")
+            .execute(&self.pool).await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_is_read ON messages (is_read)")
+            .execute(&self.pool).await?;
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_is_starred ON messages (is_starred)")
             .execute(&self.pool).await?;
 
         Ok(())
@@ -268,14 +288,16 @@ impl MailDatabase {
                     is_draft: false, // Default
                     is_sent: false, // Default
                     has_attachments: row.get("has_attachments"),
+                    is_replied: false, // Default
+                    is_forwarded: false, // Default
                 },
                 labels: serde_json::from_str(&row.get::<String, _>("labels"))?,
                 folder: row.get("folder"),
                 folder_id: None, // Default
                 importance: MessageImportance::Normal, // Default
                 priority: MessagePriority::Normal, // Default
-                size: row.get::<i32, _>("size") as i64,
-                attachments: vec![], // Would need separate query
+                size: row.get::<i64, _>("size"),
+                attachments: vec![], // Would need separate query for attachments table
                 headers: serde_json::from_str(&row.get::<String, _>("headers")).unwrap_or_default(),
                 message_id: row.get("message_id"),
                 message_id_header: row.get("message_id"),
@@ -364,15 +386,17 @@ impl MailDatabase {
                     is_draft: false,
                     is_sent: false,
                     has_attachments: row.get("has_attachments"),
+                    is_replied: false,
+                    is_forwarded: false,
                 },
                 labels: serde_json::from_str(&row.get::<String, _>("labels"))?,
                 folder: row.get("folder"),
                 folder_id: None, // Default
                 importance: MessageImportance::Normal,
                 priority: MessagePriority::Normal,
-                size: 0, // Would need to calculate
-                attachments: vec![], // Would need separate query
-                headers: HashMap::new(),
+                size: row.get::<i64, _>("size"),
+                attachments: vec![], // Would need separate query for attachments table
+                headers: serde_json::from_str(&row.get::<String, _>("headers")).unwrap_or_default(),
                 message_id: row.get::<String, _>("message_id").clone(),
                 message_id_header: row.get("message_id"),
                 in_reply_to: row.get("in_reply_to"),
@@ -567,15 +591,17 @@ impl MailDatabase {
                     is_draft: false,
                     is_sent: false,
                     has_attachments: row.get("has_attachments"),
+                    is_replied: false,
+                    is_forwarded: false,
                 },
                 labels: serde_json::from_str(&row.get::<String, _>("labels"))?,
                 folder: row.get("folder"),
                 folder_id: None, // Default
                 importance: MessageImportance::Normal,
                 priority: MessagePriority::Normal,
-                size: 0,
-                attachments: vec![],
-                headers: HashMap::new(),
+                size: row.get::<i64, _>("size"),
+                attachments: vec![], // Would need separate query for attachments table
+                headers: serde_json::from_str(&row.get::<String, _>("headers")).unwrap_or_default(),
                 message_id: row.get::<String, _>("message_id").clone(),
                 message_id_header: row.get("message_id"),
                 in_reply_to: row.get("in_reply_to"),
@@ -627,15 +653,17 @@ impl MailDatabase {
                     is_draft: false,
                     is_sent: false,
                     has_attachments: row.get("has_attachments"),
+                    is_replied: false,
+                    is_forwarded: false,
                 },
                 labels: serde_json::from_str(&row.get::<String, _>("labels"))?,
                 folder: row.get("folder"),
                 folder_id: None, // Default
                 importance: MessageImportance::Normal,
                 priority: MessagePriority::Normal,
-                size: 0,
-                attachments: vec![],
-                headers: HashMap::new(),
+                size: row.get::<i64, _>("size"),
+                attachments: vec![], // Would need separate query for attachments table
+                headers: serde_json::from_str(&row.get::<String, _>("headers")).unwrap_or_default(),
                 message_id: row.get::<String, _>("message_id").clone(),
                 message_id_header: row.get("message_id"),
                 in_reply_to: row.get("in_reply_to"),

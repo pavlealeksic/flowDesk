@@ -18,7 +18,7 @@ use tokio::sync::RwLock;
 use governor::{Quota, RateLimiter, DefaultDirectRateLimiter};
 use nonzero_ext::nonzero;
 use std::sync::Arc;
-use serde::{Serialize, Deserialize};
+use serde::Deserialize;
 use base64::Engine;
 
 /// Gmail search provider

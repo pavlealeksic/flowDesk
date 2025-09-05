@@ -17,10 +17,8 @@ pub use notion::*;
 pub use github::*;
 
 use crate::search::{SearchError, SearchResult, ProviderType, ProviderConfig};
-use async_trait::async_trait;
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 /// Provider capabilities and metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]

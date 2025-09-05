@@ -1,10 +1,9 @@
 //! Email scheduling system with timezone support and recurring emails
 
 use crate::mail::types::*;
-use crate::mail::error::{MailError, MailResult};
+use crate::mail::error::MailResult;
 use chrono::{DateTime, Utc, TimeZone, Duration, Datelike};
 use chrono_tz::Tz;
-use serde_json::Value;
 use std::collections::HashMap;
 use tokio::sync::{mpsc, RwLock};
 use tokio::time::{interval, Duration as TokioDuration};
@@ -139,7 +138,7 @@ impl EmailScheduler {
                 }
                 
                 // Send emails
-                for mut email in emails_to_send {
+                for email in emails_to_send {
                     let result = send_callback(email.clone());
                     
                     {
@@ -201,7 +200,7 @@ impl EmailScheduler {
     /// Schedule an email
     pub async fn schedule_email(
         &self,
-        mut email: ScheduledEmail,
+        email: ScheduledEmail,
     ) -> Result<Uuid, SchedulerError> {
         // Validate timezone
         if !email.timezone.is_empty() {

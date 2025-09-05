@@ -15,7 +15,7 @@ use crate::mail::{
     types::*,
 };
 use reqwest::{Client, Method, RequestBuilder};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
 use std::{
     collections::HashMap,
@@ -23,7 +23,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 use tokio::sync::{Mutex, RwLock};
-use tracing::{debug, error, info, warn};
+use tracing::info;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use secrecy::{ExposeSecret, Secret};
@@ -472,6 +472,8 @@ impl GraphClient {
             is_draft: graph_message.is_draft.unwrap_or(false),
             is_sent: matches!(graph_message.inference_classification.as_deref(), Some("focused")),
             has_attachments: !attachments.is_empty(),
+            is_replied: false, // Default - would need additional logic
+            is_forwarded: false, // Default - would need additional logic
         };
 
         let created_at = graph_message.created_date_time
@@ -735,12 +737,6 @@ impl GraphClient {
     }
 }
 
-// Helper macro for JSON creation
-macro_rules! json {
-    ($($json:tt)*) => {
-        serde_json::json!($($json)*)
-    };
-}
 
 /// Rate limiter for API requests
 struct RateLimiter {

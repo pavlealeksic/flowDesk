@@ -334,8 +334,7 @@ export class SearchEngine {
 
   private async loadNativeModule(): Promise<NativeSearchEngine> {
     try {
-      // Try to load the native module
-      // This would typically be a .node file compiled from Rust
+      // Load the native module - this MUST be available
       const nativeModule = require('@flow-desk/search-native');
       
       // Initialize logging
@@ -345,80 +344,12 @@ export class SearchEngine {
 
       return new nativeModule.JsSearchEngine();
     } catch (error) {
-      // Fallback for development - use mock implementation
-      console.warn('Native search module not available, using mock implementation');
-      return this.createMockNativeModule();
+      throw new SearchEngineError(
+        'Rust search engine is required but not available. Please ensure the native module is properly installed.',
+        'NATIVE_MODULE_UNAVAILABLE',
+        error instanceof Error ? error : undefined
+      );
     }
-  }
-
-  private createMockNativeModule(): NativeSearchEngine {
-    // Mock implementation for development/testing
-    return {
-      async initialize(_config: NativeSearchConfig): Promise<void> {
-        console.log('Mock search engine initialized');
-      },
-      
-      async search(query: NativeSearchQuery): Promise<NativeSearchResponse> {
-        return {
-          results: [
-            {
-              id: 'mock-1',
-              title: `Mock result for: ${query.query}`,
-              description: 'This is a mock search result',
-              content: 'Mock content...',
-              url: 'https://example.com',
-              contentType: 'document',
-              providerId: 'mock',
-              providerType: 'local_files',
-              score: 0.9,
-              createdAt: new Date().toISOString(),
-              lastModified: new Date().toISOString(),
-            },
-          ],
-          totalCount: 1,
-          executionTimeMs: 50,
-          suggestions: [`${query.query} suggestion`],
-        };
-      },
-      
-      async indexDocument(_document: NativeSearchDocument): Promise<void> {
-        console.log('Mock: Document indexed');
-      },
-      
-      async indexDocuments(documents: NativeSearchDocument[]): Promise<number> {
-        console.log(`Mock: ${documents.length} documents indexed`);
-        return documents.length;
-      },
-      
-      async deleteDocument(_documentId: string): Promise<boolean> {
-        console.log('Mock: Document deleted');
-        return true;
-      },
-      
-      async getSuggestions(partialQuery: string, limit?: number): Promise<string[]> {
-        return Array.from({ length: Math.min(limit || 5, 3) }, (_, i) => 
-          `${partialQuery} suggestion ${i + 1}`
-        );
-      },
-      
-      async getAnalytics(): Promise<NativeSearchAnalytics> {
-        return {
-          totalQueries: 100,
-          avgResponseTimeMs: 150,
-          successRate: 0.95,
-          popularQueries: ['test', 'search', 'document'],
-          errorRate: 0.05,
-        };
-      },
-      
-      async optimizeIndices(): Promise<void> {
-        console.log('Mock: Indices optimized');
-      },
-      
-      async clearCache(): Promise<void> {
-        console.log('Mock: Cache cleared');
-      },
-    };
   }
 
   private convertToNativeConfig(config: SearchConfiguration): NativeSearchConfig {

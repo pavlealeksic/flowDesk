@@ -4,7 +4,7 @@ use crate::search::{
     SearchQuery, SearchResult, SearchError, SearchDocument, 
     ProviderResponse, IndexingJob,
 };
-use super::{ProviderInfo, ProviderStats, ProviderHealth, ProviderAuth, AuthType};
+use super::{ProviderInfo, ProviderStats, ProviderHealth, ProviderAuth};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use serde_json::Value;

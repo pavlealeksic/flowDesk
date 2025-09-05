@@ -522,15 +522,68 @@ impl CalendarWebhookHandler {
             .map_err(|e| napi::Error::new(napi::Status::InvalidArg,
                 format!("Invalid provider: {}", e)))?;
 
-        // Validate signature if provided
-        if let Some(_sig) = signature {
-            // TODO: Implement signature validation
+        // Validate signature if provided  
+        if let Some(sig) = signature {
+            // Basic signature validation using SHA256
+            // In production, this should be replaced with proper HMAC verification
+            use sha2::{Sha256, Digest};
+            
+            let mut hasher = Sha256::new();
+            hasher.update(payload.as_bytes());
+            hasher.update(b"webhook_secret_key"); // This should come from config
+            let expected = hex::encode(hasher.finalize());
+            
+            let provided = sig.trim_start_matches("sha256=");
+            
+            if expected != provided {
+                return Err(napi::Error::new(napi::Status::GenericFailure, "Invalid signature"));
+            }
         }
 
         // Process webhook through engine
         let engine_guard = self.engine.read().await;
         if let Some(engine) = engine_guard.as_ref() {
-            // TODO: Process webhook and generate notifications
+            // Parse webhook payload and trigger sync for affected calendars
+            match serde_json::from_str::<serde_json::Value>(&payload) {
+                Ok(webhook_data) => {
+                    // Extract calendar/resource information from webhook
+                    if let Some(resource_id) = webhook_data.get("resource_id")
+                        .and_then(|v| v.as_str()) {
+                        
+                        // Trigger incremental sync for the affected resource
+                        tokio::spawn({
+                            let engine = engine.clone();
+                            let resource_id = resource_id.to_string();
+                            async move {
+                                if let Err(e) = engine.schedule_account_sync(&resource_id, true).await {
+                                    tracing::error!("Webhook-triggered sync failed: {}", e);
+                                }
+                            }
+                        });
+                        
+                        // Generate notification for JS listeners
+                        let notification = CalendarNotification {
+                            notification_type: "webhook_received".to_string(),
+                            account_id: resource_id.to_string(), // Use resource_id as account identifier
+                            calendar_id: Some(resource_id.to_string()),
+                            event_id: webhook_data.get("event_id")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string()),
+                            timestamp: chrono::Utc::now().to_rfc3339(),
+                            data: Some(payload),
+                        };
+                        
+                        // Notify all registered listeners
+                        let listeners = self.listeners.read().await;
+                        for listener in listeners.iter() {
+                            let _ = listener.notify(notification.clone());
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to parse webhook payload: {}", e);
+                }
+            }
         }
 
         Ok(())

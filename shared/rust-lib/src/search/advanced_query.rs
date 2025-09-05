@@ -1,19 +1,17 @@
 //! Advanced query processing with field searches, filters, facets, and complex expressions
 
 use crate::search::{
-    SearchQuery, SearchResult as SearchResultType, SearchError, 
-    ErrorContext, SearchErrorContext, ContentType, ProviderType
+    SearchResult as SearchResultType, SearchError, ContentType, ProviderType
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, BTreeMap};
+use std::collections::HashMap;
 use tantivy::{
-    collector::{FacetCollector, TopDocs},
     query::{BooleanQuery, TermQuery, RangeQuery, FuzzyTermQuery, PhraseQuery, Query, QueryParser},
-    schema::{Field, Schema, Value, FieldType},
-    Term, Document as TantivyDocument, DocAddress, Score,
+    schema::{Field, Schema},
+    Term,
 };
 use chrono::{DateTime, Utc};
-use tracing::{debug, warn, error, instrument};
+use tracing::{debug, warn, instrument};
 
 /// Advanced query builder for complex search operations
 pub struct AdvancedQueryBuilder {
@@ -896,29 +894,48 @@ impl AdvancedQueryBuilder {
         
         match relative {
             RelativeDateFilter::Today => {
-                let start = now.date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc();
-                let end = now.date_naive().and_hms_opt(23, 59, 59).unwrap().and_utc();
-                (Some(start), Some(end))
+                match (now.date_naive().and_hms_opt(0, 0, 0), now.date_naive().and_hms_opt(23, 59, 59)) {
+                    (Some(start), Some(end)) => (Some(start.and_utc()), Some(end.and_utc())),
+                    _ => {
+                        warn!("Failed to create today's date range, using current timestamp");
+                        (Some(now), Some(now))
+                    }
+                }
             }
             RelativeDateFilter::Yesterday => {
                 let yesterday = now - chrono::Duration::days(1);
-                let start = yesterday.date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc();
-                let end = yesterday.date_naive().and_hms_opt(23, 59, 59).unwrap().and_utc();
-                (Some(start), Some(end))
+                match (yesterday.date_naive().and_hms_opt(0, 0, 0), yesterday.date_naive().and_hms_opt(23, 59, 59)) {
+                    (Some(start), Some(end)) => (Some(start.and_utc()), Some(end.and_utc())),
+                    _ => {
+                        warn!("Failed to create yesterday's date range, using yesterday timestamp");
+                        (Some(yesterday), Some(yesterday))
+                    }
+                }
             }
             RelativeDateFilter::ThisWeek => {
                 let days_since_monday = now.format("%u").to_string().parse::<u32>().unwrap_or(1) - 1;
-                let start = now - chrono::Duration::days(days_since_monday as i64);
-                let start = start.date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc();
-                (Some(start), Some(now))
+                let start_day = now - chrono::Duration::days(days_since_monday as i64);
+                match start_day.date_naive().and_hms_opt(0, 0, 0) {
+                    Some(start) => (Some(start.and_utc()), Some(now)),
+                    None => {
+                        warn!("Failed to create this week's start date, using current timestamp");
+                        (Some(now), Some(now))
+                    }
+                }
             }
             RelativeDateFilter::LastWeek => {
                 let days_since_monday = now.format("%u").to_string().parse::<u32>().unwrap_or(1) - 1;
                 let this_monday = now - chrono::Duration::days(days_since_monday as i64);
                 let last_monday = this_monday - chrono::Duration::days(7);
                 let last_sunday = this_monday - chrono::Duration::seconds(1);
-                let start = last_monday.date_naive().and_hms_opt(0, 0, 0).unwrap().and_utc();
-                (Some(start), Some(last_sunday))
+                match last_monday.date_naive().and_hms_opt(0, 0, 0) {
+                    Some(start) => (Some(start.and_utc()), Some(last_sunday)),
+                    None => {
+                        warn!("Failed to create last week's date range, using fallback");
+                        let fallback_start = now - chrono::Duration::days(14);
+                        (Some(fallback_start), Some(now - chrono::Duration::days(7)))
+                    }
+                }
             }
             RelativeDateFilter::Last24Hours => {
                 let start = now - chrono::Duration::hours(24);
@@ -936,34 +953,104 @@ impl AdvancedQueryBuilder {
                 let current_date = now.date_naive();
                 let year = current_date.format("%Y").to_string().parse::<i32>().unwrap_or(2024);
                 let month = current_date.format("%m").to_string().parse::<u32>().unwrap_or(1);
-                let start_date = chrono::NaiveDate::from_ymd_opt(year, month, 1).unwrap();
-                let start = start_date.and_hms_opt(0, 0, 0).unwrap().and_utc();
-                (Some(start), Some(now))
+                
+                match chrono::NaiveDate::from_ymd_opt(year, month, 1) {
+                    Some(start_date) => {
+                        match start_date.and_hms_opt(0, 0, 0) {
+                            Some(start) => (Some(start.and_utc()), Some(now)),
+                            None => {
+                                warn!("Failed to create this month's start time, using beginning of month");
+                                (Some(start_date.and_hms_opt(0, 0, 0).unwrap_or_default().and_utc()), Some(now))
+                            }
+                        }
+                    }
+                    None => {
+                        warn!("Failed to create this month's start date, using current timestamp");
+                        (Some(now), Some(now))
+                    }
+                }
             }
             RelativeDateFilter::LastMonth => {
                 let current_date = now.date_naive();
                 let year = current_date.format("%Y").to_string().parse::<i32>().unwrap_or(2024);
                 let month = current_date.format("%m").to_string().parse::<u32>().unwrap_or(1);
-                let first_of_month = chrono::NaiveDate::from_ymd_opt(year, month, 1).unwrap();
+                
+                let first_of_month = chrono::NaiveDate::from_ymd_opt(year, month, 1);
                 let first_of_last_month = if month == 1 {
-                    chrono::NaiveDate::from_ymd_opt(year - 1, 12, 1).unwrap()
+                    chrono::NaiveDate::from_ymd_opt(year - 1, 12, 1)
                 } else {
-                    chrono::NaiveDate::from_ymd_opt(year, month - 1, 1).unwrap()
+                    chrono::NaiveDate::from_ymd_opt(year, month - 1, 1)
                 };
-                let start = first_of_last_month.and_hms_opt(0, 0, 0).unwrap().and_utc();
-                let end = (first_of_month - chrono::Duration::seconds(1)).and_hms_opt(23, 59, 59).unwrap().and_utc();
-                (Some(start), Some(end))
+                
+                match (first_of_last_month, first_of_month) {
+                    (Some(last_month_start), Some(this_month_start)) => {
+                        let start_time = last_month_start.and_hms_opt(0, 0, 0);
+                        let end_time = (this_month_start - chrono::Duration::seconds(1))
+                            .and_hms_opt(23, 59, 59);
+                        
+                        match (start_time, end_time) {
+                            (Some(start), Some(end)) => (Some(start.and_utc()), Some(end.and_utc())),
+                            _ => {
+                                warn!("Failed to create last month's time range, using fallback");
+                                let fallback_start = now - chrono::Duration::days(60);
+                                let fallback_end = now - chrono::Duration::days(30);
+                                (Some(fallback_start), Some(fallback_end))
+                            }
+                        }
+                    }
+                    _ => {
+                        warn!("Failed to create last month's date range, using fallback");
+                        let fallback_start = now - chrono::Duration::days(60);
+                        let fallback_end = now - chrono::Duration::days(30);
+                        (Some(fallback_start), Some(fallback_end))
+                    }
+                }
             }
             RelativeDateFilter::ThisYear => {
                 let current_year = now.format("%Y").to_string().parse::<i32>().unwrap_or(2024);
-                let start = chrono::NaiveDate::from_ymd_opt(current_year, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap().and_utc();
-                (Some(start), Some(now))
+                match chrono::NaiveDate::from_ymd_opt(current_year, 1, 1) {
+                    Some(start_date) => {
+                        match start_date.and_hms_opt(0, 0, 0) {
+                            Some(start) => (Some(start.and_utc()), Some(now)),
+                            None => {
+                                warn!("Failed to create this year's start time, using beginning of year");
+                                (Some(start_date.and_hms_opt(0, 0, 0).unwrap_or_default().and_utc()), Some(now))
+                            }
+                        }
+                    }
+                    None => {
+                        warn!("Failed to create this year's start date, using current timestamp");
+                        (Some(now), Some(now))
+                    }
+                }
             }
             RelativeDateFilter::LastYear => {
                 let last_year = now.format("%Y").to_string().parse::<i32>().unwrap_or(2024) - 1;
-                let start = chrono::NaiveDate::from_ymd_opt(last_year, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap().and_utc();
-                let end = chrono::NaiveDate::from_ymd_opt(last_year, 12, 31).unwrap().and_hms_opt(23, 59, 59).unwrap().and_utc();
-                (Some(start), Some(end))
+                let start_date = chrono::NaiveDate::from_ymd_opt(last_year, 1, 1);
+                let end_date = chrono::NaiveDate::from_ymd_opt(last_year, 12, 31);
+                
+                match (start_date, end_date) {
+                    (Some(start_date), Some(end_date)) => {
+                        let start_time = start_date.and_hms_opt(0, 0, 0);
+                        let end_time = end_date.and_hms_opt(23, 59, 59);
+                        
+                        match (start_time, end_time) {
+                            (Some(start), Some(end)) => (Some(start.and_utc()), Some(end.and_utc())),
+                            _ => {
+                                warn!("Failed to create last year's time range, using fallback");
+                                let fallback_start = now - chrono::Duration::days(400);
+                                let fallback_end = now - chrono::Duration::days(35);
+                                (Some(fallback_start), Some(fallback_end))
+                            }
+                        }
+                    }
+                    _ => {
+                        warn!("Failed to create last year's date range, using fallback");
+                        let fallback_start = now - chrono::Duration::days(400);
+                        let fallback_end = now - chrono::Duration::days(35);
+                        (Some(fallback_start), Some(fallback_end))
+                    }
+                }
             }
         }
     }
@@ -1065,7 +1152,7 @@ mod tests {
         let content = schema_builder.add_text_field("content", tantivy::schema::TEXT);
         let schema = schema_builder.build();
         
-        let builder = AdvancedQueryBuilder::new(schema).unwrap();
+        let builder = AdvancedQueryBuilder::new(schema).expect("Failed to create AdvancedQueryBuilder in test");
         
         let expression = QueryExpression {
             query: "test query".to_string(),
@@ -1092,7 +1179,7 @@ mod tests {
     fn test_date_range_resolution() {
         let mut schema_builder = SchemaBuilder::default();
         let schema = schema_builder.build();
-        let builder = AdvancedQueryBuilder::new(schema).unwrap();
+        let builder = AdvancedQueryBuilder::new(schema).expect("Failed to create AdvancedQueryBuilder in test");
         
         let (start, end) = builder.resolve_relative_date(&RelativeDateFilter::Today);
         assert!(start.is_some());
@@ -1101,14 +1188,14 @@ mod tests {
         let (start, end) = builder.resolve_relative_date(&RelativeDateFilter::Last7Days);
         assert!(start.is_some());
         assert!(end.is_some());
-        assert!(end.unwrap() > start.unwrap());
+        assert!(end.expect("End date should be present") > start.expect("Start date should be present"));
     }
     
     #[test]
     fn test_filter_building() {
         let mut schema_builder = SchemaBuilder::default();
         let schema = schema_builder.build();
-        let builder = AdvancedQueryBuilder::new(schema).unwrap();
+        let builder = AdvancedQueryBuilder::new(schema).expect("Failed to create AdvancedQueryBuilder in test");
         
         let filters = AdvancedFilters {
             content_types: Some(vec![ContentType::Email, ContentType::Document]),

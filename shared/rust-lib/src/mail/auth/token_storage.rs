@@ -77,7 +77,7 @@ impl TokenStorage {
         };
 
         let storage_path = storage_path.as_ref().to_path_buf();
-        let mut storage = Self {
+        let storage = Self {
             cache: RwLock::new(HashMap::new()),
             encryption_key,
             storage_path: Some(storage_path),

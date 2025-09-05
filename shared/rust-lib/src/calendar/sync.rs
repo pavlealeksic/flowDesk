@@ -8,6 +8,9 @@
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+
+#[cfg(test)]
+use uuid::Uuid;
 use std::sync::Arc;
 use std::time::Instant;
 use crate::calendar::{CalendarResult, CalendarError, CalendarEvent, Calendar, CalendarDatabase, CreateCalendarEventInput};
@@ -105,8 +108,8 @@ impl SyncManager {
             Ok(local_calendar) => {
                 // Update existing calendar if different
                 if local_calendar.updated_at < calendar.updated_at {
-                    // TODO: Implement calendar update method in database
-                    tracing::debug!("Calendar update needed for: {}", calendar.name);
+                    self.database.update_calendar(calendar.clone()).await?;
+                    tracing::debug!("Updated calendar: {}", calendar.name);
                 }
             }
             Err(CalendarError::NotFoundError { .. }) => {
@@ -224,7 +227,7 @@ impl SyncManager {
     async fn sync_with_token(&self, _provider: &mut Box<dyn crate::calendar::CalendarProviderTrait>, sync_token: Option<String>) -> CalendarResult<SyncResult> {
         // Implementation would use provider-specific sync token APIs
         // This is a simplified version
-        let mut result = SyncResult::new();
+        let result = SyncResult::new();
         
         if let Some(token) = sync_token {
             tracing::debug!("Using sync token for incremental sync: {}", token);

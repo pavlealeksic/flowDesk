@@ -24,7 +24,7 @@ use async_trait::async_trait;
 use std::{sync::Arc, collections::HashMap, time::Duration};
 use tokio::sync::{RwLock, Mutex};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 
 /// IMAP provider configuration
 #[derive(Debug, Clone)]
@@ -368,6 +368,8 @@ impl ImapProvider {
                 is_draft,
                 is_sent: false,
                 has_attachments: !attachments.is_empty(),
+                is_replied: false,
+                is_forwarded: false,
             },
             labels: vec![],
             folder: "Unknown".to_string(), // Will be set by caller
@@ -857,6 +859,8 @@ impl ImapProvider {
                 is_draft: false,
                 is_sent: false,
                 has_attachments: !message.attachments.is_empty(),
+                is_replied: false,
+                is_forwarded: false,
             },
             labels: vec![],
             folder: "INBOX".to_string(),

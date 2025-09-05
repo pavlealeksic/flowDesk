@@ -9,12 +9,12 @@
  */
 
 use crate::calendar::{
-    CalendarEngine, CalendarConfig, CreateCalendarAccountInput, CreateCalendarEventInput,
+    CreateCalendarAccountInput, CreateCalendarEventInput,
     CalendarProvider, CalendarAccountConfig, CalDavConfig, GoogleCalendarConfig,
-    CalendarAccountCredentials, CalendarAccountStatus
+    CalendarAccountCredentials
 };
-use crate::calendar::providers::{ProviderDetector, CalDavProvider, GoogleCalendarProvider, CalendarProviderTrait};
-use chrono::{DateTime, Utc, Duration};
+use crate::calendar::providers::{ProviderDetector, CalDavProvider, CalendarProviderTrait};
+use chrono::{Utc, Duration};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -77,26 +77,25 @@ pub async fn test_caldav_provider() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Test Google Calendar provider functionality (mock implementation)
+/// Test Google Calendar provider functionality (via CalDAV)
 #[cfg(test)]
 pub async fn test_google_provider() -> anyhow::Result<()> {
-    let config = GoogleCalendarConfig {
-        client_id: "test_client_id".to_string(),
-        client_secret: Some("test_client_secret".to_string()),
-        redirect_uri: "http://localhost:8080/callback".to_string(),
-        scopes: vec![
-            "https://www.googleapis.com/auth/calendar".to_string(),
-            "https://www.googleapis.com/auth/calendar.events".to_string(),
-        ],
+    // Google Calendar accessed via CalDAV endpoint
+    let config = CalDavConfig {
+        server_url: "https://apidata.googleusercontent.com/caldav/v2/test@gmail.com/events".to_string(),
+        username: Some("test@gmail.com".to_string()),
+        password: None,
         oauth_tokens: Some(CalendarAccountCredentials {
             access_token: "test_access_token".to_string(),
             refresh_token: Some("test_refresh_token".to_string()),
             expires_at: Some(Utc::now() + Duration::hours(1)),
         }),
+        accept_invalid_certs: false,
+        sync_interval_minutes: 15,
     };
     
     let account_id = Uuid::new_v4().to_string();
-    let mut provider = GoogleCalendarProvider::new(account_id.clone(), config, None)?;
+    let mut provider = CalDavProvider::new(account_id.clone(), config, None)?;
     
     // Test connection (will fail without valid tokens but we test error handling)
     match provider.test_connection().await {

@@ -18,8 +18,7 @@ let rustCalendarEngine: any;
 try {
   rustCalendarEngine = require('../../rust-lib/index.node');
 } catch (error) {
-  console.warn('Calendar engine native module not found, using mock implementation');
-  rustCalendarEngine = null;
+  throw new Error('Rust calendar engine is required but not available. Please ensure the native module is properly installed.');
 }
 
 /**
@@ -92,11 +91,10 @@ export class CalendarEngine {
   private initialized = false;
 
   constructor() {
-    if (calendarEngine) {
+    if (rustCalendarEngine) {
       this.engine = new rustCalendarEngine.CalendarEngineJs();
     } else {
-      // Mock implementation for development/testing
-      this.engine = new MockCalendarEngine();
+      throw new Error('Rust calendar engine is required but not available. Please ensure the native module is properly installed.');
     }
   }
 
@@ -386,38 +384,22 @@ export class CalendarEngine {
    * Get supported calendar providers
    */
   static getSupportedProviders(): CalendarProvider[] {
-    if (calendarEngine) {
+    if (rustCalendarEngine) {
       const resultJson = rustCalendarEngine.CalendarEngineJs.getSupportedProviders();
       return JSON.parse(resultJson);
     }
-    return ['google', 'outlook', 'caldav', 'icloud', 'fastmail'];
+    throw new Error('Rust calendar engine is required but not available.');
   }
 
   /**
    * Get provider capabilities
    */
   static getProviderCapabilities(provider: CalendarProvider) {
-    if (calendarEngine) {
+    if (rustCalendarEngine) {
       const resultJson = rustCalendarEngine.CalendarEngineJs.getProviderCapabilities(provider);
       return JSON.parse(resultJson);
     }
-    // Mock capabilities for development
-    return {
-      supportsWebhooks: provider === 'google' || provider === 'outlook',
-      supportsPushNotifications: provider === 'google' || provider === 'outlook',
-      supportsRecurringEvents: true,
-      supportsAttendees: true,
-      supportsFreeBusy: true,
-      supportsConferencing: provider === 'google' || provider === 'outlook',
-      supportsAttachments: provider === 'google' || provider === 'outlook',
-      supportsReminders: true,
-      supportsColors: true,
-      supportsMultipleCalendars: true,
-      supportsCalendarSharing: provider === 'google' || provider === 'outlook',
-      maxEventDurationDays: provider.startsWith('caldav') ? null : 365,
-      rateLimitRpm: provider === 'google' ? 300 : provider === 'outlook' ? 600 : 60,
-      batchOperations: provider === 'google' || provider === 'outlook',
-    };
+    throw new Error('Rust calendar engine is required but not available.');
   }
 
   private ensureInitialized(): void {
@@ -471,8 +453,10 @@ export class CalendarWebhookHandler {
   private handler: any;
 
   constructor() {
-    if (calendarEngine) {
+    if (rustCalendarEngine) {
       this.handler = new rustCalendarEngine.CalendarWebhookHandler();
+    } else {
+      throw new Error('Rust calendar engine is required but not available.');
     }
   }
 
@@ -505,128 +489,6 @@ export class CalendarWebhookHandler {
     if (this.handler) {
       await this.handler.processWebhook(provider, payload, signature);
     }
-  }
-}
-
-// Mock implementation for development/testing when native module isn't available
-class MockCalendarEngine {
-  private accounts: Map<string, CalendarAccount> = new Map();
-  private calendars: Map<string, Calendar> = new Map();
-  private events: Map<string, CalendarEvent> = new Map();
-  
-  async initialize(_configJson: string): Promise<void> {
-    console.warn('Using mock calendar engine - no actual calendar operations will be performed');
-  }
-
-  async start(): Promise<void> {}
-  async stop(): Promise<void> {}
-
-  async createAccount(accountJson: string): Promise<string> {
-    const account: CreateCalendarAccountInput = JSON.parse(accountJson);
-    const createdAccount: CalendarAccount = {
-      id: `mock-account-${Date.now()}`,
-      userId: account.userId,
-      name: account.name,
-      email: account.email,
-      provider: account.provider,
-      config: account.config,
-      credentials: account.credentials,
-      status: account.status,
-      defaultCalendarId: account.defaultCalendarId,
-      lastSyncAt: new Date(),
-      nextSyncAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
-      syncIntervalMinutes: account.syncIntervalMinutes,
-      isEnabled: account.isEnabled,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.accounts.set(createdAccount.id, createdAccount);
-    return JSON.stringify(createdAccount);
-  }
-
-  async getAccount(accountId: string): Promise<string> {
-    const account = this.accounts.get(accountId);
-    if (!account) {
-      throw new Error(`Account not found: ${accountId}`);
-    }
-    return JSON.stringify(account);
-  }
-
-  async getUserAccounts(userId: string): Promise<string> {
-    const userAccounts = Array.from(this.accounts.values())
-      .filter(account => account.userId === userId);
-    return JSON.stringify(userAccounts);
-  }
-
-  // Additional mock methods would go here...
-  async updateAccount(accountId: string, updatesJson: string): Promise<string> {
-    throw new Error('Mock implementation');
-  }
-  
-  async deleteAccount(accountId: string): Promise<void> {
-    this.accounts.delete(accountId);
-  }
-  
-  async listCalendars(accountId: string): Promise<string> {
-    return JSON.stringify([]);
-  }
-  
-  async getCalendar(calendarId: string): Promise<string> {
-    throw new Error('Mock implementation');
-  }
-  
-  async createCalendar(calendarJson: string): Promise<string> {
-    throw new Error('Mock implementation');
-  }
-  
-  async createEvent(eventJson: string): Promise<string> {
-    throw new Error('Mock implementation');
-  }
-  
-  async updateEvent(calendarId: string, eventId: string, updatesJson: string): Promise<string> {
-    throw new Error('Mock implementation');
-  }
-  
-  async deleteEvent(calendarId: string, eventId: string): Promise<void> {}
-  
-  async getEventsInRange(calendarIdsJson: string, timeMinIso: string, timeMaxIso: string): Promise<string> {
-    return JSON.stringify([]);
-  }
-  
-  async queryFreeBusy(queryJson: string): Promise<string> {
-    throw new Error('Mock implementation');
-  }
-  
-  async syncAccount(accountId: string, force: boolean): Promise<string> {
-    throw new Error('Mock implementation');
-  }
-  
-  async getAllSyncStatus(): Promise<string> {
-    return JSON.stringify({});
-  }
-  
-  async createPrivacySyncRule(ruleJson: string): Promise<string> {
-    return `mock-rule-${Date.now()}`;
-  }
-  
-  async executePrivacySync(): Promise<string> {
-    return JSON.stringify([]);
-  }
-  
-  async executePrivacySyncRule(ruleId: string): Promise<string> {
-    throw new Error('Mock implementation');
-  }
-  
-  async searchEvents(query: string, limit?: number): Promise<string> {
-    return JSON.stringify([]);
-  }
-  
-  async searchCalendars(query: string): Promise<string> {
-    return JSON.stringify([]);
-  }
-  
-  async getMetrics(): Promise<string> {
-    throw new Error('Mock implementation');
   }
 }
 

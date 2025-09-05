@@ -5,12 +5,11 @@
  * using RFC 5545 compliant implementation.
  */
 
-use chrono::{DateTime, Utc, TimeZone, Datelike, Weekday as ChronoWeekday};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use crate::calendar::{CalendarResult, CalendarError, CalendarEvent, RecurrenceRule, RecurrenceFrequency, EventRecurrence};
-use rrule::{RRule, RRuleSet, Frequency as RRuleFreq, Weekday};
+use rrule::{RRule, Frequency as RRuleFreq};
 use std::str::FromStr;
-use std::collections::HashMap;
 
 pub struct RecurringEventEngine;
 

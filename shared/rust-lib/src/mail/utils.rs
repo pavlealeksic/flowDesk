@@ -4,6 +4,20 @@ use crate::mail::{error::MailResult, types::*};
 use chrono::{DateTime, Utc};
 use regex::Regex;
 use std::collections::HashMap;
+use std::sync::LazyLock;
+
+// Pre-compiled regex patterns for better performance
+static EMAIL_PATTERN: LazyLock<Result<Regex, regex::Error>> = LazyLock::new(|| {
+    Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+});
+
+static EMAIL_WITH_NAME_PATTERN: LazyLock<Result<Regex, regex::Error>> = LazyLock::new(|| {
+    Regex::new(r#"^(?:"?([^"<>]+?)"?\s*)?<([^<>]+)>$"#)
+});
+
+static MESSAGE_ID_PATTERN: LazyLock<Result<Regex, regex::Error>> = LazyLock::new(|| {
+    Regex::new(r"<([^>]+)>")
+});
 
 /// Parse an email address string into EmailAddress struct
 pub fn parse_email_address(addr_str: &str) -> MailResult<EmailAddress> {
@@ -16,10 +30,21 @@ pub fn parse_email_address(addr_str: &str) -> MailResult<EmailAddress> {
     
     if addr_str.contains('<') && addr_str.contains('>') {
         // Format: "Name <email@example.com>" or Name <email@example.com>
-        let re = Regex::new(r#"^(?:"?([^"<>]+?)"?\s*)?<([^<>]+)>$"#).unwrap();
+        let re = EMAIL_WITH_NAME_PATTERN.as_ref()
+            .map_err(|e| crate::mail::error::MailError::validation(
+                "regex",
+                format!("Failed to compile email regex: {}", e),
+            ))?;
         if let Some(captures) = re.captures(addr_str) {
             let name = captures.get(1).map(|m| m.as_str().trim().to_string());
-            let address = captures.get(2).unwrap().as_str().trim().to_string();
+            let address = captures.get(2)
+                .ok_or_else(|| crate::mail::error::MailError::validation(
+                    "email",
+                    "Failed to extract email address from regex capture".to_string(),
+                ))?
+                .as_str()
+                .trim()
+                .to_string();
             
             if is_valid_email(&address) {
                 return Ok(EmailAddress { name, address: address.clone(), email: address });
@@ -100,8 +125,10 @@ fn split_email_list(input: &str) -> Vec<String> {
 
 /// Validate email address format
 pub fn is_valid_email(email: &str) -> bool {
-    let re = Regex::new(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").unwrap();
-    re.is_match(email)
+    match EMAIL_PATTERN.as_ref() {
+        Ok(re) => re.is_match(email),
+        Err(_) => false, // If regex compilation fails, consider invalid
+    }
 }
 
 /// Extract email domain
@@ -191,10 +218,12 @@ pub fn extract_references(headers: &HashMap<String, String>) -> Vec<String> {
 
 /// Parse Message-ID references from header value
 fn parse_message_ids(header_value: &str) -> Vec<String> {
-    let re = Regex::new(r"<([^>]+)>").unwrap();
-    re.captures_iter(header_value)
-        .map(|cap| cap[1].to_string())
-        .collect()
+    match MESSAGE_ID_PATTERN.as_ref() {
+        Ok(re) => re.captures_iter(header_value)
+            .filter_map(|cap| cap.get(1).map(|m| m.as_str().to_string()))
+            .collect(),
+        Err(_) => Vec::new(), // If regex compilation fails, return empty vec
+    }
 }
 
 /// Convert HTML email content to plain text

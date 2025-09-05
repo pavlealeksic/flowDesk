@@ -94,13 +94,11 @@ export class MobileMailService {
       this.database = await SQLite.openDatabaseAsync('flowdesk_mail.db');
       await this.initializeDatabase();
 
-      // Get native module (will be available after NAPI-RS bridge is built)
+      // Get native module (MUST be available)
       this.nativeModule = NativeModules.FlowDeskMailEngine;
       
       if (!this.nativeModule) {
-        console.warn('Native mail engine module not available, running in mock mode');
-        // In development or if native module isn't available, use mock implementation
-        this.nativeModule = this.createMockNativeModule();
+        throw new Error('Rust mail engine is required but not available. Please ensure the native module is properly installed.');
       }
 
       // Initialize the Rust mail engine
@@ -362,27 +360,25 @@ export class MobileMailService {
   }): Promise<EmailMessage[]> {
     await this.ensureInitialized();
 
+    if (!this.isOnline) {
+      throw new Error('Cannot get messages while offline. Rust mail engine requires network connectivity.');
+    }
+
     try {
-      if (this.isOnline) {
-        const messagesJson = await this.nativeModule!.getMessages(
-          accountId, 
-          folderId, 
-          options ? JSON.stringify(options) : undefined
-        );
-        const messages: EmailMessage[] = JSON.parse(messagesJson);
-        
-        // Cache messages locally
-        await this.cacheMessages(messages);
-        
-        return messages;
-      } else {
-        // Return cached messages when offline
-        return await this.getCachedMessages(accountId, folderId, options);
-      }
+      const messagesJson = await this.nativeModule!.getMessages(
+        accountId, 
+        folderId, 
+        options ? JSON.stringify(options) : undefined
+      );
+      const messages: EmailMessage[] = JSON.parse(messagesJson);
+      
+      // Cache messages locally for performance
+      await this.cacheMessages(messages);
+      
+      return messages;
     } catch (error) {
       console.error('Failed to get messages:', error);
-      // Fallback to cached messages on error
-      return await this.getCachedMessages(accountId, folderId, options);
+      throw error;
     }
   }
 
@@ -843,39 +839,6 @@ export class MobileMailService {
     }
   }
 
-  // Mock implementation for development
-  private createMockNativeModule(): MailEngineNativeModule {
-    return {
-      initialize: async () => true,
-      addAccount: async (accountData) => {
-        const account = JSON.parse(accountData);
-        return JSON.stringify({ ...account, id: `mock_${Date.now()}` });
-      },
-      updateAccount: async (accountId, updates) => {
-        return JSON.stringify({ id: accountId, ...JSON.parse(updates) });
-      },
-      removeAccount: async () => true,
-      listAccounts: async () => JSON.stringify([]),
-      syncAccount: async (accountId) => JSON.stringify({ accountId, status: 'idle', stats: {} }),
-      syncAllAccounts: async () => JSON.stringify({}),
-      getMessages: async () => JSON.stringify([]),
-      sendMessage: async () => `mock_msg_${Date.now()}`,
-      searchMessages: async (query) => JSON.stringify({
-        query,
-        totalCount: 0,
-        messages: [],
-        took: 0,
-      }),
-      getFolders: async () => JSON.stringify([]),
-      markMessageRead: async () => true,
-      getAuthUrl: async (provider) => `https://accounts.google.com/oauth/authorize?provider=${provider}`,
-      handleOAuthCallback: async () => JSON.stringify({ success: true }),
-      performBulkOperation: async () => JSON.stringify({ successful: 0, failed: 0, errors: [] }),
-      getSyncStatus: async () => JSON.stringify({}),
-      startBackgroundSync: async () => true,
-      stopBackgroundSync: async () => true,
-    };
-  }
 
   // Cleanup
   async shutdown(): Promise<void> {

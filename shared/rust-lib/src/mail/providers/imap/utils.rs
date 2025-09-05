@@ -1,6 +1,6 @@
 //! IMAP utility functions
 
-use crate::mail::{error::MailResult, types::*};
+use crate::mail::types::*;
 use mailparse::{ParsedMail, MailHeaderMap};
 
 /// Parse IMAP message flags to our internal representation
@@ -90,7 +90,7 @@ pub fn parse_message_date(date_str: &str) -> Option<chrono::DateTime<chrono::Utc
 
 /// Convert IMAP folder attributes to folder type
 pub fn folder_type_from_attributes(attributes: &[async_imap::types::NameAttribute], name: &str) -> MailFolderType {
-    use async_imap::types::NameAttribute;
+    
     
     // Use name-based detection since NameAttribute enum variants are not available
     let name_lower = name.to_lowercase();

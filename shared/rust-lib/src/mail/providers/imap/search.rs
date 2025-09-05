@@ -1,6 +1,6 @@
 //! IMAP search implementation
 
-use crate::mail::{error::MailResult, types::*};
+use crate::mail::error::MailResult;
 
 /// IMAP search query builder and executor
 pub struct ImapSearchBuilder {

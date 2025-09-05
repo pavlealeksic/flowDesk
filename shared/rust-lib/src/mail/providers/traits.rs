@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use crate::mail::{MailMessage, MailFolder, MailAttachment, EmailMessage, MailResult};
+use crate::mail::{MailMessage, MailFolder};
 
 #[async_trait]
 pub trait ImapProvider {

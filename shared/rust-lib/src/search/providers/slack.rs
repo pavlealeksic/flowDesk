@@ -1,7 +1,7 @@
 //! Slack search provider (placeholder implementation)
 
 use crate::search::{
-    SearchQuery, SearchResult, SearchError, SearchDocument, ProviderResponse,
+    SearchQuery, SearchResult, SearchDocument, ProviderResponse,
     ContentType, ProviderType,
 };
 use super::{

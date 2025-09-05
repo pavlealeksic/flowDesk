@@ -9,7 +9,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use tokio::sync::{RwLock, Mutex};
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
@@ -21,14 +20,13 @@ use crate::calendar::{
     CalendarAccount, Calendar, CalendarEvent, CalendarProvider,
     CreateCalendarAccountInput, UpdateCalendarAccountInput,
     CreateCalendarEventInput, UpdateCalendarEventInput,
-    CalendarPrivacySync, FreeBusyQuery, FreeBusyResponse,
-    MeetingProposal, CalendarMetrics, CalendarSyncStatus,
+    CalendarPrivacySync, FreeBusyQuery, FreeBusyResponse, CalendarMetrics, CalendarSyncStatus,
     CalendarDatabase
 };
 
 use crate::calendar::providers::{CalendarProviderTrait, CalendarProviderFactory};
 use crate::calendar::privacy_sync::{PrivacySyncEngine, PrivacySyncConfig, PrivacySyncResult, PrivacySyncRule, PrivacySyncState, PrivacySyncStatus, PrivacySyncStats};
-use crate::calendar::webhook::{WebhookManager, CalendarWebhook};
+use crate::calendar::webhook::WebhookManager;
 use crate::calendar::search::CalendarSearchEngine;
 
 /// Main calendar engine orchestrating all calendar operations
@@ -473,7 +471,7 @@ impl CalendarEngine {
         let rule_id = Uuid::new_v4().to_string();
 
         // Add to runtime state
-        let mut privacy_rules = self.state.privacy_sync_rules.write().await;
+        let privacy_rules = self.state.privacy_sync_rules.write().await;
         privacy_rules.insert(rule_id.clone(), rule.clone());
 
         info!("Privacy sync rule created: {}", rule_id);
@@ -555,7 +553,7 @@ impl CalendarEngine {
     /// Get calendar metrics
     pub async fn get_metrics(&self) -> CalendarResult<CalendarMetrics> {
         // Collect metrics from all components
-        let mut metrics = CalendarMetrics::default();
+        let metrics = CalendarMetrics::default();
 
         // Get account metrics
         // (Implementation would aggregate data from database and state)
@@ -618,7 +616,15 @@ impl CalendarEngine {
         
         // Clone the provider - this is a temporary solution for compilation
         // In practice, we'd need to redesign this to avoid cloning trait objects
-        let provider = providers.get(&account_id).unwrap();
+        let _provider = providers.get(&account_id)
+            .ok_or_else(|| CalendarError::ValidationError {
+                message: "Provider not found for account".to_string(),
+                provider: None,
+                account_id: Some(account_id.clone()),
+                field: Some("account_id".to_string()),
+                value: Some(account_id.clone()),
+                constraint: Some("existing_account".to_string()),
+            })?;
         CalendarProviderFactory::create_boxed_provider(
             &self.database.get_calendar_account(&account_id).await?
         )
@@ -652,7 +658,15 @@ impl CalendarEngine {
         }
         
         // Get mutable reference to provider
-        let provider = providers.get_mut(&account_id).unwrap();
+        let provider = providers.get_mut(&account_id)
+            .ok_or_else(|| CalendarError::ValidationError {
+                message: "Provider not found for account".to_string(),
+                provider: None,
+                account_id: Some(account_id.clone()),
+                field: Some("account_id".to_string()),
+                value: Some(account_id.clone()),
+                constraint: Some("existing_account".to_string()),
+            })?;
         f(provider).await
     }
 

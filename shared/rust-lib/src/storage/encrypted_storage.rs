@@ -15,6 +15,9 @@ use crate::crypto::*;
 use crate::config_sync::*;
 use crate::storage::local_storage::LocalStorage;
 
+#[cfg(test)]
+use crate::vector_clock::VectorClock;
+
 /// Encrypted storage wrapper configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptedStorageConfig {

@@ -184,6 +184,8 @@ pub struct EmailFlags {
     pub is_draft: bool,
     pub is_sent: bool,
     pub has_attachments: bool,
+    pub is_replied: bool,
+    pub is_forwarded: bool,
 }
 
 /// Message importance level
@@ -630,6 +632,8 @@ impl Default for EmailFlags {
             is_draft: false,
             is_sent: false,
             has_attachments: false,
+            is_replied: false,
+            is_forwarded: false,
         }
     }
 }

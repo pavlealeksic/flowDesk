@@ -6,8 +6,7 @@
  */
 
 use crate::calendar::{
-    CalendarProvider, CalDavConfig, GoogleCalendarConfig, 
-    OutlookCalendarConfig, CalendarResult, CalendarError
+    CalendarProvider, CalendarResult, CalendarError
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

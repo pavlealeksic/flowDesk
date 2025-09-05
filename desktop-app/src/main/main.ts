@@ -469,7 +469,7 @@ class FlowDeskApp {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        preload: join(__dirname, '../preload/preload.js'),
+        preload: join(__dirname, '../../../dist/preload/preload.js'),
         webSecurity: true,
         experimentalFeatures: false,
         offscreen: false,

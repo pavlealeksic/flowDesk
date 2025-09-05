@@ -8,18 +8,16 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use async_trait::async_trait;
 use chrono::{DateTime, Utc, Duration, Timelike};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use tracing::{debug, error, info, warn};
-use tokio::time::{sleep, Duration as TokioDuration};
+use tokio::time::Duration as TokioDuration;
 
 use crate::calendar::{
     CalendarResult, CalendarError, CalendarPrivacySync, 
-    CalendarEvent, CreateCalendarEventInput, UpdateCalendarEventInput,
-    Calendar, EventVisibility, EventTransparency, EventStatus,
-    CalendarDatabase, CalendarProvider
+    CalendarEvent, CreateCalendarEventInput, UpdateCalendarEventInput, EventTransparency, EventStatus,
+    CalendarDatabase
 };
 
 use crate::calendar::providers::{CalendarProviderTrait, CalendarProviderFactory};
@@ -328,11 +326,15 @@ impl PrivacySyncEngine {
         let start_time = std::time::Instant::now();
         let mut stats = PrivacySyncStats::default();
 
-        // Calculate sync window
+        // Calculate sync window using configured time window or defaults
         let now = Utc::now();
-        // TODO: Add window configuration to CalendarPrivacySync
-        let time_min = now - Duration::days(30); // Default to 30 days past
-        let time_max = now + Duration::days(365); // Default to 365 days future
+        let (past_days, future_days) = if let Some(ref time_window) = rule.config.time_window {
+            (time_window.past_days, time_window.future_days)
+        } else {
+            (30, 365) // Default to 30 days past, 365 days future
+        };
+        let time_min = now - Duration::days(past_days as i64);
+        let time_max = now + Duration::days(future_days as i64);
 
         debug!("Syncing events from {} to {} for rule {}", 
             time_min.format("%Y-%m-%d"), 
@@ -508,7 +510,7 @@ impl PrivacySyncEngine {
         let title = self.generate_privacy_title(source_event, privacy_settings)?;
 
         // Create basic privacy event
-        let mut privacy_event = CreateCalendarEventInput {
+        let privacy_event = CreateCalendarEventInput {
             calendar_id: target_calendar_id.to_string(),
             provider_id: Some(format!("privacy_{}", Uuid::new_v4())),
             title,
@@ -541,7 +543,10 @@ impl PrivacySyncEngine {
             } else { 
                 Some(source_event.attendees.clone()) 
             },
-            recurrence: None, // TODO: Convert from EventRecurrence to RecurrenceRule
+            recurrence: source_event.recurrence.as_ref().and_then(|event_recurrence| {
+                // Convert EventRecurrence to RecurrenceRule
+                crate::calendar::recurring::RecurringEventEngine::parse_rrule_to_recurrence_rule(&event_recurrence.rule).ok()
+            }),
             recurring_event_id: None, // Will be set by provider
             original_start_time: source_event.original_start_time,
             reminders: Some(vec![]), // No reminders for privacy events
@@ -725,7 +730,39 @@ impl PrivacySyncEngine {
         self.database.get_calendar(&rule.source_calendar_id).await?;
         self.database.get_calendar(&rule.target_calendar_id).await?;
 
-        // TODO: Add window validation once CalendarPrivacySync has window configuration
+        // Validate time window configuration if present
+        if let Some(ref time_window) = rule.time_window {
+            if time_window.past_days > 3650 { // More than 10 years
+                return Err(CalendarError::ValidationError {
+                    message: "Past days cannot exceed 3650 days (10 years)".to_string(),
+                    provider: None,
+                    account_id: None,
+                    field: Some("past_days".to_string()),
+                    value: Some(time_window.past_days.to_string()),
+                    constraint: Some("max_value".to_string()),
+                });
+            }
+            if time_window.future_days > 3650 { // More than 10 years
+                return Err(CalendarError::ValidationError {
+                    message: "Future days cannot exceed 3650 days (10 years)".to_string(),
+                    provider: None,
+                    account_id: None,
+                    field: Some("future_days".to_string()),
+                    value: Some(time_window.future_days.to_string()),
+                    constraint: Some("max_value".to_string()),
+                });
+            }
+            if time_window.past_days == 0 && time_window.future_days == 0 {
+                return Err(CalendarError::ValidationError {
+                    message: "At least one of past_days or future_days must be greater than 0".to_string(),
+                    provider: None,
+                    account_id: None,
+                    field: Some("time_window".to_string()),
+                    value: Some("both_zero".to_string()),
+                    constraint: Some("min_range".to_string()),
+                });
+            }
+        }
 
         Ok(())
     }
@@ -810,13 +847,36 @@ impl PrivacySyncEngine {
             }
         }
         
-        // Delete orphaned events - TODO: get actual account info
-        // For now, skip provider operations since we don't have account context
-        // Just clean up from local database
-        for orphaned_event in orphaned_events {
-            let _ = self.database.delete_event(&orphaned_event.id).await;
-            cleanup_stats.events_deleted += 1;
-            info!("Deleted orphaned privacy event: {}", orphaned_event.id);
+        // Delete orphaned events with proper account context
+        if !orphaned_events.is_empty() {
+            // Get account info from target calendar
+            match self.database.get_calendar(&rule.config.target_calendar_id).await {
+                Ok(target_calendar) => {
+                    match self.database.get_calendar_account(&target_calendar.account_id.to_string()).await {
+                        Ok(_account) => {
+                            // For now, just clean up from local database
+                            // In a full implementation, we would:
+                            // 1. Create a provider instance for the account
+                            // 2. Delete events from the actual calendar provider
+                            // 3. Then delete from local database
+                            for orphaned_event in orphaned_events {
+                                if let Err(e) = self.database.delete_event(&orphaned_event.id).await {
+                                    tracing::error!("Failed to delete orphaned event {}: {}", orphaned_event.id, e);
+                                } else {
+                                    cleanup_stats.events_deleted += 1;
+                                    info!("Deleted orphaned privacy event: {}", orphaned_event.id);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to get account for cleanup: {}", e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to get target calendar for cleanup: {}", e);
+                }
+            }
         }
         
         Ok(cleanup_stats)

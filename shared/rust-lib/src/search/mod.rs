@@ -117,7 +117,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_search_system_initialization() {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().expect("Failed to create temp directory for test");
         let config = SearchConfig {
             index_dir: temp_dir.path().to_path_buf(),
             ..Default::default()

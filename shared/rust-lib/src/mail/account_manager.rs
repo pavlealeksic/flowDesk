@@ -162,7 +162,7 @@ impl AccountManager {
         refresh_token: String,
         expires_at: chrono::DateTime<chrono::Utc>,
     ) -> MailResult<String> {
-        let mut gmail_config = get_predefined_configs().get("gmail")
+        let gmail_config = get_predefined_configs().get("gmail")
             .ok_or_else(|| MailError::ConfigurationError { 
                 message: "Gmail config not found".to_string() 
             })?

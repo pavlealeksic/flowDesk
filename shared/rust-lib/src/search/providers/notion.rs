@@ -1,7 +1,7 @@
 //! Notion search provider (placeholder implementation)
 
 use crate::search::{
-    SearchQuery, SearchResult as SearchResult, SearchError, SearchDocument, ProviderResponse,
+    SearchQuery, SearchResult as SearchResult, SearchDocument, ProviderResponse,
     ContentType, ProviderType,
 };
 use super::{

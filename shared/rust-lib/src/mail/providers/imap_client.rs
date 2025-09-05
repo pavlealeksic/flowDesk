@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use async_imap::{Session, Client};
+use async_imap::Session;
 use async_native_tls::TlsStream;
 use tokio::net::TcpStream;
-use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
+use tokio_util::compat::Compat;
 use crate::mail::{ImapConfig, MailMessage, MailFolder, MailFolderType, EmailAddress, EmailFlags, MessageImportance, MessagePriority};
 use crate::mail::providers::traits::ImapProvider;
 use std::sync::Arc;
@@ -10,7 +10,6 @@ use std::collections::HashMap;
 use uuid::Uuid;
 use tokio::sync::Mutex;
 use mailparse::{parse_mail, MailHeaderMap};
-use chrono::{DateTime, Utc};
 
 pub struct ImapClient {
     config: ImapConfig,
@@ -28,7 +27,7 @@ impl ImapClient {
     }
 
     async fn ensure_connected(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let mut session_guard = self.session.lock().await;
+        let session_guard = self.session.lock().await;
         
         if session_guard.is_some() {
             return Ok(());
@@ -235,6 +234,8 @@ impl ImapClient {
                 is_draft: imap_message.flags().any(|f| f == async_imap::types::Flag::Draft),
                 is_sent: false,
                 has_attachments: false,
+                is_replied: false,
+                is_forwarded: false,
             },
             labels: vec![],
             folder: "INBOX".to_string(), // Will be set by caller

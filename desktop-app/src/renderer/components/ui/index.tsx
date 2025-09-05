@@ -102,8 +102,8 @@ export {
   VolumeX,
   
   // Additional icons
-  Sync,
-  Template,
+  RotateCcw as Sync,
+  File as Template,
   
   type LucideProps,
   type LucideIcon

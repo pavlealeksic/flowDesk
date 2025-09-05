@@ -7,8 +7,6 @@
 //! - Cross-platform file system access
 
 use std::path::{Path, PathBuf};
-use std::fs;
-use std::io::{self, Write};
 use anyhow::{Result, anyhow};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -16,6 +14,9 @@ use tokio::fs as async_fs;
 
 use crate::crypto::*;
 use crate::config_sync::*;
+
+#[cfg(test)]
+use crate::vector_clock::VectorClock;
 
 /// Local storage configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -6,14 +6,11 @@
  * and CRUD operations for mail, calendar, and workspace data.
  */
 
-use sqlx::{SqlitePool, Row, Transaction, Sqlite, migrate::MigrateDatabase};
+use sqlx::{SqlitePool, Row, migrate::MigrateDatabase};
 use std::path::Path;
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use serde::{Serialize, Deserialize};
-use std::collections::HashMap;
-use std::sync::Arc;
-use tracing::{info, debug, error, warn};
+use tracing::{info, error};
 
 pub mod mail_db;
 pub mod calendar_db;
@@ -30,6 +27,29 @@ pub struct DatabaseConfig {
     pub search_index_path: String,
     pub user_data_path: String,
     pub schema_version: u32,
+    pub pool_config: Option<DatabasePoolConfig>,
+}
+
+/// Database connection pool configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatabasePoolConfig {
+    pub max_connections: u32,
+    pub min_connections: u32,
+    pub acquire_timeout_seconds: u64,
+    pub idle_timeout_seconds: u64,
+    pub max_lifetime_seconds: u64,
+}
+
+impl Default for DatabasePoolConfig {
+    fn default() -> Self {
+        Self {
+            max_connections: 10,
+            min_connections: 1,
+            acquire_timeout_seconds: 30,
+            idle_timeout_seconds: 600, // 10 minutes
+            max_lifetime_seconds: 3600, // 1 hour
+        }
+    }
 }
 
 /// Database initialization progress
@@ -139,9 +159,32 @@ impl FlowDeskDatabase {
 
     /// Setup required directories
     async fn setup_directories(&self) -> Result<(), DatabaseError> {
-        let mail_db_dir = Path::new(&self.config.mail_db_path).parent().unwrap().to_string_lossy().to_string();
-        let calendar_db_dir = Path::new(&self.config.calendar_db_path).parent().unwrap().to_string_lossy().to_string();
-        let search_index_dir = Path::new(&self.config.search_index_path).parent().unwrap().to_string_lossy().to_string();
+        let mail_db_dir = Path::new(&self.config.mail_db_path).parent()
+            .ok_or_else(|| DatabaseError::IoError {
+                message: "Mail database path has no parent directory".to_string(),
+                path: self.config.mail_db_path.clone(),
+                operation: "get_parent_directory".to_string(),
+            })?
+            .to_string_lossy()
+            .to_string();
+            
+        let calendar_db_dir = Path::new(&self.config.calendar_db_path).parent()
+            .ok_or_else(|| DatabaseError::IoError {
+                message: "Calendar database path has no parent directory".to_string(),
+                path: self.config.calendar_db_path.clone(),
+                operation: "get_parent_directory".to_string(),
+            })?
+            .to_string_lossy()
+            .to_string();
+            
+        let search_index_dir = Path::new(&self.config.search_index_path).parent()
+            .ok_or_else(|| DatabaseError::IoError {
+                message: "Search index path has no parent directory".to_string(),
+                path: self.config.search_index_path.clone(),
+                operation: "get_parent_directory".to_string(),
+            })?
+            .to_string_lossy()
+            .to_string();
         
         let directories = vec![
             self.config.user_data_path.as_str(),
@@ -197,7 +240,7 @@ impl FlowDeskDatabase {
 
     /// Run all database migrations
     async fn run_all_migrations(&self) -> Result<Vec<MigrationStatus>, DatabaseError> {
-        let mut statuses = Vec::new();
+        let statuses = Vec::new();
         
         // Run mail database migrations
         let mail_db = MailDatabase::new(&self.config.mail_db_path).await
@@ -311,7 +354,12 @@ impl FlowDeskDatabase {
                 })?;
             self.mail_db = Some(db);
         }
-        Ok(self.mail_db.as_ref().unwrap())
+        self.mail_db.as_ref()
+            .ok_or_else(|| DatabaseError::ConnectionError {
+                message: "Mail database not initialized".to_string(),
+                database_path: self.config.mail_db_path.clone(),
+                connection_string: format!("sqlite:{}", self.config.mail_db_path),
+            })
     }
 
     /// Get calendar database instance
@@ -325,7 +373,12 @@ impl FlowDeskDatabase {
                 })?;
             self.calendar_db = Some(db);
         }
-        Ok(self.calendar_db.as_ref().unwrap())
+        self.calendar_db.as_ref()
+            .ok_or_else(|| DatabaseError::ConnectionError {
+                message: "Calendar database not initialized".to_string(),
+                database_path: self.config.calendar_db_path.clone(),
+                connection_string: format!("sqlite:{}", self.config.calendar_db_path),
+            })
     }
 
     /// Repair corrupted databases
@@ -505,3 +558,5 @@ impl From<serde_json::Error> for DatabaseError {
         }
     }
 }
+
+// End of file

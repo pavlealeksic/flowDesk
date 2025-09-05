@@ -2,11 +2,11 @@
 
 use crate::search::{
     SearchEngine, RealTimeIndexManager, AdvancedQueryBuilder, PerformanceMonitor, ProviderManager,
-    SearchConfig, SearchQuery, SearchDocument, SearchResponse, SearchError, SearchResult as SearchResultType,
-    QueryExpression, AdvancedFilters, IndexingConfig, PerformanceTargets, PerformanceMetrics,
-    IndexingStats, SearchAnalytics, ErrorContext, SearchErrorContext,
+    SearchConfig, SearchQuery, SearchResponse, SearchResult as SearchResultType,
+    QueryExpression, AdvancedFilters, IndexingConfig, PerformanceTargets, PerformanceMetrics, SearchAnalytics, ErrorContext, SearchErrorContext,
     performance::QueryPerformanceBreakdown,
-    types::SortDirection,
+    types::{SortDirection, SearchFilter, ContentType, ProviderType},
+    advanced_query::TagFilter,
 };
 use std::sync::Arc;
 use tokio::sync::{RwLock, Mutex};
@@ -845,7 +845,7 @@ impl UnifiedSearchService {
             results_count: response.results.len(),
             execution_time_ms,
             was_cached: false, // Would track actual cache status
-            filters_applied: None, // TODO: Convert SearchFilter to AdvancedFilters
+            filters_applied: convert_search_filters_to_advanced(&query.filters),
         };
         
         // Update or create session
@@ -977,8 +977,8 @@ impl UnifiedSearchService {
         };
         
         let mut actions_executed = Vec::new();
-        let mut execution_success = true;
-        let mut error_message = None;
+        let execution_success = true;
+        let error_message = None;
         
         // Execute actions
         for action in &trigger.actions {
@@ -1266,4 +1266,184 @@ impl Clone for UnifiedSearchService {
             status: Arc::clone(&self.status),
         }
     }
+}
+
+/// Convert SearchFilter vector to AdvancedFilters
+/// 
+/// This function maps the simple SearchFilter format to the more structured
+/// AdvancedFilters format for better analytics tracking and query optimization.
+fn convert_search_filters_to_advanced(filters: &Option<Vec<SearchFilter>>) -> Option<AdvancedFilters> {
+    let filters = filters.as_ref()?;
+    if filters.is_empty() {
+        return None;
+    }
+    
+    let mut advanced_filters = AdvancedFilters {
+        content_types: None,
+        providers: None,
+        provider_types: None,
+        date_range: None,
+        authors: None,
+        tags: None,
+        categories: None,
+        file_size_range: None,
+        metadata_filters: None,
+        location_filter: None,
+        language: None,
+        priority_range: None,
+    };
+    
+    let mut content_types = Vec::new();
+    let mut providers = Vec::new();
+    let mut provider_types = Vec::new();
+    let mut authors = Vec::new();
+    let mut categories = Vec::new();
+    let mut tags = Vec::new();
+    let mut metadata_filters = HashMap::new();
+    
+    for filter in filters {
+        match filter.field.as_str() {
+            "content_type" => {
+                if let Ok(content_type_str) = serde_json::from_value::<String>(filter.value.clone()) {
+                    // Parse content type string
+                    match content_type_str.as_str() {
+                        "email" => content_types.push(ContentType::Email),
+                        "calendar_event" => content_types.push(ContentType::CalendarEvent),
+                        "contact" => content_types.push(ContentType::Contact),
+                        "file" => content_types.push(ContentType::File),
+                        "document" => content_types.push(ContentType::Document),
+                        "message" => content_types.push(ContentType::Message),
+                        "channel" => content_types.push(ContentType::Channel),
+                        "thread" => content_types.push(ContentType::Thread),
+                        "task" => content_types.push(ContentType::Task),
+                        "project" => content_types.push(ContentType::Project),
+                        "issue" => content_types.push(ContentType::Issue),
+                        "pull_request" => content_types.push(ContentType::PullRequest),
+                        "commit" => content_types.push(ContentType::Commit),
+                        "meeting" => content_types.push(ContentType::Meeting),
+                        "note" => content_types.push(ContentType::Note),
+                        "bookmark" => content_types.push(ContentType::Bookmark),
+                        custom => content_types.push(ContentType::Custom(custom.to_string())),
+                    }
+                }
+            },
+            "provider_id" => {
+                if let Ok(provider_id) = serde_json::from_value::<String>(filter.value.clone()) {
+                    providers.push(provider_id);
+                }
+            },
+            "provider_type" => {
+                if let Ok(provider_type_str) = serde_json::from_value::<String>(filter.value.clone()) {
+                    // Parse provider type string
+                    match provider_type_str.as_str() {
+                        "gmail" => provider_types.push(ProviderType::Gmail),
+                        "outlook" => provider_types.push(ProviderType::Outlook),
+                        "exchange" => provider_types.push(ProviderType::Exchange),
+                        "slack" => provider_types.push(ProviderType::Slack),
+                        "teams" => provider_types.push(ProviderType::Teams),
+                        "discord" => provider_types.push(ProviderType::Discord),
+                        "notion" => provider_types.push(ProviderType::Notion),
+                        "confluence" => provider_types.push(ProviderType::Confluence),
+                        "jira" => provider_types.push(ProviderType::Jira),
+                        "github" => provider_types.push(ProviderType::GitHub),
+                        "gitlab" => provider_types.push(ProviderType::GitLab),
+                        "google_drive" => provider_types.push(ProviderType::GoogleDrive),
+                        "dropbox" => provider_types.push(ProviderType::Dropbox),
+                        "onedrive" => provider_types.push(ProviderType::OneDrive),
+                        "local" => provider_types.push(ProviderType::LocalFiles),
+                        _ => {}, // Unknown provider type, skip
+                    }
+                }
+            },
+            "author" => {
+                if let Ok(author) = serde_json::from_value::<String>(filter.value.clone()) {
+                    authors.push(author);
+                }
+            },
+            "categories" | "category" => {
+                if let Ok(category) = serde_json::from_value::<String>(filter.value.clone()) {
+                    categories.push(category);
+                } else if let Ok(category_list) = serde_json::from_value::<Vec<String>>(filter.value.clone()) {
+                    categories.extend(category_list);
+                }
+            },
+            "tags" | "tag" => {
+                if let Ok(tag) = serde_json::from_value::<String>(filter.value.clone()) {
+                    tags.push(tag);
+                } else if let Ok(tag_list) = serde_json::from_value::<Vec<String>>(filter.value.clone()) {
+                    tags.extend(tag_list);
+                }
+            },
+            "created_at" | "modified_at" | "last_modified" => {
+                // For date filters, we could implement date range conversion here
+                // For now, we'll store it in metadata_filters
+                if let Ok(value_str) = serde_json::from_value::<String>(filter.value.clone()) {
+                    metadata_filters.insert(
+                        filter.field.clone(),
+                        crate::search::advanced_query::MetadataFilter {
+                            field: filter.field.clone(),
+                            operation: crate::search::advanced_query::FilterOperation::Equals,
+                            value: crate::search::advanced_query::FilterValue::String(value_str),
+                        }
+                    );
+                }
+            },
+            "language" => {
+                if let Ok(lang) = serde_json::from_value::<String>(filter.value.clone()) {
+                    advanced_filters.language = Some(lang);
+                }
+            },
+            _ => {
+                // Store unknown filters as metadata filters
+                if let Ok(value_str) = serde_json::from_value::<String>(filter.value.clone()) {
+                    metadata_filters.insert(
+                        filter.field.clone(),
+                        crate::search::advanced_query::MetadataFilter {
+                            field: filter.field.clone(),
+                            operation: crate::search::advanced_query::FilterOperation::Equals,
+                            value: crate::search::advanced_query::FilterValue::String(value_str),
+                        }
+                    );
+                } else if let Ok(value_num) = serde_json::from_value::<f64>(filter.value.clone()) {
+                    metadata_filters.insert(
+                        filter.field.clone(),
+                        crate::search::advanced_query::MetadataFilter {
+                            field: filter.field.clone(),
+                            operation: crate::search::advanced_query::FilterOperation::Equals,
+                            value: crate::search::advanced_query::FilterValue::Number(value_num),
+                        }
+                    );
+                }
+            },
+        }
+    }
+    
+    // Set the collected filters
+    if !content_types.is_empty() {
+        advanced_filters.content_types = Some(content_types);
+    }
+    if !providers.is_empty() {
+        advanced_filters.providers = Some(providers);
+    }
+    if !provider_types.is_empty() {
+        advanced_filters.provider_types = Some(provider_types);
+    }
+    if !authors.is_empty() {
+        advanced_filters.authors = Some(authors);
+    }
+    if !categories.is_empty() {
+        advanced_filters.categories = Some(categories);
+    }
+    if !tags.is_empty() {
+        advanced_filters.tags = Some(TagFilter {
+            include_any: Some(tags), // Default to "any" mode - tags are included if any match
+            include_all: None,
+            exclude: None,
+        });
+    }
+    if !metadata_filters.is_empty() {
+        advanced_filters.metadata_filters = Some(metadata_filters);
+    }
+    
+    Some(advanced_filters)
 }

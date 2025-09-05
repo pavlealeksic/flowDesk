@@ -1,9 +1,7 @@
-use crate::mail::{MailDatabase, MailMessage, MailAccount};
+use crate::mail::MailDatabase;
 use std::sync::Arc;
-use tokio::sync::{RwLock, Mutex};
 use tokio::time::{Duration, interval, Instant};
 use dashmap::DashMap;
-use std::collections::HashMap;
 
 pub struct MailSyncManager {
     database: Arc<MailDatabase>,
@@ -18,6 +16,8 @@ struct SyncState {
     is_syncing: bool,
     sync_interval: Duration,
     error_count: u32,
+    current_operation: Option<String>,
+    last_error: Option<String>,
 }
 
 impl MailSyncManager {
@@ -44,6 +44,8 @@ impl MailSyncManager {
             is_syncing: true,
             sync_interval: Duration::from_secs(60),
             error_count: 0,
+            current_operation: Some("Starting sync".to_string()),
+            last_error: None,
         });
 
         let result = self.perform_sync(account_id).await;
@@ -179,13 +181,51 @@ impl MailSyncManager {
     }
 
     pub async fn get_current_operation(&self) -> Option<String> {
-        // TODO: Track current operation per account
+        // Find any account that has a current operation
+        for entry in self.sync_states.iter() {
+            if let Some(ref operation) = entry.current_operation {
+                return Some(operation.clone());
+            }
+        }
         None
     }
 
     pub async fn get_last_error(&self) -> Option<String> {
-        // TODO: Track last error per account  
+        // Find the most recent error from any account
+        for entry in self.sync_states.iter() {
+            if let Some(ref error) = entry.last_error {
+                return Some(error.clone());
+            }
+        }
         None
+    }
+
+    /// Get current operation for a specific account
+    pub async fn get_account_current_operation(&self, account_id: &str) -> Option<String> {
+        self.sync_states.get(account_id)?.current_operation.clone()
+    }
+
+    /// Get last error for a specific account
+    pub async fn get_account_last_error(&self, account_id: &str) -> Option<String> {
+        self.sync_states.get(account_id)?.last_error.clone()
+    }
+
+    /// Update the current operation for an account
+    pub async fn set_account_operation(&self, account_id: &str, operation: Option<String>) {
+        if let Some(mut state) = self.sync_states.get_mut(account_id) {
+            state.current_operation = operation;
+        }
+    }
+
+    /// Set the last error for an account
+    pub async fn set_account_error(&self, account_id: &str, error: Option<String>) {
+        if let Some(mut state) = self.sync_states.get_mut(account_id) {
+            let has_error = error.is_some();
+            state.last_error = error;
+            if has_error {
+                state.error_count += 1;
+            }
+        }
     }
 
     pub async fn shutdown(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {

@@ -36,6 +36,14 @@ static CALENDAR_ENGINE: once_cell::sync::Lazy<Arc<Mutex<Option<CalendarEngine>>>
 static SEARCH_ENGINE: once_cell::sync::Lazy<Arc<Mutex<Option<SearchEngine>>>> =
     once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(None)));
 
+/// Shared production calendar engine instance
+static PRODUCTION_CALENDAR_ENGINE: once_cell::sync::Lazy<Arc<Mutex<Option<CalendarEngine>>>> =
+    once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(None)));
+
+/// Shared production search engine instance
+static PRODUCTION_SEARCH_ENGINE: once_cell::sync::Lazy<Arc<Mutex<Option<SearchEngine>>>> =
+    once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(None)));
+
 // ============================================================================
 // Mail Engine NAPI Bindings
 // ============================================================================
@@ -667,6 +675,282 @@ pub async fn create_calendar_event(
     Ok(event.id)
 }
 
+/// Update calendar event
+#[napi]
+pub async fn update_calendar_event(
+    calendar_id: String,
+    event_id: String,
+    title: Option<String>,
+    start_time: Option<i64>,
+    end_time: Option<i64>,
+    description: Option<String>,
+    location: Option<String>,
+) -> Result<()> {
+    let engine_guard = CALENDAR_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Calendar engine not initialized"))?;
+    
+    let updates = crate::calendar::types::UpdateCalendarEventInput {
+        title,
+        description,
+        location,
+        start_time: start_time.map(|t| DateTime::from_timestamp(t, 0).unwrap_or_default()),
+        end_time: end_time.map(|t| DateTime::from_timestamp(t, 0).unwrap_or_default()),
+        ..Default::default()
+    };
+    
+    engine.update_event(&calendar_id, &event_id, &updates).await
+        .map_err(|e| Error::from_reason(format!("Failed to update calendar event: {}", e)))?;
+    
+    tracing::info!("Calendar event updated: {}", event_id);
+    Ok(())
+}
+
+/// Delete calendar event
+#[napi]
+pub async fn delete_calendar_event(calendar_id: String, event_id: String) -> Result<()> {
+    let engine_guard = CALENDAR_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Calendar engine not initialized"))?;
+    
+    engine.delete_event(&calendar_id, &event_id).await
+        .map_err(|e| Error::from_reason(format!("Failed to delete calendar event: {}", e)))?;
+    
+    tracing::info!("Calendar event deleted: {}", event_id);
+    Ok(())
+}
+
+/// Get events in a date range
+#[napi]
+pub async fn get_calendar_events_in_range(
+    account_id: String,
+    start_time: i64,
+    end_time: i64,
+) -> Result<Vec<NapiCalendarEvent>> {
+    let engine_guard = CALENDAR_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Calendar engine not initialized"))?;
+    
+    let start_dt = DateTime::from_timestamp(start_time, 0)
+        .ok_or_else(|| Error::from_reason("Invalid start time"))?;
+    let end_dt = DateTime::from_timestamp(end_time, 0)
+        .ok_or_else(|| Error::from_reason("Invalid end time"))?;
+    
+    let events = engine.get_events_in_range(&account_id, start_dt, end_dt).await
+        .map_err(|e| Error::from_reason(format!("Failed to get events: {}", e)))?;
+    
+    Ok(events.into_iter().map(|event| NapiCalendarEvent {
+        id: event.id,
+        calendar_id: event.calendar_id,
+        title: event.title,
+        description: event.description,
+        location: event.location,
+        start_time: event.start_time.timestamp(),
+        end_time: event.end_time.timestamp(),
+        is_all_day: event.all_day,
+        organizer: event.organizer.unwrap_or_default(),
+        attendees: event.attendees.unwrap_or_default(),
+        status: event.status,
+        visibility: event.visibility.unwrap_or_default(),
+        recurrence_rule: event.recurrence_rule,
+    }).collect())
+}
+
+/// Create a new calendar
+#[napi]
+pub async fn create_calendar(
+    account_id: String,
+    name: String,
+    description: Option<String>,
+    color: Option<String>,
+) -> Result<String> {
+    let engine_guard = CALENDAR_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Calendar engine not initialized"))?;
+    
+    let calendar = crate::calendar::types::Calendar {
+        id: uuid::Uuid::new_v4().to_string(),
+        account_id,
+        name,
+        description: description.unwrap_or_default(),
+        color: color.unwrap_or_default(),
+        ..Default::default()
+    };
+    
+    let created_calendar = engine.create_calendar(&calendar).await
+        .map_err(|e| Error::from_reason(format!("Failed to create calendar: {}", e)))?;
+    
+    Ok(created_calendar.id)
+}
+
+/// Update calendar properties
+#[napi]
+pub async fn update_calendar(
+    calendar_id: String,
+    name: Option<String>,
+    description: Option<String>,
+    color: Option<String>,
+) -> Result<()> {
+    let engine_guard = CALENDAR_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Calendar engine not initialized"))?;
+    
+    // Get existing calendar first
+    let mut calendar = engine.get_calendar(&calendar_id).await
+        .map_err(|e| Error::from_reason(format!("Failed to get calendar: {}", e)))?;
+    
+    // Update fields if provided
+    if let Some(name) = name {
+        calendar.name = name;
+    }
+    if let Some(description) = description {
+        calendar.description = description;
+    }
+    if let Some(color) = color {
+        calendar.color = color;
+    }
+    
+    // This assumes there's an update_calendar method in the engine
+    // If not, this would need to be implemented
+    Err(Error::from_reason("Update calendar functionality not yet implemented in calendar engine"))
+}
+
+/// Delete a calendar
+#[napi]
+pub async fn delete_calendar(calendar_id: String) -> Result<()> {
+    let engine_guard = CALENDAR_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Calendar engine not initialized"))?;
+    
+    // This assumes there's a delete_calendar method in the engine
+    // If not, this would need to be implemented in the calendar engine
+    Err(Error::from_reason("Delete calendar functionality not yet implemented in calendar engine"))
+}
+
+/// Get free/busy information for a calendar
+#[napi]
+pub async fn query_free_busy(
+    account_id: String,
+    start_time: i64,
+    end_time: i64,
+    calendars: Vec<String>,
+) -> Result<String> {
+    let engine_guard = CALENDAR_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Calendar engine not initialized"))?;
+    
+    let start_dt = DateTime::from_timestamp(start_time, 0)
+        .ok_or_else(|| Error::from_reason("Invalid start time"))?;
+    let end_dt = DateTime::from_timestamp(end_time, 0)
+        .ok_or_else(|| Error::from_reason("Invalid end time"))?;
+    
+    let query = crate::calendar::types::FreeBusyQuery {
+        time_min: start_dt,
+        time_max: end_dt,
+        items: calendars.into_iter().map(|id| crate::calendar::types::FreeBusyRequestItem {
+            id,
+        }).collect(),
+    };
+    
+    let response = engine.query_free_busy(&query).await
+        .map_err(|e| Error::from_reason(format!("Failed to query free/busy: {}", e)))?;
+    
+    let response_json = serde_json::to_string(&response)
+        .map_err(|e| Error::from_reason(format!("Failed to serialize free/busy response: {}", e)))?;
+    
+    Ok(response_json)
+}
+
+/// Remove calendar account
+#[napi]
+pub async fn remove_calendar_account(account_id: String) -> Result<()> {
+    let engine_guard = CALENDAR_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Calendar engine not initialized"))?;
+    
+    engine.delete_account(&account_id).await
+        .map_err(|e| Error::from_reason(format!("Failed to remove calendar account: {}", e)))?;
+    
+    tracing::info!("Calendar account removed: {}", account_id);
+    Ok(())
+}
+
+/// Get account calendars with details
+#[napi]
+pub async fn get_account_calendars_detailed(account_id: String) -> Result<String> {
+    let engine_guard = CALENDAR_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Calendar engine not initialized"))?;
+    
+    let calendars = engine.list_calendars(&account_id).await
+        .map_err(|e| Error::from_reason(format!("Failed to get calendars: {}", e)))?;
+    
+    let calendars_json = serde_json::to_string(&calendars)
+        .map_err(|e| Error::from_reason(format!("Failed to serialize calendars: {}", e)))?;
+    
+    Ok(calendars_json)
+}
+
+/// Start calendar engine background sync
+#[napi]
+pub async fn start_calendar_sync() -> Result<()> {
+    let engine_guard = CALENDAR_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Calendar engine not initialized"))?;
+    
+    engine.start().await
+        .map_err(|e| Error::from_reason(format!("Failed to start calendar sync: {}", e)))?;
+    
+    tracing::info!("Calendar sync started");
+    Ok(())
+}
+
+/// Stop calendar engine background sync
+#[napi]
+pub async fn stop_calendar_sync() -> Result<()> {
+    let engine_guard = CALENDAR_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Calendar engine not initialized"))?;
+    
+    engine.stop().await
+        .map_err(|e| Error::from_reason(format!("Failed to stop calendar sync: {}", e)))?;
+    
+    tracing::info!("Calendar sync stopped");
+    Ok(())
+}
+
+/// Force sync calendar account with server
+#[napi]
+pub async fn force_sync_calendar_account(account_id: String) -> Result<NapiCalendarSyncStatus> {
+    let engine_guard = CALENDAR_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Calendar engine not initialized"))?;
+    
+    let sync_result = engine.sync_account(&account_id, true).await
+        .map_err(|e| Error::from_reason(format!("Failed to force sync calendar account: {}", e)))?;
+    
+    Ok(NapiCalendarSyncStatus {
+        account_id: sync_result.account_id,
+        last_sync: sync_result.last_sync.map(|dt| dt.timestamp()),
+        is_syncing: sync_result.is_syncing,
+        sync_errors: sync_result.sync_errors,
+        calendars_synced: sync_result.calendars_synced,
+        events_synced: sync_result.events_synced,
+    })
+}
+
 // ============================================================================
 // Search Engine NAPI Bindings
 // ============================================================================
@@ -1222,6 +1506,361 @@ pub async fn clear_search_cache() -> Result<()> {
     engine.clear_cache().await;
     tracing::info!("Search cache cleared");
     Ok(())
+}
+
+/// Rebuild search index from scratch
+#[napi]
+pub async fn rebuild_search_index() -> Result<()> {
+    let engine_guard = SEARCH_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Search engine not initialized"))?;
+    
+    engine.rebuild_index().await
+        .map_err(|e| Error::from_reason(format!("Failed to rebuild search index: {}", e)))?;
+    
+    tracing::info!("Search index rebuilt successfully");
+    Ok(())
+}
+
+/// Get search index statistics
+#[napi]
+pub async fn get_search_index_stats() -> Result<String> {
+    let engine_guard = SEARCH_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Search engine not initialized"))?;
+    
+    let stats = engine.get_index_stats().await
+        .map_err(|e| Error::from_reason(format!("Failed to get index stats: {}", e)))?;
+    
+    let stats_json = serde_json::to_string(&stats)
+        .map_err(|e| Error::from_reason(format!("Failed to serialize stats: {}", e)))?;
+    
+    Ok(stats_json)
+}
+
+/// Convert NAPI advanced search filters to internal search filters
+fn convert_napi_filters_to_internal(query: &NapiAdvancedSearchQuery) -> Vec<crate::search::types::SearchFilter> {
+    let mut filters = Vec::new();
+    
+    if let Some(doc_type) = &query.document_type {
+        filters.push(crate::search::types::SearchFilter::DocumentType(doc_type.clone()));
+    }
+    
+    if let Some(sender) = &query.sender {
+        filters.push(crate::search::types::SearchFilter::Field {
+            field: "sender".to_string(),
+            value: sender.clone(),
+            operator: crate::search::types::FilterOperator::Equals,
+        });
+    }
+    
+    if let Some(folder) = &query.folder {
+        filters.push(crate::search::types::SearchFilter::Field {
+            field: "folder".to_string(),
+            value: folder.clone(),
+            operator: crate::search::types::FilterOperator::Equals,
+        });
+    }
+    
+    if let Some(date_from) = query.date_from {
+        let from_date = chrono::DateTime::from_timestamp(date_from, 0)
+            .unwrap_or_default();
+        filters.push(crate::search::types::SearchFilter::DateRange {
+            field: "date".to_string(),
+            from: Some(from_date),
+            to: None,
+        });
+    }
+    
+    if let Some(date_to) = query.date_to {
+        let to_date = chrono::DateTime::from_timestamp(date_to, 0)
+            .unwrap_or_default();
+        filters.push(crate::search::types::SearchFilter::DateRange {
+            field: "date".to_string(),
+            from: None,
+            to: Some(to_date),
+        });
+    }
+    
+    filters
+}
+
+/// Advanced search with multiple filters
+#[napi(object)]
+pub struct NapiAdvancedSearchQuery {
+    pub query: String,
+    pub document_type: Option<String>,
+    pub date_from: Option<i64>,
+    pub date_to: Option<i64>,
+    pub sender: Option<String>,
+    pub folder: Option<String>,
+    pub has_attachments: Option<bool>,
+    pub is_read: Option<bool>,
+    pub limit: Option<u32>,
+    pub offset: Option<u32>,
+}
+
+#[napi]
+pub async fn advanced_search_documents(query: NapiAdvancedSearchQuery) -> Result<NapiSearchResponse> {
+    let engine_guard = SEARCH_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Search engine not initialized"))?;
+    
+    let search_query = crate::search::types::SearchQuery {
+        query: query.query,
+        limit: query.limit.unwrap_or(50) as usize,
+        offset: query.offset.unwrap_or(0) as usize,
+        filters: convert_napi_filters_to_internal(&query), // Convert NAPI filters to internal search filters
+        sort_by: None,
+        highlight: true,
+    };
+    
+    let results = engine.search(&search_query).await
+        .map_err(|e| Error::from_reason(format!("Advanced search failed: {}", e)))?;
+    
+    Ok(NapiSearchResponse {
+        results: results.results.into_iter().map(|r| NapiSearchResult {
+            id: r.id,
+            title: r.title,
+            content: r.content,
+            document_type: r.document_type,
+            score: r.score,
+            highlights: r.highlights.unwrap_or_default().into_iter().map(|h| NapiSearchHighlight {
+                field: h.field,
+                fragments: h.fragments,
+            }).collect(),
+            metadata: r.metadata,
+            last_modified: r.last_modified,
+        }).collect(),
+        total_hits: results.total_hits as u32,
+        query_time_ms: results.query_time.as_millis() as u32,
+        has_more: results.has_more,
+        suggestions: results.suggestions.unwrap_or_default(),
+    })
+}
+
+/// Search within specific document types
+#[napi]
+pub async fn search_by_type(document_type: String, query: String, limit: Option<u32>) -> Result<Vec<NapiSearchResult>> {
+    let engine_guard = SEARCH_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Search engine not initialized"))?;
+    
+    let search_query = crate::search::types::SearchQuery {
+        query: format!("type:{} AND ({})", document_type, query),
+        limit: limit.unwrap_or(50) as usize,
+        offset: 0,
+        filters: vec![],
+        sort_by: None,
+        highlight: true,
+    };
+    
+    let results = engine.search(&search_query).await
+        .map_err(|e| Error::from_reason(format!("Type search failed: {}", e)))?;
+    
+    Ok(results.results.into_iter().map(|r| NapiSearchResult {
+        id: r.id,
+        title: r.title,
+        content: r.content,
+        document_type: r.document_type,
+        score: r.score,
+        highlights: r.highlights.unwrap_or_default().into_iter().map(|h| NapiSearchHighlight {
+            field: h.field,
+            fragments: h.fragments,
+        }).collect(),
+        metadata: r.metadata,
+        last_modified: r.last_modified,
+    }).collect())
+}
+
+/// Get recently indexed documents
+#[napi]
+pub async fn get_recent_documents(limit: Option<u32>) -> Result<Vec<NapiSearchResult>> {
+    let engine_guard = SEARCH_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Search engine not initialized"))?;
+    
+    let search_query = crate::search::types::SearchQuery {
+        query: "*".to_string(),
+        limit: limit.unwrap_or(20) as usize,
+        offset: 0,
+        filters: vec![],
+        sort_by: Some(crate::search::types::SortBy::LastModified),
+        highlight: false,
+    };
+    
+    let results = engine.search(&search_query).await
+        .map_err(|e| Error::from_reason(format!("Recent documents search failed: {}", e)))?;
+    
+    Ok(results.results.into_iter().map(|r| NapiSearchResult {
+        id: r.id,
+        title: r.title,
+        content: r.content,
+        document_type: r.document_type,
+        score: r.score,
+        highlights: vec![],
+        metadata: r.metadata,
+        last_modified: r.last_modified,
+    }).collect())
+}
+
+/// Auto-index email thread with messages
+#[napi]
+pub async fn index_email_thread(
+    thread_id: String,
+    messages: Vec<serde_json::Value>,
+) -> Result<()> {
+    let engine_guard = SEARCH_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Search engine not initialized"))?;
+    
+    // Index each message in the thread
+    for (i, message_json) in messages.iter().enumerate() {
+        let document = crate::search::types::Document {
+            id: format!("{}_{}", thread_id, i),
+            title: message_json.get("subject")
+                .and_then(|v| v.as_str())
+                .unwrap_or("No Subject")
+                .to_string(),
+            content: message_json.get("body")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            document_type: "email_thread".to_string(),
+            metadata: message_json.clone(),
+            last_modified: chrono::Utc::now(),
+        };
+        
+        engine.index_document(document).await
+            .map_err(|e| Error::from_reason(format!("Failed to index thread message: {}", e)))?;
+    }
+    
+    tracing::info!("Email thread {} indexed with {} messages", thread_id, messages.len());
+    Ok(())
+}
+
+/// Index calendar event with recurrence
+#[napi]
+pub async fn index_calendar_event_with_recurrence(
+    event_id: String,
+    event_data: serde_json::Value,
+    recurrence_instances: Vec<serde_json::Value>,
+) -> Result<()> {
+    let engine_guard = SEARCH_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Search engine not initialized"))?;
+    
+    // Index main event
+    let main_document = crate::search::types::Document {
+        id: event_id.clone(),
+        title: event_data.get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or("No Title")
+            .to_string(),
+        content: format!(
+            "{} {}",
+            event_data.get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or(""),
+            event_data.get("location")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+        ),
+        document_type: "calendar_event".to_string(),
+        metadata: event_data,
+        last_modified: chrono::Utc::now(),
+    };
+    
+    engine.index_document(main_document).await
+        .map_err(|e| Error::from_reason(format!("Failed to index main event: {}", e)))?;
+    
+    // Index recurrence instances
+    for (i, instance) in recurrence_instances.iter().enumerate() {
+        let instance_document = crate::search::types::Document {
+            id: format!("{}_instance_{}", event_id, i),
+            title: format!("{} ({})", 
+                instance.get("title")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("No Title"),
+                instance.get("start_time")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Unknown Time")
+            ),
+            content: format!(
+                "{} {}",
+                instance.get("description")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(""),
+                instance.get("location")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+            ),
+            document_type: "calendar_event_instance".to_string(),
+            metadata: instance.clone(),
+            last_modified: chrono::Utc::now(),
+        };
+        
+        engine.index_document(instance_document).await
+            .map_err(|e| Error::from_reason(format!("Failed to index event instance: {}", e)))?;
+    }
+    
+    tracing::info!("Calendar event {} indexed with {} recurrence instances", 
+                   event_id, recurrence_instances.len());
+    Ok(())
+}
+
+/// Full-text search with fuzzy matching
+#[napi]
+pub async fn fuzzy_search_documents(query: String, fuzziness: Option<u32>, limit: Option<u32>) -> Result<NapiSearchResponse> {
+    let engine_guard = SEARCH_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Search engine not initialized"))?;
+    
+    let fuzzy_query = if let Some(fuzz) = fuzziness {
+        format!("{}~{}", query, fuzz)
+    } else {
+        format!("{}~1", query) // Default fuzziness of 1
+    };
+    
+    let search_query = crate::search::types::SearchQuery {
+        query: fuzzy_query,
+        limit: limit.unwrap_or(50) as usize,
+        offset: 0,
+        filters: vec![],
+        sort_by: None,
+        highlight: true,
+    };
+    
+    let results = engine.search(&search_query).await
+        .map_err(|e| Error::from_reason(format!("Fuzzy search failed: {}", e)))?;
+    
+    Ok(NapiSearchResponse {
+        results: results.results.into_iter().map(|r| NapiSearchResult {
+            id: r.id,
+            title: r.title,
+            content: r.content,
+            document_type: r.document_type,
+            score: r.score,
+            highlights: r.highlights.unwrap_or_default().into_iter().map(|h| NapiSearchHighlight {
+                field: h.field,
+                fragments: h.fragments,
+            }).collect(),
+            metadata: r.metadata,
+            last_modified: r.last_modified,
+        }).collect(),
+        total_hits: results.total_hits as u32,
+        query_time_ms: results.query_time.as_millis() as u32,
+        has_more: results.has_more,
+        suggestions: results.suggestions.unwrap_or_default(),
+    })
 }
 
 // ============================================================================
@@ -2275,6 +2914,42 @@ pub async fn init_production_email_engine(app_name: String) -> Result<String> {
     Ok("Production email engine initialized successfully".to_string())
 }
 
+/// Initialize production calendar engine
+#[napi]
+pub async fn init_production_calendar_engine(app_name: String) -> Result<String> {
+    let mut engine_guard = PRODUCTION_CALENDAR_ENGINE.lock().await;
+    
+    if engine_guard.is_none() {
+        // For now, calendar engine uses the standard CalendarEngine implementation
+        // since there's no separate production calendar engine implementation
+        let config = crate::calendar::CalendarConfig::default();
+        let engine = crate::calendar::CalendarEngine::new(config).await
+            .map_err(|e| Error::from_reason(format!("Failed to initialize production calendar engine: {}", e)))?;
+        *engine_guard = Some(engine);
+    }
+    
+    tracing::info!("Production calendar engine initialized successfully for app: {}", app_name);
+    Ok("Production calendar engine initialized successfully".to_string())
+}
+
+/// Initialize production search engine
+#[napi]
+pub async fn init_production_search_engine(app_name: String) -> Result<String> {
+    let mut engine_guard = PRODUCTION_SEARCH_ENGINE.lock().await;
+    
+    if engine_guard.is_none() {
+        // For now, search engine uses the standard SearchEngine implementation  
+        // since there's no separate production search engine implementation
+        let config = crate::search::SearchConfig::default();
+        let engine = crate::search::SearchEngine::new(config).await
+            .map_err(|e| Error::from_reason(format!("Failed to initialize production search engine: {}", e)))?;
+        *engine_guard = Some(engine);
+    }
+    
+    tracing::info!("Production search engine initialized successfully for app: {}", app_name);
+    Ok("Production search engine initialized successfully".to_string())
+}
+
 /// Setup a new email account with credentials
 #[napi]
 pub async fn setup_email_account(
@@ -2404,7 +3079,7 @@ pub async fn send_email_message(
         subject: message.subject,
         body_text: message.body_text,
         body_html: message.body_html,
-        attachments: Vec::new(), // TODO: Add attachment support
+        attachments: Vec::new(), // Attachments support pending - requires MIME parsing implementation
     };
     
     engine.send_email(account_uuid, new_message).await
@@ -2538,6 +3213,202 @@ pub fn get_predefined_server_configs() -> Result<String> {
         .map_err(|e| Error::from_reason(format!("Failed to serialize server configs: {}", e)))?;
     
     Ok(configs_json)
+}
+
+/// Get all production email accounts
+#[napi]
+pub async fn get_production_email_accounts() -> Result<Vec<String>> {
+    let engine_guard = PRODUCTION_EMAIL_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Production email engine not initialized"))?;
+    
+    let accounts = engine.account_manager().get_all_accounts().await
+        .map_err(|e| Error::from_reason(format!("Failed to get accounts: {}", e)))?;
+    
+    let account_ids: Vec<String> = accounts.into_iter()
+        .map(|account| account.id.to_string())
+        .collect();
+    
+    Ok(account_ids)
+}
+
+/// Get production email account by ID
+#[napi]
+pub async fn get_production_email_account(account_id: String) -> Result<Option<String>> {
+    let engine_guard = PRODUCTION_EMAIL_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Production email engine not initialized"))?;
+    
+    let account_uuid = uuid::Uuid::parse_str(&account_id)
+        .map_err(|e| Error::from_reason(format!("Invalid account ID: {}", e)))?;
+    
+    let account = engine.account_manager().get_account_by_id(account_uuid).await
+        .map_err(|e| Error::from_reason(format!("Failed to get account: {}", e)))?;
+    
+    if let Some(account) = account {
+        let account_json = serde_json::to_string(&account)
+            .map_err(|e| Error::from_reason(format!("Failed to serialize account: {}", e)))?;
+        Ok(Some(account_json))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Connect to IMAP server for an account
+#[napi]
+pub async fn connect_imap_account(account_id: String) -> Result<()> {
+    let engine_guard = PRODUCTION_EMAIL_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Production email engine not initialized"))?;
+    
+    let account_uuid = uuid::Uuid::parse_str(&account_id)
+        .map_err(|e| Error::from_reason(format!("Invalid account ID: {}", e)))?;
+    
+    engine.connect_imap(account_uuid).await
+        .map_err(|e| Error::from_reason(format!("Failed to connect IMAP: {}", e)))?;
+    
+    tracing::info!("IMAP connected for account: {}", account_id);
+    Ok(())
+}
+
+/// Connect to SMTP server for an account
+#[napi]
+pub async fn connect_smtp_account(account_id: String) -> Result<()> {
+    let engine_guard = PRODUCTION_EMAIL_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Production email engine not initialized"))?;
+    
+    let account_uuid = uuid::Uuid::parse_str(&account_id)
+        .map_err(|e| Error::from_reason(format!("Invalid account ID: {}", e)))?;
+    
+    engine.connect_smtp(account_uuid).await
+        .map_err(|e| Error::from_reason(format!("Failed to connect SMTP: {}", e)))?;
+    
+    tracing::info!("SMTP connected for account: {}", account_id);
+    Ok(())
+}
+
+/// Remove an email account from the production engine
+#[napi]
+pub async fn remove_production_email_account(account_id: String) -> Result<()> {
+    let mut engine_guard = PRODUCTION_EMAIL_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_mut()
+        .ok_or_else(|| Error::from_reason("Production email engine not initialized"))?;
+    
+    let account_uuid = uuid::Uuid::parse_str(&account_id)
+        .map_err(|e| Error::from_reason(format!("Invalid account ID: {}", e)))?;
+    
+    engine.account_manager_mut().remove_account(account_uuid).await
+        .map_err(|e| Error::from_reason(format!("Failed to remove account: {}", e)))?;
+    
+    tracing::info!("Account removed: {}", account_id);
+    Ok(())
+}
+
+/// Search emails across all accounts
+#[napi]
+pub async fn search_production_emails(query: String, limit: Option<u32>) -> Result<Vec<NapiMailMessage>> {
+    let engine_guard = PRODUCTION_EMAIL_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Production email engine not initialized"))?;
+    
+    // Get all accounts and search through them
+    let accounts = engine.account_manager().get_all_accounts().await
+        .map_err(|e| Error::from_reason(format!("Failed to get accounts: {}", e)))?;
+    
+    let mut all_messages = Vec::new();
+    let limit_per_account = limit.map(|l| l as usize / accounts.len().max(1)).unwrap_or(100);
+    
+    for account in accounts {
+        match engine.get_messages(account.id, "INBOX", Some(limit_per_account)).await {
+            Ok(messages) => {
+                // Simple text search on messages
+                let filtered: Vec<_> = messages.into_iter()
+                    .filter(|msg| {
+                        msg.subject.contains(&query) || 
+                        msg.body_text.as_ref().map_or(false, |body| body.contains(&query)) ||
+                        msg.body_html.as_ref().map_or(false, |body| body.contains(&query))
+                    })
+                    .map(|msg| (&msg).into())
+                    .collect();
+                all_messages.extend(filtered);
+            },
+            Err(e) => {
+                tracing::warn!("Failed to search messages for account {}: {}", account.id, e);
+                continue;
+            }
+        }
+    }
+    
+    // Sort by received date and limit results
+    all_messages.sort_by(|a, b| b.received_at.cmp(&a.received_at));
+    if let Some(limit) = limit {
+        all_messages.truncate(limit as usize);
+    }
+    
+    Ok(all_messages)
+}
+
+/// Move email message to different folder
+#[napi]
+pub async fn move_email_message(
+    account_id: String,
+    from_folder: String,
+    to_folder: String,
+    message_uid: u32,
+) -> Result<()> {
+    let engine_guard = PRODUCTION_EMAIL_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Production email engine not initialized"))?;
+    
+    let account_uuid = uuid::Uuid::parse_str(&account_id)
+        .map_err(|e| Error::from_reason(format!("Invalid account ID: {}", e)))?;
+    
+    // Move functionality would need to be implemented at the IMAP provider level
+    // This is a complex operation that requires IMAP MOVE or COPY+EXPUNGE commands
+    Err(Error::from_reason("Move message functionality requires IMAP provider implementation - use copy to target folder and delete from source as workaround"))
+}
+
+/// Get email account statistics
+#[napi]
+pub async fn get_email_account_stats(account_id: String) -> Result<String> {
+    let engine_guard = PRODUCTION_EMAIL_ENGINE.lock().await;
+    let engine = engine_guard
+        .as_ref()
+        .ok_or_else(|| Error::from_reason("Production email engine not initialized"))?;
+    
+    let account_uuid = uuid::Uuid::parse_str(&account_id)
+        .map_err(|e| Error::from_reason(format!("Invalid account ID: {}", e)))?;
+    
+    let folders = engine.get_folders(account_uuid).await
+        .map_err(|e| Error::from_reason(format!("Failed to get folders: {}", e)))?;
+    
+    let total_messages: u32 = folders.iter().map(|f| f.message_count).sum();
+    let total_unread: u32 = folders.iter().map(|f| f.unread_count).sum();
+    
+    let stats = serde_json::json!({
+        "account_id": account_id,
+        "total_folders": folders.len(),
+        "total_messages": total_messages,
+        "total_unread": total_unread,
+        "folders": folders.iter().map(|f| serde_json::json!({
+            "name": f.name,
+            "messages": f.message_count,
+            "unread": f.unread_count
+        })).collect::<Vec<_>>()
+    });
+    
+    let stats_json = serde_json::to_string(&stats)
+        .map_err(|e| Error::from_reason(format!("Failed to serialize stats: {}", e)))?;
+    
+    Ok(stats_json)
 }
 
 // ============================================================================
@@ -2901,8 +3772,41 @@ pub async fn save_email_message(message: serde_json::Value) -> Result<String> {
     // Generate unique ID for the message
     let message_id = Uuid::new_v4().to_string();
     
-    // TODO: Parse message JSON and save to database using mail_db
-    // This is a placeholder - actual implementation would parse the message data
+    // Extract message data from JSON and save to database
+    let subject = message.get("subject")
+        .and_then(|v| v.as_str())
+        .unwrap_or("No Subject")
+        .to_string();
+    let from_address = message.get("from")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Unknown")
+        .to_string();
+    let body = message.get("body")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let account_id = message.get("account_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    
+    // Insert message into database (this would need proper schema implementation)
+    let database_url = format!("sqlite:{}", database.config.mail_db_path);
+    let pool = SqlitePool::connect(&database_url).await
+        .map_err(|e| Error::from_reason(format!("Failed to connect to database: {}", e)))?;
+    
+    sqlx::query(
+        "INSERT INTO messages (id, account_id, subject, from_address, body_text, received_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+    )
+    .bind(&message_id)
+    .bind(&account_id)
+    .bind(&subject)
+    .bind(&from_address)
+    .bind(&body)
+    .execute(&pool).await
+    .map_err(|e| Error::from_reason(format!("Failed to save message: {}", e)))?;
+    
+    pool.close().await;
     
     Ok(message_id)
 }
@@ -3016,8 +3920,45 @@ pub async fn save_calendar_event(event: serde_json::Value) -> Result<String> {
     // Generate unique ID for the event
     let event_id = Uuid::new_v4().to_string();
     
-    // TODO: Parse event JSON and save to database
-    // This is a placeholder - actual implementation would parse the event data
+    // Extract event data from JSON and save to database
+    let title = event.get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("No Title")
+        .to_string();
+    let description = event.get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let location = event.get("location")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let calendar_id = event.get("calendar_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let start_time = event.get("start_time")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let end_time = event.get("end_time")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    
+    // Insert event into database (this would need proper schema implementation)
+    sqlx::query(
+        "INSERT INTO calendar_events (id, calendar_id, title, description, location, start_time, end_time, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+    )
+    .bind(&event_id)
+    .bind(&calendar_id)
+    .bind(&title)
+    .bind(&description)
+    .bind(&location)
+    .bind(&start_time)
+    .bind(&end_time)
+    .execute(&pool).await
+    .map_err(|e| Error::from_reason(format!("Failed to save event: {}", e)))?;
     
     pool.close().await;
     Ok(event_id)
@@ -3089,8 +4030,31 @@ pub async fn update_calendar_event(event: serde_json::Value) -> Result<()> {
     let pool = SqlitePool::connect(&database_url).await
         .map_err(|e| Error::from_reason(format!("Failed to connect to database: {}", e)))?;
     
-    // TODO: Parse event JSON and update in database
-    // This is a placeholder - actual implementation would parse and update the event
+    // Extract updated event data from JSON and update in database
+    let event_id = event.get("id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| Error::from_reason("Event ID is required for update"))?;
+    
+    let title = event.get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("No Title");
+    let description = event.get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let location = event.get("location")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    
+    // Update event in database
+    sqlx::query(
+        "UPDATE calendar_events SET title = ?, description = ?, location = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+    )
+    .bind(title)
+    .bind(description)
+    .bind(location)
+    .bind(event_id)
+    .execute(&pool).await
+    .map_err(|e| Error::from_reason(format!("Failed to update event: {}", e)))?;
     
     pool.close().await;
     Ok(())

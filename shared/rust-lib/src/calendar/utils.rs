@@ -4,7 +4,7 @@
  * Common utility functions for calendar operations.
  */
 
-use chrono::{DateTime, Utc, TimeZone};
+use chrono::{DateTime, Utc};
 use crate::calendar::{CalendarResult, CalendarError};
 
 /// Convert RFC3339 string to UTC DateTime

@@ -20,10 +20,12 @@
   },
   "include": [
     "src/lib/rust-integration/rust-engine-integration.ts",
+    "src/lib/rust-engine/index.js",
     "src/main/database-migration-manager.ts",
     "src/main/database-initialization-service.ts",
     "src/main/main.ts",
     "src/main/**/*.ts",
+    "src/preload/preload.ts",
     "src/types/**/*",
     "../shared/src/**/*"
   ],
@@ -56,6 +58,7 @@
     "../shared/src/feedback/**/*",
     "../shared/src/performance/**/*",
     "../shared/src/crypto/**/*",
+    "src/main/optimized-main.ts",
     "src/main/search-ipc.ts",
     "src/main/smtp-client.ts",
     "src/main/transports/**/*",

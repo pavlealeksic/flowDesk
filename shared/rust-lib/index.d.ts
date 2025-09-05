@@ -229,6 +229,74 @@ export function needsOauthTokenRefresh(expiresAt?: number): Promise<boolean>;
 export function validateOauthToken(token: string): Promise<boolean>;
 export function cleanupExpiredPkceSessions(): Promise<number>;
 
+// Production Email Engine Types
+export interface NapiEmailCredentials {
+  email: string;
+  password: string;
+  imapServer?: string;
+  imapPort?: number;
+  smtpServer?: string;
+  smtpPort?: number;
+  useTls?: boolean;
+  provider?: string;
+}
+
+export interface NapiAccountSetupResult {
+  success: boolean;
+  accountId?: string;
+  error?: string;
+}
+
+export interface NapiSyncResult {
+  success: boolean;
+  messagesSynced: number;
+  foldersProcessed: number;
+  errors?: string[];
+}
+
+export interface NapiFolder {
+  name: string;
+  fullName: string;
+  messageCount: number;
+  unreadCount: number;
+  flags?: string[];
+}
+
+export interface NapiNewMessage {
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+  subject: string;
+  body: string;
+  bodyType?: 'text' | 'html';
+  attachments?: Array<{
+    filename: string;
+    content: string;
+    contentType: string;
+  }>;
+}
+
+// Production Email Engine Functions
+export function initProductionEmailEngine(appName: string): Promise<string>;
+export function setupEmailAccount(userId: string, credentials: NapiEmailCredentials): Promise<NapiAccountSetupResult>;
+export function testAccountConnections(accountId: string): Promise<boolean>;
+export function syncEmailAccount(accountId: string): Promise<NapiSyncResult>;
+export function getEmailFolders(accountId: string): Promise<NapiFolder[]>;
+export function sendEmailMessage(accountId: string, message: NapiNewMessage): Promise<void>;
+export function getFolderMessages(accountId: string, folderName: string, limit?: number): Promise<NapiMailMessage[]>;
+export function markEmailMessageRead(accountId: string, folderName: string, messageUid: number, isRead: boolean): Promise<void>;
+export function deleteEmailMessage(accountId: string, folderName: string, messageUid: number): Promise<void>;
+export function closeEmailAccountConnections(accountId: string): Promise<void>;
+export function getEmailAccountsHealth(): Promise<string>;
+export function detectEmailServerConfig(email: string): string | null;
+export function getPredefinedServerConfigs(): string;
+
+// Production Calendar Engine Functions
+export function initProductionCalendarEngine(appName: string): Promise<string>;
+
+// Production Search Engine Functions
+export function initProductionSearchEngine(appName: string): Promise<string>;
+
 // Utility Functions
 export function hello(): Promise<string>;
 export function initialize(): Promise<string>;
