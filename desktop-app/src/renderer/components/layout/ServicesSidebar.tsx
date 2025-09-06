@@ -74,30 +74,30 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
   
   const getServiceIcon = useCallback((type: string) => {
     const iconMap: Record<string, string> = {
-      slack: '/src/renderer/assets/service-icons/slack.svg',
-      notion: '/src/renderer/assets/service-icons/notion.png',
-      github: '/src/renderer/assets/service-icons/github.svg',
-      jira: '/src/renderer/assets/service-icons/jira.png',
-      teams: '/src/renderer/assets/service-icons/teams.svg',
-      discord: '/src/renderer/assets/service-icons/discord.svg',
-      trello: '/src/renderer/assets/service-icons/trello.png',
-      asana: '/src/renderer/assets/service-icons/asana.svg',
-      linear: '/src/renderer/assets/service-icons/linear.ico',
-      clickup: '/src/renderer/assets/service-icons/clickup.png',
-      monday: '/src/renderer/assets/service-icons/monday.png',
-      gitlab: '/src/renderer/assets/service-icons/gitlab.svg',
-      bitbucket: '/src/renderer/assets/service-icons/bitbucket.png',
-      googledrive: '/src/renderer/assets/service-icons/googledrive.png',
-      onedrive: '/src/renderer/assets/service-icons/onedrive.png',
-      dropbox: '/src/renderer/assets/service-icons/dropbox.png',
-      figma: '/src/renderer/assets/service-icons/figma.svg',
-      miro: '/src/renderer/assets/service-icons/miro.ico',
-      salesforce: '/src/renderer/assets/service-icons/salesforce.png',
-      hubspot: '/src/renderer/assets/service-icons/hubspot.ico',
-      zendesk: '/src/renderer/assets/service-icons/zendesk.png',
-      intercom: '/src/renderer/assets/service-icons/intercom.png'
+      slack: '/service-icons/slack.svg',
+      notion: '/service-icons/notion.png',
+      github: '/service-icons/github.svg',
+      jira: '/service-icons/jira.png',
+      teams: '/service-icons/teams.svg',
+      discord: '/service-icons/discord.svg',
+      trello: '/service-icons/trello.png',
+      asana: '/service-icons/asana.svg',
+      linear: '/service-icons/linear.ico',
+      clickup: '/service-icons/clickup.png',
+      monday: '/service-icons/monday.png',
+      gitlab: '/service-icons/gitlab.svg',
+      bitbucket: '/service-icons/bitbucket.png',
+      googledrive: '/service-icons/googledrive.png',
+      onedrive: '/service-icons/onedrive.png',
+      dropbox: '/service-icons/dropbox.png',
+      figma: '/service-icons/figma.svg',
+      miro: '/service-icons/miro.ico',
+      salesforce: '/service-icons/salesforce.png',
+      hubspot: '/service-icons/hubspot.ico',
+      zendesk: '/service-icons/zendesk.png',
+      intercom: '/service-icons/intercom.png'
     };
-    return iconMap[type] || '/src/renderer/assets/service-icons/default.svg';
+    return iconMap[type] || '/service-icons/default.svg';
   }, []);
 
   if (!workspaceId) {
