@@ -468,7 +468,7 @@ impl ProductionEmailEngine {
         connection.session.select(folder_name).await?;
 
         let flag = if is_read { "+FLAGS" } else { "-FLAGS" };
-        connection.session
+        let _response = connection.session
             .uid_store(format!("{}", message_uid), format!("{} (\\Seen)", flag))
             .await?;
 
@@ -492,12 +492,14 @@ impl ProductionEmailEngine {
         connection.session.select(folder_name).await?;
 
         // Mark as deleted
-        connection.session
-            .uid_store(format!("{}", message_uid), "+FLAGS (\\Deleted)")
-            .await?;
+        {
+            let _response = connection.session
+                .uid_store(format!("{}", message_uid), "+FLAGS (\\Deleted)")
+                .await?;
+        } // Drop the stream here
 
         // Expunge to permanently remove
-        connection.session.expunge().await?;
+        let _expunge_response = connection.session.expunge().await?;
 
         debug!("Message {} deleted successfully", message_uid);
         Ok(())

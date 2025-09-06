@@ -1,7 +1,7 @@
-use sqlx::{SqlitePool, Row, ConnectOptions};
+use sqlx::{SqlitePool, Row};
 use crate::mail::{MailMessage, MailFolder, types::EmailThread};
 use crate::mail::types::{EmailAddress, EmailFlags, MessageImportance, MessagePriority, MailFolderType, FolderSyncStatus, MailAccount};
-use std::{path::Path, collections::HashMap, str::FromStr};
+use std::{path::Path, str::FromStr};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 

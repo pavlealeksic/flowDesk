@@ -19,7 +19,7 @@ use crate::calendar::{
     CalendarPrivacySync, CalendarResult, CalendarError,
     CalendarAccessLevel, CalendarType, CreateCalendarEventInput, CreateCalendarAccountInput,
     UpdateCalendarAccountInput, EventAttendee, EventAttachment, EventRecurrence, EventStatus,
-    EventVisibility, AttendeeResponseStatus, EventReminder, ReminderMethod, CalendarSyncStatus
+    EventVisibility
 };
 
 /// Database connection and operations manager

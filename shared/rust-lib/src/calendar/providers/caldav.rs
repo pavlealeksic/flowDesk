@@ -28,11 +28,10 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 use chrono::{DateTime, Utc, TimeZone};
 use tokio::time::{sleep, Duration as TokioDuration};
-use rrule::{RRule, RRuleSet};
 
 /// CalDAV server capabilities discovered during connection setup
 #[derive(Debug, Clone)]
-struct CalDavCapabilities {
+pub struct CalDavCapabilities {
     supports_webdav: bool,
     supports_caldav: bool,
     dav_compliance: String,

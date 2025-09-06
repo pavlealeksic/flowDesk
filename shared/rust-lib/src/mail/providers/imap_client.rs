@@ -135,7 +135,7 @@ impl ImapProvider for ImapClient {
         
         if let Some(session) = session_guard.as_mut() {
             let flag = if is_read { "\\Seen" } else { "-\\Seen" };
-            session.store(message_id, &format!("+FLAGS ({})", flag)).await?;
+            let _response = session.store(message_id, &format!("+FLAGS ({})", flag)).await?;
         }
         
         Ok(())
@@ -147,7 +147,7 @@ impl ImapProvider for ImapClient {
         
         if let Some(session) = session_guard.as_mut() {
             let flag = if is_starred { "\\Flagged" } else { "-\\Flagged" };
-            session.store(message_id, &format!("+FLAGS ({})", flag)).await?;
+            let _response = session.store(message_id, &format!("+FLAGS ({})", flag)).await?;
         }
         
         Ok(())
@@ -158,8 +158,10 @@ impl ImapProvider for ImapClient {
         let mut session_guard = self.session.lock().await;
         
         if let Some(session) = session_guard.as_mut() {
-            session.store(message_id, "+FLAGS (\\Deleted)").await?;
-            session.expunge().await?;
+            {
+                let _response = session.store(message_id, "+FLAGS (\\Deleted)").await?;
+            } // Drop the stream here
+            let _expunge_response = session.expunge().await?;
         }
         
         Ok(())

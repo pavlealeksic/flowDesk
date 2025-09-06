@@ -3,6 +3,12 @@
 //! This library contains shared functionality for Flow Desk applications,
 //! including cryptographic operations, data validation, and common utilities.
 
+// Allow common development warnings for incomplete implementations
+#![allow(dead_code)]
+#![allow(unused_variables)]  
+#![allow(unused_imports)]
+#![cfg_attr(debug_assertions, allow(unused))]
+
 #[cfg(feature = "napi")]
 use napi_derive::napi;
 

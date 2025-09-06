@@ -65,7 +65,7 @@ pub struct IndexFields {
 
 /// Index statistics
 #[derive(Debug, Clone)]
-struct IndexStats {
+pub struct IndexStats {
     total_documents: u64,
     index_size_bytes: u64,
     last_optimization: Option<DateTime<Utc>>,
