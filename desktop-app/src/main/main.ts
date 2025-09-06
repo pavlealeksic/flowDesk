@@ -1775,16 +1775,29 @@ class FlowDeskApp {
 
     // Legacy handler for backward compatibility
     ipcMain.handle('mail:add-account', async (_, email: string, password: string, displayName?: string) => {
-      const account = { email, password, displayName };
-      log.info(`Adding mail account (legacy): ${email}`);
-      const accountId = 'temp-legacy-' + Date.now();
-      return {
-        id: accountId,
-        email,
-        displayName: displayName || email,
-        provider: 'imap',
-        isEnabled: true
-      };
+      try {
+        log.info(`Adding mail account via Rust: ${email}`);
+        if (this.realEmailService) {
+          const credentials = { email, password, displayName };
+          const result = await this.realEmailService.setupAccount('current-user', credentials);
+          
+          if (result.success) {
+            return {
+              id: result.accountId,
+              email,
+              displayName: displayName || email,
+              provider: 'auto',
+              isEnabled: true
+            };
+          } else {
+            throw new Error(result.errorMessage || 'Failed to add account');
+          }
+        }
+        throw new Error('Email service not initialized');
+      } catch (error) {
+        log.error('Failed to add mail account:', error);
+        throw error;
+      }
     });
 
     ipcMain.handle('mail:get-accounts', async () => {
@@ -2838,18 +2851,36 @@ class FlowDeskApp {
     });
 
     ipcMain.handle('calendar:delete-account', async (_, accountId: string) => {
-      log.info(`Deleting calendar account: ${accountId}`);
-      return { success: true, error: undefined };
+      try {
+        log.info(`Deleting calendar account via Rust: ${accountId}`);
+        const result = await rustEngineIntegration.callRustFunction('calendar_delete_account', [accountId]);
+        return { success: result, error: result ? undefined : 'Failed to delete account' };
+      } catch (error) {
+        log.error('Failed to delete calendar account:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Delete failed' };
+      }
     });
 
     ipcMain.handle('calendar:list-calendars', async (_, accountId: string) => {
-      log.info(`Listing calendars for account: ${accountId}`);
-      return { success: true, data: [], error: undefined };
+      try {
+        log.info(`Listing calendars for account via Rust: ${accountId}`);
+        const calendars = await rustEngineIntegration.callRustFunction('calendar_list_calendars', [accountId]);
+        return { success: true, data: calendars, error: undefined };
+      } catch (error) {
+        log.error('Failed to list calendars:', error);
+        return { success: false, data: [], error: error instanceof Error ? error.message : 'List calendars failed' };
+      }
     });
 
     ipcMain.handle('calendar:get-events-in-range', async (_, calendarIds: string[], timeMin: string, timeMax: string) => {
-      log.info(`Getting events in range: ${calendarIds.join(', ')} from ${timeMin} to ${timeMax}`);
-      return { success: true, data: [], error: undefined };
+      try {
+        log.info(`Getting events in range via Rust: ${calendarIds.join(', ')} from ${timeMin} to ${timeMax}`);
+        const events = await rustEngineIntegration.callRustFunction('calendar_get_events_range', [calendarIds, timeMin, timeMax]);
+        return { success: true, data: events, error: undefined };
+      } catch (error) {
+        log.error('Failed to get events in range:', error);
+        return { success: false, data: [], error: error instanceof Error ? error.message : 'Get events failed' };
+      }
     });
 
     ipcMain.handle('calendar:create-event-full', async (_, eventData: CalendarEventData) => {
