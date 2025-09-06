@@ -1160,6 +1160,60 @@ class FlowDeskApp {
       }
     });
 
+    // Email setup handlers  
+    ipcMain.handle('email:test-setup', async (_, credentials: any) => {
+      try {
+        if (!this.realEmailService) {
+          throw new Error('Email service not initialized');
+        }
+        // First setup account to test it, then remove if just testing
+        log.info('Testing email setup for:', credentials.email);
+        const result = await this.realEmailService.setupAccount('test-user', credentials);
+        
+        if (result.success) {
+          // Test worked, return server config
+          return { 
+            success: true, 
+            serverConfig: { 
+              provider: credentials.providerOverride || 'auto',
+              displayName: credentials.displayName || credentials.email
+            }
+          };
+        } else {
+          return { success: false, error: result.errorMessage || 'Email test failed' };
+        }
+      } catch (error) {
+        log.error('Email test setup failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Email test failed' };
+      }
+    });
+
+    ipcMain.handle('email:setup-account', async (_, userId: string, credentials: any) => {
+      try {
+        if (!this.realEmailService) {
+          throw new Error('Email service not initialized');
+        }
+        // Setup account using real Rust backend
+        log.info('Setting up email account for:', credentials.email);
+        const result = await this.realEmailService.setupAccount(userId, credentials);
+        
+        if (result.success) {
+          // Also trigger account refresh in the UI
+          log.info('Email account setup successful, ID:', result.accountId);
+          return { 
+            success: true, 
+            accountId: result.accountId,
+            message: 'Email account added successfully!'
+          };
+        } else {
+          return { success: false, error: result.errorMessage || 'Account setup failed' };
+        }
+      } catch (error) {
+        log.error('Email account setup failed:', error);
+        return { success: false, error: error instanceof Error ? error.message : 'Account setup failed' };
+      }
+    });
+
     // Email template handlers
     ipcMain.handle('email-templates:get-all', async () => {
       try {
@@ -1799,25 +1853,57 @@ class FlowDeskApp {
     });
 
     ipcMain.handle('mail:start-sync', async () => {
-      log.info('Starting mail sync for all accounts');
-      return true;
+      try {
+        log.info('Starting mail sync for all accounts via Rust');
+        if (this.mailSyncManager) {
+          await this.mailSyncManager.startSync('all');
+        }
+        return true;
+      } catch (error) {
+        log.error('Failed to start mail sync:', error);
+        return false;
+      }
     });
 
     ipcMain.handle('mail:stop-sync', async () => {
-      log.info('Stopping mail sync');
-      return true;
+      try {
+        log.info('Stopping mail sync via Rust');
+        if (this.mailSyncManager) {
+          await this.mailSyncManager.stopSync('all');
+        }
+        return true;
+      } catch (error) {
+        log.error('Failed to stop mail sync:', error);
+        return false;
+      }
     });
 
     ipcMain.handle('mail:get-sync-status', async () => {
-      // Return Record<string, any> as Redux expects
-      return {
-        'account1': { issyncing: false, lastSync: new Date(), error: undefined }
-      };
+      try {
+        // Get real sync status from Rust backend
+        if (this.mailSyncManager) {
+          const status = await this.mailSyncManager.getSyncStatus('');
+          return status;
+        }
+        return {};
+      } catch (error) {
+        log.error('Failed to get mail sync status:', error);
+        return {};
+      }
     });
 
     ipcMain.handle('mail:delete-message', async (_, accountId: string, messageId: string) => {
-      log.info(`Deleting message ${messageId} from account ${accountId}`);
-      return true;
+      try {
+        log.info(`Deleting message ${messageId} from account ${accountId} via Rust`);
+        if (this.realEmailService) {
+          const result = await this.realEmailService.deleteMessage(accountId, messageId, 1);
+          return result;
+        }
+        return false;
+      } catch (error) {
+        log.error('Failed to delete message:', error);
+        return false;
+      }
     });
 
     ipcMain.handle('mail:sync-all', async () => {
@@ -2031,8 +2117,26 @@ class FlowDeskApp {
     });
 
     ipcMain.handle('mail:send-message', async (_, accountId: string, to: string[], subject: string, body: string, options?: SendMessageOptions) => {
-      log.info(`Sending message from account ${accountId} to ${to.join(', ')}`);
-      return 'message-' + Date.now();
+      try {
+        log.info(`Sending message from account ${accountId} to ${to.join(', ')} via Rust`);
+        if (this.realEmailService) {
+          // Convert to EmailMessage format and use real service
+          const message = {
+            to: to,
+            subject,
+            body,
+            cc: options?.cc || [],
+            bcc: options?.bcc || [],
+            attachments: options?.attachments || []
+          };
+          await this.realEmailService.sendMessage(accountId, message);
+          return `message_${Date.now()}`;
+        }
+        return null;
+      } catch (error) {
+        log.error('Failed to send message via Rust:', error);
+        return null;
+      }
     });
 
     ipcMain.handle('mail:mark-as-read', async (_, accountId: string, messageId: string) => {
@@ -2678,8 +2782,17 @@ class FlowDeskApp {
 
     // Additional calendar handlers for Redux slice compatibility
     ipcMain.handle('calendar:get-user-accounts', async (_, userId: string) => {
-      log.info(`Getting user accounts for: ${userId}`);
-      return { success: true, data: [], error: undefined };
+      try {
+        log.info(`Getting calendar accounts for user: ${userId} via Rust`);
+        if (calendarEngine) {
+          const accounts = await calendarEngine.getAccounts();
+          return { success: true, data: accounts, error: undefined };
+        }
+        return { success: false, data: [], error: 'Calendar engine not initialized' };
+      } catch (error) {
+        log.error('Failed to get calendar accounts:', error);
+        return { success: false, data: [], error: error instanceof Error ? error.message : 'Unknown error' };
+      }
     });
     log.info('Registered calendar:get-user-accounts handler');
 

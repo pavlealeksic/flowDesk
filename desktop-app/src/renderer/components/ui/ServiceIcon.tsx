@@ -49,10 +49,33 @@ export const ServiceIcon: React.FC<ServiceIconProps> = memo(({
     ? `w-[${size}px] h-[${size}px]` 
     : sizeClasses[size];
 
+  // Icon mapping for local service icons
+  const iconMapping: Record<string, { src: string; format: string }> = {
+    slack: { src: './assets/service-icons/slack.svg', format: 'svg' },
+    discord: { src: './assets/service-icons/discord.svg', format: 'svg' },
+    teams: { src: './assets/service-icons/teams.svg', format: 'svg' },
+    github: { src: './assets/service-icons/github.svg', format: 'svg' },
+    asana: { src: './assets/service-icons/asana.svg', format: 'svg' },
+    notion: { src: './assets/service-icons/notion.png', format: 'png' },
+    trello: { src: './assets/service-icons/trello.png', format: 'png' },
+    zoom: { src: './assets/service-icons/zoom.svg', format: 'svg' },
+    telegram: { src: './assets/service-icons/telegram.svg', format: 'svg' },
+    whatsapp: { src: './assets/service-icons/whatsapp.svg', format: 'svg' },
+    gmail: { src: './assets/service-icons/gmail.ico', format: 'ico' },
+    outlook: { src: './assets/service-icons/outlook.ico', format: 'ico' },
+    figma: { src: './assets/service-icons/figma.svg', format: 'svg' },
+    default: { src: './assets/service-icons/default.svg', format: 'svg' }
+  };
+
   useEffect(() => {
-    // Show fallback immediately since we don't have service config
-    setShowFallback(true);
-    setIsLoading(false);
+    const iconConfig = iconMapping[serviceId] || iconMapping.default;
+    if (iconConfig) {
+      setCurrentSrc(iconConfig.src);
+      setIsLoading(false);
+    } else {
+      setShowFallback(true);
+      setIsLoading(false);
+    }
   }, [serviceId]);
 
 

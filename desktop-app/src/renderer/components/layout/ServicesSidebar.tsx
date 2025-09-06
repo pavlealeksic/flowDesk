@@ -74,30 +74,30 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
   
   const getServiceIcon = useCallback((type: string) => {
     const iconMap: Record<string, string> = {
-      slack: '/service-icons/slack.svg',
-      notion: '/service-icons/notion.png',
-      github: '/service-icons/github.svg',
-      jira: '/service-icons/jira.png',
-      teams: '/service-icons/teams.svg',
-      discord: '/service-icons/discord.svg',
-      trello: '/service-icons/trello.png',
-      asana: '/service-icons/asana.svg',
-      linear: '/service-icons/linear.ico',
-      clickup: '/service-icons/clickup.png',
-      monday: '/service-icons/monday.png',
-      gitlab: '/service-icons/gitlab.svg',
-      bitbucket: '/service-icons/bitbucket.png',
-      googledrive: '/service-icons/googledrive.png',
-      onedrive: '/service-icons/onedrive.png',
-      dropbox: '/service-icons/dropbox.png',
-      figma: '/service-icons/figma.svg',
-      miro: '/service-icons/miro.ico',
-      salesforce: '/service-icons/salesforce.png',
-      hubspot: '/service-icons/hubspot.ico',
-      zendesk: '/service-icons/zendesk.png',
-      intercom: '/service-icons/intercom.png'
+      slack: './assets/service-icons/slack.svg',
+      notion: './assets/service-icons/notion.svg',
+      github: './assets/service-icons/github.svg',
+      jira: './assets/service-icons/jira.svg',
+      teams: './assets/service-icons/teams.svg',
+      discord: './assets/service-icons/discord.svg',
+      trello: './assets/service-icons/trello.svg',
+      asana: './assets/service-icons/asana.svg',
+      linear: './assets/service-icons/linear.ico',
+      clickup: './assets/service-icons/clickup.svg',
+      monday: './assets/service-icons/monday.svg',
+      gitlab: './assets/service-icons/gitlab.svg',
+      bitbucket: './assets/service-icons/bitbucket.svg',
+      googledrive: './assets/service-icons/googledrive.svg',
+      onedrive: './assets/service-icons/onedrive.svg',
+      dropbox: './assets/service-icons/dropbox.svg',
+      figma: './assets/service-icons/figma.svg',
+      miro: './assets/service-icons/miro.ico',
+      salesforce: './assets/service-icons/salesforce.svg',
+      hubspot: './assets/service-icons/hubspot.ico',
+      zendesk: './assets/service-icons/zendesk.svg',
+      intercom: './assets/service-icons/intercom.svg'
     };
-    return iconMap[type] || '/service-icons/default.svg';
+    return iconMap[type] || './assets/service-icons/default.svg';
   }, []);
 
   if (!workspaceId) {

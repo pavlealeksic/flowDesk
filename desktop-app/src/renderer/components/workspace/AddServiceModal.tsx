@@ -41,7 +41,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Slack',
     url: 'https://slack.com',
     type: 'communication',
-    iconUrl: '/service-icons/slack.svg',
+    iconUrl: './assets/service-icons/slack.svg',
     color: '#4A154B',
     category: 'communication'
   },
@@ -50,7 +50,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Discord',
     url: 'https://discord.com/app',
     type: 'communication',
-    iconUrl: '/service-icons/discord.svg',
+    iconUrl: './assets/service-icons/discord.svg',
     color: '#5865F2',
     category: 'communication'
   },
@@ -59,7 +59,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Microsoft Teams',
     url: 'https://teams.microsoft.com',
     type: 'communication',
-    iconUrl: '/service-icons/teams.svg',
+    iconUrl: './assets/service-icons/teams.svg',
     color: '#6264A7',
     category: 'communication'
   },
@@ -68,7 +68,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Zoom',
     url: 'https://zoom.us/signin',
     type: 'communication',
-    iconUrl: '/service-icons/zoom.svg',
+    iconUrl: './assets/service-icons/zoom.svg',
     color: '#2D8CFF',
     category: 'communication'
   },
@@ -77,7 +77,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Telegram',
     url: 'https://web.telegram.org',
     type: 'communication',
-    iconUrl: '/service-icons/telegram.svg',
+    iconUrl: './assets/service-icons/telegram.svg',
     color: '#0088CC',
     category: 'communication'
   },
@@ -86,7 +86,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'WhatsApp Web',
     url: 'https://web.whatsapp.com',
     type: 'communication',
-    iconUrl: '/service-icons/whatsapp.svg',
+    iconUrl: './assets/service-icons/whatsapp.svg',
     color: '#25D366',
     category: 'communication'
   },
@@ -97,7 +97,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Notion',
     url: 'https://www.notion.so',
     type: 'project-management',
-    iconUrl: '/service-icons/notion.png',
+    iconUrl: './assets/service-icons/notion.svg',
     color: '#000000',
     category: 'project-management'
   },
@@ -106,7 +106,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Trello',
     url: 'https://trello.com',
     type: 'project-management',
-    iconUrl: '/service-icons/trello.png',
+    iconUrl: './assets/service-icons/trello.svg',
     color: '#0079BF',
     category: 'project-management'
   },
@@ -115,7 +115,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Asana',
     url: 'https://app.asana.com',
     type: 'project-management',
-    iconUrl: '/service-icons/asana.svg',
+    iconUrl: './assets/service-icons/asana.svg',
     color: '#F06A6A',
     category: 'project-management'
   },
@@ -124,7 +124,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Monday.com',
     url: 'https://monday.com',
     type: 'project-management',
-    iconUrl: '/service-icons/monday.svg',
+    iconUrl: './assets/service-icons/monday.svg',
     color: '#FF3D57',
     category: 'project-management'
   },
@@ -133,7 +133,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Jira',
     url: 'https://atlassian.com',
     type: 'project-management',
-    iconUrl: '/service-icons/jira.png',
+    iconUrl: './assets/service-icons/jira.svg',
     color: '#0052CC',
     category: 'project-management'
   },
@@ -142,7 +142,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'ClickUp',
     url: 'https://app.clickup.com',
     type: 'project-management',
-    iconUrl: '/service-icons/clickup.png',
+    iconUrl: './assets/service-icons/clickup.svg',
     color: '#7B68EE',
     category: 'project-management'
   },
@@ -153,7 +153,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'GitHub',
     url: 'https://github.com',
     type: 'development',
-    iconUrl: '/service-icons/github.svg',
+    iconUrl: './assets/service-icons/github.svg',
     color: '#181717',
     category: 'development'
   },
@@ -162,7 +162,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'GitLab',
     url: 'https://gitlab.com',
     type: 'development',
-    iconUrl: '/service-icons/gitlab.svg',
+    iconUrl: './assets/service-icons/gitlab.svg',
     color: '#FC6D26',
     category: 'development'
   },
@@ -171,7 +171,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Bitbucket',
     url: 'https://bitbucket.org',
     type: 'development',
-    iconUrl: '/service-icons/bitbucket.png',
+    iconUrl: './assets/service-icons/bitbucket.svg',
     color: '#0052CC',
     category: 'development'
   },
@@ -180,7 +180,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'VS Code Web',
     url: 'https://vscode.dev',
     type: 'development',
-    iconUrl: '/service-icons/vscode.ico',
+    iconUrl: './assets/service-icons/vscode.svg',
     color: '#007ACC',
     category: 'development'
   },
@@ -189,7 +189,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'CodePen',
     url: 'https://codepen.io',
     type: 'development',
-    iconUrl: '/service-icons/codepen.ico',
+    iconUrl: './assets/service-icons/codepen.svg',
     color: '#000000',
     category: 'development'
   },
@@ -198,7 +198,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Replit',
     url: 'https://replit.com',
     type: 'development',
-    iconUrl: '/service-icons/replit.ico',
+    iconUrl: './assets/service-icons/replit.svg',
     color: '#F26207',
     category: 'development'
   },
@@ -209,7 +209,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Obsidian',
     url: 'https://obsidian.md',
     type: 'productivity',
-    iconUrl: '/service-icons/obsidian.ico',
+    iconUrl: './assets/service-icons/obsidian.svg',
     color: '#7C3AED',
     category: 'productivity'
   },
@@ -218,7 +218,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Todoist',
     url: 'https://todoist.com',
     type: 'productivity',
-    iconUrl: '/service-icons/todoist.svg',
+    iconUrl: './assets/service-icons/todoist.svg',
     color: '#E44332',
     category: 'productivity'
   },
@@ -227,7 +227,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Evernote',
     url: 'https://www.evernote.com',
     type: 'productivity',
-    iconUrl: '/service-icons/evernote.ico',
+    iconUrl: './assets/service-icons/evernote.svg',
     color: '#00A82D',
     category: 'productivity'
   },
@@ -236,7 +236,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'OneNote',
     url: 'https://www.onenote.com',
     type: 'productivity',
-    iconUrl: '/service-icons/onenote.ico',
+    iconUrl: './assets/service-icons/onenote.svg',
     color: '#7719AA',
     category: 'productivity'
   },
@@ -247,7 +247,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Figma',
     url: 'https://www.figma.com',
     type: 'design',
-    iconUrl: '/service-icons/figma.ico',
+    iconUrl: './assets/service-icons/figma.svg',
     color: '#F24E1E',
     category: 'design'
   },
@@ -256,7 +256,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Sketch',
     url: 'https://www.sketch.com',
     type: 'design',
-    iconUrl: '/service-icons/sketch.ico',
+    iconUrl: './assets/service-icons/sketch.svg',
     color: '#F7B500',
     category: 'design'
   },
@@ -265,7 +265,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Canva',
     url: 'https://www.canva.com',
     type: 'design',
-    iconUrl: '/service-icons/canva.ico',
+    iconUrl: './assets/service-icons/canva.svg',
     color: '#00C4CC',
     category: 'design'
   },
@@ -274,7 +274,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Adobe XD',
     url: 'https://www.adobe.com/products/xd.html',
     type: 'design',
-    iconUrl: '/service-icons/adobe.ico',
+    iconUrl: './assets/service-icons/adobe.svg',
     color: '#FF61F6',
     category: 'design'
   },
@@ -285,7 +285,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Google Drive',
     url: 'https://drive.google.com',
     type: 'cloud-storage',
-    iconUrl: '/service-icons/googledrive.ico',
+    iconUrl: './assets/service-icons/googledrive.svg',
     color: '#4285F4',
     category: 'cloud-storage'
   },
@@ -294,7 +294,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Dropbox',
     url: 'https://www.dropbox.com',
     type: 'cloud-storage',
-    iconUrl: '/service-icons/dropbox.png',
+    iconUrl: './assets/service-icons/dropbox.svg',
     color: '#0061FF',
     category: 'cloud-storage'
   },
@@ -303,7 +303,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'OneDrive',
     url: 'https://onedrive.live.com',
     type: 'cloud-storage',
-    iconUrl: '/service-icons/onedrive.png',
+    iconUrl: './assets/service-icons/onedrive.svg',
     color: '#0078D4',
     category: 'cloud-storage'
   },
@@ -314,7 +314,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Gmail',
     url: 'https://mail.google.com',
     type: 'communication',
-    iconUrl: '/service-icons/gmail.ico',
+    iconUrl: './assets/service-icons/gmail.svg',
     color: '#EA4335',
     category: 'communication'
   },
@@ -323,7 +323,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Outlook',
     url: 'https://outlook.office.com',
     type: 'communication',
-    iconUrl: '/service-icons/outlook.ico',
+    iconUrl: './assets/service-icons/outlook.svg',
     color: '#0078D4',
     category: 'communication'
   },
@@ -332,7 +332,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Google Calendar',
     url: 'https://calendar.google.com',
     type: 'productivity',
-    iconUrl: '/service-icons/gcal.ico',
+    iconUrl: './assets/service-icons/gcal.svg',
     color: '#4285F4',
     category: 'productivity'
   },
@@ -343,7 +343,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Salesforce',
     url: 'https://salesforce.com',
     type: 'crm',
-    iconUrl: '/service-icons/salesforce.png',
+    iconUrl: './assets/service-icons/salesforce.svg',
     color: '#00A1E0',
     category: 'crm'
   },
@@ -352,7 +352,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'HubSpot',
     url: 'https://app.hubspot.com',
     type: 'crm',
-    iconUrl: '/service-icons/hubspot.svg',
+    iconUrl: './assets/service-icons/hubspot.svg',
     color: '#FF7A59',
     category: 'crm'
   },
@@ -363,7 +363,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Google Analytics',
     url: 'https://analytics.google.com',
     type: 'analytics',
-    iconUrl: '/service-icons/analytics.ico',
+    iconUrl: './assets/service-icons/analytics.svg',
     color: '#F9AB00',
     category: 'analytics'
   },
@@ -372,7 +372,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Mailchimp',
     url: 'https://mailchimp.com',
     type: 'analytics',
-    iconUrl: '/service-icons/mailchimp.ico',
+    iconUrl: './assets/service-icons/mailchimp.svg',
     color: '#FFE01B',
     category: 'analytics'
   },
@@ -383,7 +383,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Stripe',
     url: 'https://dashboard.stripe.com',
     type: 'finance',
-    iconUrl: '/service-icons/stripe.ico',
+    iconUrl: './assets/service-icons/stripe.svg',
     color: '#635BFF',
     category: 'finance'
   },
@@ -392,7 +392,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'QuickBooks',
     url: 'https://quickbooks.intuit.com',
     type: 'finance',
-    iconUrl: '/service-icons/quickbooks.ico',
+    iconUrl: './assets/service-icons/quickbooks.svg',
     color: '#0077C5',
     category: 'finance'
   },
@@ -403,7 +403,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Twitter/X',
     url: 'https://twitter.com',
     type: 'social-media',
-    iconUrl: '/service-icons/twitter.ico',
+    iconUrl: './assets/service-icons/twitter.svg',
     color: '#1DA1F2',
     category: 'social-media'
   },
@@ -412,7 +412,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'LinkedIn',
     url: 'https://www.linkedin.com',
     type: 'social-media',
-    iconUrl: '/service-icons/linkedin.ico',
+    iconUrl: './assets/service-icons/linkedin.svg',
     color: '#0077B5',
     category: 'social-media'
   },
@@ -421,7 +421,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Instagram',
     url: 'https://www.instagram.com',
     type: 'social-media',
-    iconUrl: '/service-icons/instagram.ico',
+    iconUrl: './assets/service-icons/instagram.svg',
     color: '#E4405F',
     category: 'social-media'
   },
@@ -432,7 +432,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Zendesk',
     url: 'https://zendesk.com',
     type: 'support',
-    iconUrl: '/service-icons/zendesk.png',
+    iconUrl: './assets/service-icons/zendesk.svg',
     color: '#03363D',
     category: 'support'
   },
@@ -441,7 +441,7 @@ const PREDEFINED_SERVICES: ServiceConfig[] = [
     name: 'Intercom',
     url: 'https://app.intercom.com',
     type: 'support',
-    iconUrl: '/service-icons/intercom.png',
+    iconUrl: './assets/service-icons/intercom.svg',
     color: '#338DF0',
     category: 'support'
   }
@@ -511,7 +511,7 @@ const ServiceIconComponent: React.FC<{
         </div>
       )}
       <img
-        src={service.iconUrl}
+        src={service.svgnUrl}
         alt={service.name}
         className={cn(
           'w-full h-full object-contain',

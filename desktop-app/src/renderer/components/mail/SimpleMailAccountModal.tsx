@@ -14,20 +14,39 @@ interface SimpleMailAccountModalProps {
   onSuccess?: (account: any) => void;
 }
 
+type EmailProvider = 'gmail' | 'outlook' | 'yahoo' | 'fastmail' | 'icloud' | 'custom';
+type SetupStep = 'provider' | 'credentials' | 'custom-config';
+
 const SimpleMailAccountModal: React.FC<SimpleMailAccountModalProps> = ({
   isOpen,
   onClose,
   onSuccess
 }) => {
   console.log('🟡 SimpleMailAccountModal rendered with isOpen:', isOpen);
+  const [currentStep, setCurrentStep] = useState<SetupStep>('provider');
+  const [selectedProvider, setSelectedProvider] = useState<EmailProvider | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    displayName: ''
+    displayName: '',
+    imapHost: '',
+    imapPort: 993,
+    smtpHost: '',
+    smtpPort: 587
   });
   const [isAdding, setIsAdding] = useState(false);
   const [loadingStep, setLoadingStep] = useState<'testing' | 'setting-up' | 'completing' | null>(null);
   const [error, setError] = useState('');
+
+  // Provider configurations
+  const providers = [
+    { id: 'gmail' as EmailProvider, name: 'Gmail', description: 'Gmail and G Workspace accounts', icon: '📧' },
+    { id: 'outlook' as EmailProvider, name: 'Outlook', description: 'Outlook.com and Office 365', icon: '📮' },
+    { id: 'yahoo' as EmailProvider, name: 'Yahoo Mail', description: 'Yahoo Mail accounts', icon: '💜' },
+    { id: 'fastmail' as EmailProvider, name: 'FastMail', description: 'FastMail premium email', icon: '⚡' },
+    { id: 'icloud' as EmailProvider, name: 'iCloud Mail', description: 'Apple iCloud email', icon: '🍎' },
+    { id: 'custom' as EmailProvider, name: 'Custom IMAP', description: 'Other email providers', icon: '⚙️' }
+  ];
 
   const handleClose = useCallback(() => {
     setFormData({
