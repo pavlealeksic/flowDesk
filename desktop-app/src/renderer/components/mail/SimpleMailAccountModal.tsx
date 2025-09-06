@@ -14,11 +14,12 @@ interface SimpleMailAccountModalProps {
   onSuccess?: (account: any) => void;
 }
 
-export const SimpleMailAccountModal: React.FC<SimpleMailAccountModalProps> = ({
+const SimpleMailAccountModal: React.FC<SimpleMailAccountModalProps> = ({
   isOpen,
   onClose,
   onSuccess
 }) => {
+  console.log('🟡 SimpleMailAccountModal rendered with isOpen:', isOpen);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -93,23 +94,26 @@ export const SimpleMailAccountModal: React.FC<SimpleMailAccountModalProps> = ({
   // Handle ESC key
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && isOpen) {
+      if (event.key === 'Escape') {
         handleClose()
       }
     }
 
-    if (isOpen) {
-      document.addEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = 'hidden'
-    }
+    document.addEventListener('keydown', handleKeyDown)
+    document.body.style.overflow = 'hidden'
 
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
       document.body.style.overflow = 'unset'
     }
-  }, [isOpen, handleClose])
+  }, [handleClose])
 
-  if (!isOpen) return null
+  if (!isOpen) {
+    console.log('🔴 SimpleMailAccountModal: isOpen is false, not rendering');
+    return null;
+  }
+  
+  console.log('🟢 SimpleMailAccountModal: isOpen is true, rendering modal');
 
   return (
     <div 
@@ -200,3 +204,4 @@ export const SimpleMailAccountModal: React.FC<SimpleMailAccountModalProps> = ({
 };
 
 export default SimpleMailAccountModal;
+export { SimpleMailAccountModal };

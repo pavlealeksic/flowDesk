@@ -41,7 +41,6 @@ import {
   selectIsLoadingMail,
   selectMailError
 } from '../../store/slices/mailSlice'
-import SimpleMailAccountModal from './SimpleMailAccountModal'
 import { ComposeModal } from './ComposeModal'
 import { MailErrorBoundary } from './MailErrorBoundary'
 import { useMailSync } from '../../hooks/useMailSync'
@@ -481,10 +480,12 @@ const MessageView: React.FC<MessageViewProps> = ({
 
 export interface MailLayoutProps extends BaseComponentProps {
   onComposeNew?: () => void
+  onAddAccount?: () => void
 }
 
 export const MailLayout: React.FC<MailLayoutProps> = ({
   onComposeNew,
+  onAddAccount,
   className,
   'data-testid': testId
 }) => {
@@ -502,7 +503,6 @@ export const MailLayout: React.FC<MailLayoutProps> = ({
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
   const [folderPanelSize, setFolderPanelSize] = useState(250)
   const [messageListSize, setMessageListSize] = useState(400)
-  const [showAddAccountModal, setShowAddAccountModal] = useState(false)
   const [showComposeModal, setShowComposeModal] = useState(false)
   const [showRulesModal, setShowRulesModal] = useState(false)
   const [viewMode, setViewMode] = useState<'folders' | 'unified' | 'smart'>('folders')
@@ -704,7 +704,11 @@ export const MailLayout: React.FC<MailLayoutProps> = ({
             Add a mail account to get started with Flow Desk Mail
           </p>
           <Button 
-            onClick={() => setShowAddAccountModal(true)}
+            onClick={() => {
+              console.log('🔵 Add Account button clicked!');
+              console.log('🔵 Calling onAddAccount callback from MailLayout');
+              onAddAccount?.();
+            }}
             leftIcon={<Plus className="h-4 w-4" />}
           >
             Add Account
@@ -816,15 +820,6 @@ export const MailLayout: React.FC<MailLayoutProps> = ({
         </ResizableContainer>
       </div>
 
-      <SimpleMailAccountModal
-        isOpen={showAddAccountModal}
-        onClose={() => setShowAddAccountModal(false)}
-        onSuccess={(account) => {
-          console.log('Mail account added successfully:', account);
-          dispatch(fetchMailAccounts()); // Refresh mail accounts list
-          setShowAddAccountModal(false);
-        }}
-      />
 
       <ComposeModal
         isOpen={showComposeModal}

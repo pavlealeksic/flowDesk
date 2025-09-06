@@ -343,6 +343,9 @@ class FlowDeskApp {
   private environmentConfig = getEnvironmentConfig();
 
   constructor() {
+    // Set proper app name for all Electron APIs (userData paths, etc.)
+    app.setName('Flow Desk');
+    
     this.workspaceManager = new WorkspaceManager();
     this.initializeApp();
   }

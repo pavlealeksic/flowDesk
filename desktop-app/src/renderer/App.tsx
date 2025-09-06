@@ -40,6 +40,7 @@ import FlowDeskLeftRail from './components/layout/FlowDeskLeftRail'
 import ServicesSidebar from './components/layout/ServicesSidebar'
 import AddServiceModal from './components/workspace/AddServiceModal'
 import EditServiceModal from './components/workspace/EditServiceModal'
+import SimpleMailAccountModal from './components/mail/SimpleMailAccountModal'
 import { useMemoryCleanup } from './hooks/useMemoryCleanup'
 import { usePerformanceMonitor, useBundleMonitor } from './hooks/usePerformanceMonitor'
 import type { Workspace } from '../types/preload'
@@ -92,6 +93,7 @@ function AppContent() {
   const [showEditServiceModal, setShowEditServiceModal] = useState(false)
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null)
   const [showAccessibilitySettings, setShowAccessibilitySettings] = useState(false)
+  const [showAddAccountModal, setShowAddAccountModal] = useState(false)
 
   // BrowserView visibility management for proper z-index layering
   useBlockingOverlay('search-overlay', showSearchOverlay, 'SEARCH_OVERLAY')
@@ -295,7 +297,13 @@ function AppContent() {
         return (
           <MailErrorBoundary>
             <Suspense fallback={<ComponentLoader name="Mail" />}>
-              <MailLayout className="h-full" />
+              <MailLayout 
+                className="h-full" 
+                onAddAccount={() => {
+                  console.log('🟢 App.tsx: Opening add account modal');
+                  setShowAddAccountModal(true);
+                }}
+              />
             </Suspense>
           </MailErrorBoundary>
         )
@@ -513,6 +521,17 @@ function AppContent() {
         isOpen={showAddServiceModal}
         onClose={() => setShowAddServiceModal(false)}
         onAddService={handleAddService}
+      />
+
+      {/* Add Account Modal */}
+      <SimpleMailAccountModal
+        isOpen={showAddAccountModal}
+        onClose={() => setShowAddAccountModal(false)}
+        onSuccess={(account) => {
+          console.log('✅ Mail account added successfully:', account);
+          // TODO: dispatch(fetchMailAccounts()) when needed
+          setShowAddAccountModal(false);
+        }}
       />
 
       {/* Edit Service Modal */}

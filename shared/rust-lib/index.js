@@ -385,8 +385,29 @@ function createNapiInterface(napiPath) {
             this._searchEngineInstance = new napi.JsSearchEngine();
             // Initialize the search engine with proper config
             try {
+              // Use proper app data directory instead of /tmp
+              // This should be passed from the main process, but fallback to app data
+              const os = require('os');
+              const path = require('path');
+              
+              // Use proper app data directory from Electron
+              let indexDir;
+              try {
+                // If running in Electron context, use proper app path
+                const { app } = require('electron');
+                indexDir = path.join(app.getPath('userData'), 'search-index');
+              } catch (error) {
+                // Fallback for non-Electron environments
+                const appDataDir = process.platform === 'darwin' 
+                  ? path.join(os.homedir(), 'Library', 'Application Support', 'FlowDesk')
+                  : process.platform === 'win32'
+                  ? path.join(os.homedir(), 'AppData', 'Roaming', 'FlowDesk')
+                  : path.join(os.homedir(), '.config', 'flowdesk');
+                indexDir = path.join(appDataDir, 'search-index');
+              }
+              
               const config = {
-                indexDir: '/tmp/flow-desk-search-index'
+                indexDir: indexDir
               };
               await this._searchEngineInstance.initialize(config);
             } catch (initErr) {
