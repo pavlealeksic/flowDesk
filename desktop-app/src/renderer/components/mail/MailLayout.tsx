@@ -693,8 +693,23 @@ export const MailLayout: React.FC<MailLayoutProps> = ({
     )
   }
 
-  // Show message if no accounts
-  if (!isLoading && accounts.length === 0) {
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className={cn('h-full flex items-center justify-center', className)} data-testid={testId}>
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-lg font-medium mb-2">Loading Mail Accounts</h3>
+          <p className="text-sm text-muted-foreground">
+            Connecting to your email providers...
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show message if no accounts  
+  if (accounts.length === 0) {
     return (
       <div className={cn('h-full flex items-center justify-center', className)} data-testid={testId}>
         <div className="text-center">

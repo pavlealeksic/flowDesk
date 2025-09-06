@@ -6,7 +6,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { Button, Card, cn } from '../ui';
-import { X, Mail, Globe } from 'lucide-react';
+import { X, Mail, Globe, Loader2 } from 'lucide-react';
 
 interface SimpleMailAccountModalProps {
   isOpen: boolean;
@@ -26,6 +26,7 @@ const SimpleMailAccountModal: React.FC<SimpleMailAccountModalProps> = ({
     displayName: ''
   });
   const [isAdding, setIsAdding] = useState(false);
+  const [loadingStep, setLoadingStep] = useState<'testing' | 'setting-up' | 'completing' | null>(null);
   const [error, setError] = useState('');
 
   const handleClose = useCallback(() => {
@@ -52,17 +53,24 @@ const SimpleMailAccountModal: React.FC<SimpleMailAccountModalProps> = ({
         displayName: formData.displayName || formData.email
       };
 
+      // Step 1: Testing credentials
+      setLoadingStep('testing');
       const testResult = await window.flowDesk?.productionEmail?.testEmailSetup(credentials);
       
       if (!testResult || !testResult.success) {
         throw new Error(testResult?.error || 'Email configuration test failed. Please check your credentials.');
       }
 
+      // Step 2: Setting up account  
+      setLoadingStep('setting-up');
       const accountResult = await window.flowDesk?.productionEmail?.setupAccount('current-user', credentials);
       
       if (!accountResult || !accountResult.success) {
         throw new Error(accountResult?.error || 'Failed to add email account.');
       }
+
+      // Step 3: Completing
+      setLoadingStep('completing');
 
       const account = {
         id: accountResult.accountId || 'new-account',
@@ -88,6 +96,7 @@ const SimpleMailAccountModal: React.FC<SimpleMailAccountModalProps> = ({
       setError(error instanceof Error ? error.message : 'Failed to add mail account');
     } finally {
       setIsAdding(false);
+      setLoadingStep(null);
     }
   };
 
@@ -192,8 +201,15 @@ const SimpleMailAccountModal: React.FC<SimpleMailAccountModalProps> = ({
           <Button
             type="submit"
             disabled={!formData.email || !formData.password || isAdding}
+            loading={isAdding}
+            leftIcon={isAdding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
           >
-            {isAdding ? 'Adding...' : 'Add Email Account'}
+            {isAdding ? (
+              loadingStep === 'testing' ? 'Testing Connection...' :
+              loadingStep === 'setting-up' ? 'Setting Up Account...' :
+              loadingStep === 'completing' ? 'Completing Setup...' :
+              'Adding Account...'
+            ) : 'Add Email Account'}
           </Button>
         </div>
       </form>

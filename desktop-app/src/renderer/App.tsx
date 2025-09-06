@@ -9,7 +9,8 @@ import {
   NotificationsHub,
   SearchInterface,
   SettingsPanels,
-  cn
+  cn,
+  Loader2
 } from './components'
 import { AccessibilityProvider } from './contexts/AccessibilityContext'
 import ColorBlindnessFilters from './components/accessibility/ColorBlindnessFilters'
@@ -329,9 +330,10 @@ function AppContent() {
                 {/* This area will be covered by BrowserView */}
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
-                    <div className="text-2xl mb-2">🔄</div>
-                    <p className="text-sm text-gray-600">
-                      Loading {selectedService?.name || 'service'}...
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-medium mb-2">Loading Service</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Starting {selectedService?.name || 'service'}...
                     </p>
                   </div>
                 </div>
