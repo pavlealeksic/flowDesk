@@ -1,1 +1,0 @@
-const ffi = require('ffi-napi');
