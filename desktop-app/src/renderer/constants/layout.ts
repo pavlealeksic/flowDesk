@@ -6,7 +6,16 @@
  */
 
 export const LAYOUT_CONSTANTS = {
-  // Sidebar dimensions
+  // Primary sidebar (FlowDeskLeftRail)
+  PRIMARY_SIDEBAR_WIDTH: 64, // w-16 in Tailwind
+  
+  // Services sidebar (ServicesSidebar) 
+  SERVICES_SIDEBAR_WIDTH: 256, // w-64 in Tailwind
+  
+  // Total sidebar width when both are visible (workspace view)
+  TOTAL_SIDEBAR_WIDTH: 320, // 64 + 256
+  
+  // Legacy sidebar width for backwards compatibility
   SIDEBAR_WIDTH: 280,
   
   // Panel dimensions  
@@ -22,6 +31,14 @@ export const LAYOUT_CONSTANTS = {
   // Spacing and margins
   CONTENT_PADDING: 16,
   PANEL_PADDING: 12,
+  
+  // WebContentsView positioning (for workspace view)
+  WEB_CONTENTS_VIEW_OFFSET_X: 320, // Total sidebar width
+  WEB_CONTENTS_VIEW_OFFSET_Y: 0,   // Same as TOP_BAR_HEIGHT
+  
+  // Legacy compatibility
+  BROWSER_VIEW_OFFSET_X: 320, // Total sidebar width
+  BROWSER_VIEW_OFFSET_Y: 0,   // Same as TOP_BAR_HEIGHT
 } as const;
 
 // Type for layout constants (for TypeScript type safety)

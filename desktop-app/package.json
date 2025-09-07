@@ -7,32 +7,13 @@
   "main": "dist/desktop-app/src/main/main.js",
   "homepage": "./",
   "scripts": {
-    "build": "npm run build:core",
-    "build:core": "npm run build:renderer && npm run build:main:core",
-    "build:full": "npm run build:rust && npm run build:renderer && npm run build:main",
-    "build:rust": "npm run copy-rust-lib && npm run build:rust:current-platform",
-    "build:rust:current-platform": "cd ../shared/rust-lib && cargo build --release --bin flow_desk_cli --features=cli",
-    "build:rust:all-platforms": "node scripts/build-rust-all-platforms.js",
-    "prebuild": "npm run clean:binaries",
-    "clean:binaries": "rm -rf dist/binaries && mkdir -p dist/binaries",
-    "copy-rust-lib": "mkdir -p src/lib/rust-engine && cp -r ../shared/rust-lib/* src/lib/rust-engine/ && mkdir -p src/lib/rust-integration",
-    "build:main": "tsc --project tsconfig.main.json && npm run copy-rust-to-dist",
-    "build:main:core": "npm run build:preload && tsc --project tsconfig.main.json",
-    "copy-rust-to-dist": "mkdir -p dist/lib && cp -r src/lib/rust-engine dist/lib/ && mkdir -p dist/shared && npm run copy:binaries",
-    "copy:binaries": "node scripts/copy-rust-binaries.js",
+    "build": "npm run build:renderer && npm run build:main",
+    "build:main": "npm run build:preload && tsc --project tsconfig.main.json",
     "build:renderer": "vite build",
     "build:renderer:analyze": "vite build --mode analyze",
     "build:preload": "vite build --config vite.preload.config.ts",
-    "dev": "npm run dev:with-rust",
-    "dev:with-rust": "npm run build:rust:current-platform && npm run copy:binaries && concurrently \"npm run dev:renderer\" \"wait-on http://localhost:5173 && npm run dev:main:core\"",
-    "dev:fast": "npm run dev:setup:minimal && concurrently \"npm run dev:renderer\" \"wait-on http://localhost:5173 && npm run dev:main:core\"",
-    "dev:core": "npm run dev:setup:quick && concurrently \"npm run dev:renderer\" \"wait-on http://localhost:5173 && npm run dev:main:core\"",
-    "dev:full": "npm run dev:setup:full && concurrently \"npm run dev:renderer\" \"wait-on http://localhost:5173 && npm run dev:main\"",
-    "dev:setup:minimal": "node scripts/dev-setup-minimal.js",
-    "dev:setup:quick": "node scripts/dev-setup-quick.js",
-    "dev:setup:full": "node scripts/dev-setup.js",
+    "dev": "concurrently \"npm run dev:renderer\" \"wait-on http://localhost:5173 && npm run dev:main\"",
     "dev:main": "npm run build:main && NODE_ENV=development electron dist/desktop-app/src/main/main.js --inspect=9229",
-    "dev:main:core": "npm run build:main:core && NODE_ENV=development electron dist/desktop-app/src/main/main.js --inspect=9229",
     "dev:renderer": "vite",
     "start": "electron dist/main.js",
     "pack": "electron-builder",
@@ -41,28 +22,38 @@
     "dist:win": "npm run build && electron-builder --win",
     "dist:linux": "npm run build && electron-builder --linux",
     "lint": "eslint . --ext .ts,.tsx --fix",
-    "type-check": "npm run type-check:core",
-    "type-check:core": "tsc --noEmit && tsc -p tsconfig.main.json --noEmit",
-    "type-check:full": "tsc --noEmit && tsc -p tsconfig.main.json --noEmit --skipLibCheck false",
-    "test": "vitest",
+    "type-check": "tsc --noEmit && tsc -p tsconfig.main.json --noEmit",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e",
+    "test:unit": "npm run test:unit:main && npm run test:unit:renderer",
+    "test:unit:main": "jest --config jest.config.js",
+    "test:unit:renderer": "vitest --config vitest.config.ts",
+    "test:integration": "jest --config jest.config.js --testMatch='**/__tests__/integration/**/*.test.{js,ts}'",
+    "test:e2e": "playwright test --config playwright.config.ts",
+    "test:e2e:headed": "playwright test --config playwright.config.ts --headed",
+    "test:e2e:debug": "playwright test --config playwright.config.ts --debug",
     "test:watch": "vitest --watch",
-    "security:check": "node scripts/security-check.js",
-    "security:audit": "npm audit",
+    "test:watch:main": "jest --config jest.config.js --watch",
+    "test:coverage": "npm run test:coverage:renderer && npm run test:coverage:main",
+    "test:coverage:renderer": "vitest --config vitest.config.ts --coverage",
+    "test:coverage:main": "jest --config jest.config.js --coverage",
+    "test:coverage:all": "npm run test:coverage && npm run test:e2e",
+    "test:ci": "npm run test:unit && npm run test:integration && npm run test:e2e -- --reporter=json",
+    "security:audit": "npm audit --audit-level=moderate",
     "security:fix": "npm audit fix",
-    "clean": "rm -rf dist build node_modules/.cache",
-    "verify:build": "node scripts/verify-build.js",
-    "test:distribution": "node scripts/test-distribution.js",
-    "postbuild": "npm run verify:build",
-    "prebuild:production": "npm run clean && npm run build:rust:all-platforms",
-    "build:production": "npm run build:renderer && npm run build:main && npm run verify:build",
-    "dist:production": "npm run prebuild:production && npm run build:production && electron-builder",
-    "perf:analyze": "npm run build:renderer:analyze && npx vite-bundle-analyzer dist/renderer",
-    "perf:profile": "NODE_ENV=production electron dist/main/main.js --enable-logging --v=1",
-    "optimize:icons": "node scripts/analyze-icons.js",
-    "optimize:bundle": "npm run optimize:icons && npm run build:renderer && npm run perf:analyze",
-    "validate:platform": "node scripts/validate-cross-platform.js",
-    "validate:prebuild": "node scripts/prebuild-platform-check.js",
-    "rebuild:native": "npm rebuild && npm run copy:binaries"
+    "security:check": "npm run security:audit && npm run lint",
+    "security:update": "npm update && npm run security:audit",
+    "clean": "rm -rf dist build node_modules/.cache coverage test-results",
+    "clean:test": "rm -rf coverage test-results data temp-e2e-data",
+    "build:production": "npm run build",
+    "build:test": "npm run type-check && npm run build",
+    "dist:production": "npm run build:production && electron-builder",
+    "rebuild:native": "npm rebuild",
+    "logging:replace-console": "node scripts/replace-console-logs.js",
+    "logging:test": "npm run build && npm run dev:main -- --logging-test",
+    "pretest": "npm run type-check",
+    "pretest:e2e": "npm run build:test",
+    "posttest": "npm run clean:test"
   },
   "dependencies": {
     "@flow-desk/shared": "*",
@@ -82,9 +73,14 @@
     "ws": "^8.18.3"
   },
   "devDependencies": {
+    "@jest/globals": "^30.1.2",
+    "@playwright/test": "^1.55.0",
     "@reduxjs/toolkit": "^2.4.0",
+    "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/crypto-js": "^4.2.2",
+    "@types/jest": "^30.0.0",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.17",
     "@types/react-dom": "^18.3.1",
@@ -95,18 +91,25 @@
     "@typescript-eslint/eslint-plugin": "^8.15.0",
     "@typescript-eslint/parser": "^8.15.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/ui": "^3.2.4",
     "autoprefixer": "^10.4.20",
     "babel-plugin-transform-remove-console": "^6.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "concurrently": "^9.1.0",
-    "electron": "^33.4.11",
+    "electron": "^37.4.0",
     "electron-builder": "^25.1.8",
+    "electron-mock": "^0.5.0",
     "eslint": "^9.17.0",
     "eslint-plugin-react": "^7.37.3",
     "eslint-plugin-react-hooks": "^5.0.0",
     "framer-motion": "^11.15.0",
+    "happy-dom": "^18.0.1",
+    "jest": "^30.1.3",
+    "jest-environment-jsdom": "^30.1.2",
+    "jest-transform-stub": "^2.0.0",
     "lucide-react": "^0.468.0",
+    "msw": "^2.11.1",
     "postcss": "^8.4.49",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -114,52 +117,28 @@
     "react-router-dom": "^7.1.1",
     "tailwind-merge": "^2.6.0",
     "tailwindcss": "^3.4.17",
+    "ts-jest": "^29.4.1",
     "typescript": "^5.7.3",
-    "vite": "^6.0.7",
+    "vite": "^7.1.4",
     "vite-bundle-analyzer": "^1.2.3",
-    "vitest": "^2.1.8",
+    "vitest": "^3.2.4",
     "wait-on": "^8.0.1"
-  },
-  "rust-build": {
-    "targets": {
-      "darwin-x64": "x86_64-apple-darwin",
-      "darwin-arm64": "aarch64-apple-darwin",
-      "win32-x64": "x86_64-pc-windows-gnu",
-      "win32-ia32": "i686-pc-windows-gnu",
-      "linux-x64": "x86_64-unknown-linux-gnu"
-    },
-    "binary-name": "flow_desk_cli"
   },
   "build": {
     "appId": "com.flowdesk.desktop",
     "productName": "Flow Desk",
-    "electronVersion": "33.4.11",
+    "electronVersion": "37.4.0",
     "directories": {
       "output": "build"
     },
     "files": [
       "dist/**/*",
       "assets/**/*",
-      "node_modules/**/*",
-      "!dist/lib/rust-engine/target/**/*",
-      "!dist/lib/rust-engine/src/**/*",
-      "!dist/lib/rust-engine/Cargo.lock",
-      "!dist/lib/rust-engine/build-script.sh",
-      "!dist/lib/rust-engine/*.md"
-    ],
-    "extraResources": [
-      {
-        "from": "dist/binaries/",
-        "to": "binaries/",
-        "filter": [
-          "**/*"
-        ]
-      }
+      "node_modules/**/*"
     ],
     "extraMetadata": {
       "main": "dist/desktop-app/src/main/main.js"
     },
-    "beforeBuild": "scripts/prebuild-platform-check.js",
     "mac": {
       "category": "public.app-category.productivity",
       "target": [
@@ -170,9 +149,6 @@
             "arm64"
           ]
         }
-      ],
-      "asarUnpack": [
-        "**/binaries/**/*"
       ]
     },
     "win": {
@@ -184,9 +160,6 @@
             "ia32"
           ]
         }
-      ],
-      "asarUnpack": [
-        "**/binaries/**/*"
       ]
     },
     "linux": {
@@ -198,10 +171,7 @@
           ]
         }
       ],
-      "category": "Office",
-      "asarUnpack": [
-        "**/binaries/**/*"
-      ]
+      "category": "Office"
     }
   }
 }

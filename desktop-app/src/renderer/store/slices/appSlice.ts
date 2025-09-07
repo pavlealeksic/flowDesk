@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
-import type { AppSettings } from '../../types/preload.d.ts'
+import type { AppSettings } from '../../../types/preload'
 // FlowDeskAPI type is defined globally in preload script
 
 interface SystemInfo {
@@ -153,7 +153,8 @@ const appSlice = createSlice({
         state.error = action.error.message || 'Failed to initialize app'
       })
       .addCase(updateSetting.fulfilled, (state, action) => {
-        state.settings[action.payload.key] = action.payload.value
+        const key = action.payload.key as keyof AppSettings
+        ;(state.settings as any)[key] = action.payload.value
       })
       .addCase(updateSetting.rejected, (state, action) => {
         state.error = action.error.message || 'Failed to update setting'

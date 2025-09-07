@@ -511,7 +511,7 @@ const ServiceIconComponent: React.FC<{
         </div>
       )}
       <img
-        src={service.svgnUrl}
+        src={service.iconUrl}
         alt={service.name}
         className={cn(
           'w-full h-full object-contain',

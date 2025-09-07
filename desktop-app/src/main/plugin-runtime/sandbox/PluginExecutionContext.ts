@@ -366,7 +366,6 @@ export class PluginExecutionContext extends EventEmitter {
         session: this.sandboxSession,
         nodeIntegration: false,
         contextIsolation: true,
-        enableRemoteModule: false,
         allowRunningInsecureContent: false,
         webSecurity: true,
         sandbox: true,

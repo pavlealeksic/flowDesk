@@ -10,7 +10,7 @@ export function focusRing(options: { offset?: boolean } = {}) {
     // base
     'outline outline-0 focus-visible:outline-2 focus-visible:outline-offset-2',
     // outline color
-    'focus-visible:outline-flow-primary-500',
+    'focus-visible:outline-primary',
     // offset
     options.offset && 'focus-visible:outline-offset-2'
   ]

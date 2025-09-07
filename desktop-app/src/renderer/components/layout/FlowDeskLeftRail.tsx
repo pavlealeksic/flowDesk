@@ -1,10 +1,24 @@
 /**
- * Flow Desk Left Rail Component
+ * @fileoverview Flow Desk Left Rail Component - Primary navigation sidebar
  * 
- * Primary sidebar with Mail, Calendar buttons and Workspace squares
+ * This component provides the primary navigation interface for Flow Desk, displaying
+ * workspace squares and providing workspace management functionality. It serves as
+ * the leftmost sidebar in the application layout.
+ * 
+ * Key features:
+ * - Visual workspace representation with color-coded squares
+ * - Workspace creation through modal dialog
+ * - Context menus for workspace operations
+ * - Keyboard navigation and accessibility support
+ * - Performance optimized with memoization
+ * - Visual feedback for active workspace
+ * 
+ * @author Flow Desk Team
+ * @version 1.0.0
+ * @since 2024-01-01
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useAppSelector, useAppDispatch } from '../../store';
 import { loadWorkspaces } from '../../store/slices/workspaceSlice';
 import CreateWorkspaceModal from '../workspace/CreateWorkspaceModal';
@@ -12,18 +26,21 @@ import {
   Button, 
   cn,
   Plus,
-  Mail,
-  Calendar,
-  MoreVertical,
   Edit,
   Trash2,
-  Settings,
-  Dropdown,
-  DropdownTrigger,
-  DropdownContent,
-  DropdownItem
+  Settings
 } from '../ui';
 
+/**
+ * Workspace interface for left rail display
+ * @interface Workspace
+ * @property {string} id - Unique workspace identifier
+ * @property {string} name - Display name of the workspace
+ * @property {string} abbreviation - 2-letter abbreviation for workspace square
+ * @property {string} color - Hex color code for workspace theming
+ * @property {Array} services - Array of services within the workspace
+ * @property {boolean} isActive - Whether this workspace is currently active
+ */
 interface Workspace {
   id: string;
   name: string;
@@ -39,28 +56,59 @@ interface Workspace {
   isActive: boolean;
 }
 
+/**
+ * Props for the FlowDeskLeftRail component
+ * @interface FlowDeskLeftRailProps
+ * @property {function} onWorkspaceSelect - Callback when a workspace is selected
+ * @property {string} [activeWorkspaceId] - ID of the currently active workspace
+ */
 interface FlowDeskLeftRailProps {
-  onViewSelect: (view: 'mail' | 'calendar' | 'workspace') => void;
   onWorkspaceSelect: (workspaceId: string) => void;
-  activeView: 'mail' | 'calendar' | 'workspace';
   activeWorkspaceId?: string;
 }
 
-export const FlowDeskLeftRail: React.FC<FlowDeskLeftRailProps> = ({
-  onViewSelect,
+/**
+ * Flow Desk Left Rail Component - Primary workspace navigation
+ * 
+ * This component renders the primary sidebar containing workspace squares that users
+ * can click to switch between different workspace contexts. Each workspace is
+ * represented by a colored square with either a custom icon or 2-letter abbreviation.
+ * 
+ * Features:
+ * - Visual workspace representation with custom colors and icons
+ * - Context menu for workspace operations (edit, settings, delete)
+ * - Add new workspace button with creation modal
+ * - Accessibility support with proper ARIA attributes
+ * - Performance optimized with React.memo and memoized workspaces
+ * - Visual feedback for active workspace with scaling and ring effects
+ * 
+ * @component
+ * @param {FlowDeskLeftRailProps} props - Component props
+ * @returns {JSX.Element} The left rail navigation interface
+ * 
+ * @example
+ * ```tsx
+ * <FlowDeskLeftRail
+ *   onWorkspaceSelect={handleWorkspaceSelect}
+ *   activeWorkspaceId={currentWorkspace?.id}
+ * />
+ * ```
+ */
+export const FlowDeskLeftRail: React.FC<FlowDeskLeftRailProps> = memo(({
   onWorkspaceSelect,
-  activeView,
   activeWorkspaceId
 }) => {
   const dispatch = useAppDispatch();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [contextMenuWorkspace, setContextMenuWorkspace] = useState<string | null>(null);
   
-  // Get workspaces from Redux store with memoization
+  // Get workspaces from Redux store with optimized selector
   const workspaces = useAppSelector(state => 
-    Object.values(state.workspace?.workspaces || {}),
-    (left, right) => JSON.stringify(left) === JSON.stringify(right)
+    Object.values(state.workspace?.workspaces || {})
   ) as Workspace[];
+
+  // Memoize workspaces to prevent unnecessary re-renders
+  const memoizedWorkspaces = useMemo(() => workspaces, [workspaces.length, workspaces.map(w => w.id).join(',')])
 
   const handleCreateWorkspace = useCallback(async (workspaceData: {
     name: string;
@@ -83,12 +131,11 @@ export const FlowDeskLeftRail: React.FC<FlowDeskLeftRailProps> = ({
       
       // Switch to the new workspace
       onWorkspaceSelect(workspaceId);
-      onViewSelect('workspace');
     } catch (error) {
       console.error('Failed to create workspace:', error);
       throw error;
     }
-  }, [dispatch, onWorkspaceSelect, onViewSelect]);
+  }, [dispatch, onWorkspaceSelect]);
 
   const handleEditWorkspace = useCallback((workspaceId: string) => {
     // TODO: Implement edit workspace modal
@@ -128,75 +175,39 @@ export const FlowDeskLeftRail: React.FC<FlowDeskLeftRailProps> = ({
 
   return (
     <div 
-      className="w-16 bg-background border-r border-border flex flex-col items-center py-4 space-y-4"
+      className="w-16 h-full bg-background border-r border-border flex flex-col items-center py-4 px-2.5 space-y-4"
       role="tablist"
       aria-label="Application views"
     >
-      {/* Mail Button */}
-      <Button
-        variant={activeView === 'mail' ? 'primary' : 'ghost'}
-        size="sm"
-        className={cn(
-          'w-12 h-12 p-0 rounded-xl transition-all',
-          activeView === 'mail' && 'bg-primary text-primary-foreground shadow-md'
-        )}
-        onClick={() => onViewSelect('mail')}
-        aria-label="Mail view"
-        aria-pressed={activeView === 'mail'}
-        aria-controls="main-content"
-      >
-        <Mail className="h-5 w-5" aria-hidden="true" />
-      </Button>
-
-      {/* Calendar Button */}
-      <Button
-        variant={activeView === 'calendar' ? 'primary' : 'ghost'}
-        size="sm"
-        className={cn(
-          'w-12 h-12 p-0 rounded-xl transition-all',
-          activeView === 'calendar' && 'bg-primary text-primary-foreground shadow-md'
-        )}
-        onClick={() => onViewSelect('calendar')}
-        aria-label="Calendar view"
-        aria-pressed={activeView === 'calendar'}
-        aria-controls="main-content"
-      >
-        <Calendar className="h-5 w-5" aria-hidden="true" />
-      </Button>
-
-      {/* Divider */}
-      <div className="w-8 h-px bg-border my-2" role="separator" />
-
       {/* Workspace Squares */}
       <div 
         className="flex flex-col space-y-2"
         role="group"
         aria-label="Workspaces"
       >
-        {workspaces.map((workspace) => (
+        {memoizedWorkspaces.map((workspace) => (
           <div key={workspace.id} className="relative">
             <button
               className={cn(
                 'w-12 h-12 rounded-xl transition-all cursor-pointer',
                 'flex items-center justify-center text-white font-semibold text-sm',
                 'hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2',
-                workspace.id === activeWorkspaceId && activeView === 'workspace'
+                workspace.id === activeWorkspaceId
                   ? 'ring-2 ring-white shadow-lg scale-105'
                   : 'hover:ring-2 hover:ring-white/50'
               )}
               style={{ backgroundColor: workspace.color }}
               onClick={() => {
                 onWorkspaceSelect(workspace.id);
-                onViewSelect('workspace');
               }}
               onContextMenu={(e) => {
                 e.preventDefault();
                 setContextMenuWorkspace(workspace.id);
               }}
               aria-label={`${workspace.name} workspace`}
-              aria-pressed={workspace.id === activeWorkspaceId && activeView === 'workspace'}
+              aria-pressed={workspace.id === activeWorkspaceId}
               role="tab"
-              aria-selected={workspace.id === activeWorkspaceId && activeView === 'workspace'}
+              aria-selected={workspace.id === activeWorkspaceId}
               aria-controls="main-content"
             >
             {(workspace as any).icon ? (
@@ -283,6 +294,6 @@ export const FlowDeskLeftRail: React.FC<FlowDeskLeftRailProps> = ({
       />
     </div>
   );
-};
+});
 
 export default FlowDeskLeftRail;

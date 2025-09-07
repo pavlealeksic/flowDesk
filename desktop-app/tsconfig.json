@@ -9,8 +9,8 @@
       "@/*": ["src/*"],
       "@flow-desk/shared/*": ["../shared/src/*"],
       "@flow-desk/shared": ["../shared/src/index"],
-      "*/preload": ["src/types/preload.d.ts"],
-      "*/preload.d": ["src/types/preload.d.ts"]
+      "*/preload": ["src/types/preload.ts"],
+      "*/preload.d": ["src/types/preload.ts"]
     },
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
@@ -28,7 +28,7 @@
   "include": [
     "src/renderer/**/*",
     "src/types/**/*",
-    "src/types/preload.d.ts",
+    "src/types/preload.ts",
     "src/preload/**/*",
     "../shared/src/**/*"
   ],

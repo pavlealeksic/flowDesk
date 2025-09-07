@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit'
-import type { SearchResult, SearchDocument } from '../../types/preload.d.ts'
+import type { SearchResult, SearchDocument } from '../../../types/preload'
 
 interface SearchSuggestion {
   query: string;
@@ -15,12 +15,9 @@ interface AnalyticsData {
 
 // Extended SearchResult with additional properties for the store
 interface ExtendedSearchResult extends SearchResult {
-  type: 'email' | 'calendar' | 'contact' | 'file' | 'plugin' | 'command';
   description?: string;
   snippet?: string;
-  url?: string;
   icon?: string;
-  timestamp?: number;
 }
 
 interface SearchFilter {
@@ -148,6 +145,31 @@ export const initializeSearch = createAsyncThunk(
       return true;
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Unknown error');
+    }
+  }
+);
+
+// Global search across all content types using advanced Rust backend
+export const searchGlobal = createAsyncThunk(
+  'search/searchGlobal', 
+  async ({ query, filters, limit = 20 }: { query: string; filters?: any; limit?: number }, { rejectWithValue }) => {
+    try {
+      const result = await window.flowDesk?.invoke('search:perform', {
+        query,
+        filters: {
+          contentType: filters?.contentType || 'all',
+          dateRange: filters?.dateRange,
+          providers: filters?.providers
+        },
+        limit,
+        offset: 0,
+        includeFacets: true,
+        useAdvancedFeatures: true
+      });
+      
+      return result?.results || [];
+    } catch (error) {
+      return rejectWithValue(error instanceof Error ? error.message : 'Global search failed');
     }
   }
 );
@@ -362,6 +384,22 @@ const searchSlice = createSlice({
       })
       .addCase(initializeSearch.rejected, (state, action) => {
         state.error = action.payload as string;
+      })
+      
+      // Global search
+      .addCase(searchGlobal.pending, (state) => {
+        state.isSearching = true;
+        state.error = null;
+      })
+      .addCase(searchGlobal.fulfilled, (state, action) => {
+        state.isSearching = false;
+        state.results = action.payload;
+        state.totalResults = action.payload.length;
+      })
+      .addCase(searchGlobal.rejected, (state, action) => {
+        state.isSearching = false;
+        state.error = action.payload as string;
+        state.results = [];
       });
   }
 })
@@ -386,5 +424,11 @@ export const {
   setError,
   clearError
 } = searchSlice.actions
+
+// Selectors
+export const selectIsSearching = (state: any) => state.search.isSearching;
+export const selectSearchResults = (state: any) => state.search.results;
+export const selectSearchQuery = (state: any) => state.search.query;
+export const selectSearchError = (state: any) => state.search.error;
 
 export default searchSlice.reducer

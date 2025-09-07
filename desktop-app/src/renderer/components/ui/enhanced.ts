@@ -20,15 +20,8 @@ export * from './Input'
 export * from './Avatar'
 export * from './utils'
 
-// Enhanced Mail Components
-export { VirtualizedMessageList } from '../mail/VirtualizedMessageList'
-export { ComposeModal } from '../mail/ComposeModal'
-
 // Enhanced Search Components
 export { AdvancedSearchInterface } from '../search/AdvancedSearchInterface'
-
-// Enhanced Calendar Components  
-export { EnhancedCalendarInterface } from '../calendar/EnhancedCalendarInterface'
 
 // Enhanced Workspace Components
 export { WorkspaceManagementInterface } from '../workspace/WorkspaceManagementInterface'

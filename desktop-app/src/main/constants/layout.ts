@@ -23,7 +23,11 @@ export const LAYOUT_CONSTANTS = {
   // Top bar dimensions
   TOP_BAR_HEIGHT: 0, // No top bar in current design
   
-  // BrowserView positioning (for workspace view)
+  // WebContentsView positioning (for workspace view)
+  WEB_CONTENTS_VIEW_OFFSET_X: 320, // Total sidebar width
+  WEB_CONTENTS_VIEW_OFFSET_Y: 0,   // Same as TOP_BAR_HEIGHT
+  
+  // Legacy compatibility
   BROWSER_VIEW_OFFSET_X: 320, // Total sidebar width
   BROWSER_VIEW_OFFSET_Y: 0,   // Same as TOP_BAR_HEIGHT
   

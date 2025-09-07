@@ -4,10 +4,7 @@ export * from './ui'
 // Layout Components (loaded immediately)
 export * from './layout'
 
-// Feature Components - Lazy loaded to reduce initial bundle
-export { MailLayout } from './mail/MailLayout'
-export { CalendarViews } from './calendar/CalendarViews'
+// Feature Components - Only export what's actually used
 export { PluginPanels } from './plugins/PluginPanels'
 export { NotificationsHub } from './notifications/NotificationsHub'
-export { SearchInterface } from './search/SearchInterface'
-export { SettingsPanels } from './settings/SettingsPanels'
+// SearchInterface and SettingsPanels removed - not used in main app

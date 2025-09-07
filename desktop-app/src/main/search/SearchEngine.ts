@@ -7,6 +7,7 @@
 import { app } from 'electron';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
+import { mainLoggingService } from '../logging/LoggingService';
 
 // Import Rust NAPI functions
 const {
@@ -113,6 +114,7 @@ export class LocalSearchEngine {
   private initialized = false;
   private queryStats: Array<{ query: string; resultCount: number; searchTime: number; timestamp: Date }> = [];
   private readonly maxQueryStatsHistory = 1000;
+  private readonly logger = mainLoggingService.createLogger('LocalSearchEngine');
 
   constructor() {
     const userDataPath = app.getPath('userData');
@@ -132,12 +134,12 @@ export class LocalSearchEngine {
     try {
       // Initialize Rust search engine with Tantivy backend
       const result = await initSearchEngine(this.indexDir);
-      console.log('Search engine initialized:', result);
+      this.logger.info('Search engine initialized', undefined, { result });
       
       this.initialized = true;
-      console.log('Rust-powered search engine initialized successfully');
+      this.logger.info('Rust-powered search engine initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize Rust search engine:', error);
+      this.logger.error('Failed to initialize Rust search engine', error as Error);
       throw error;
     }
   }
@@ -155,9 +157,9 @@ export class LocalSearchEngine {
         JSON.stringify(document.metadata || {})
       );
       
-      console.log(`Document indexed via Rust backend: ${document.id}`);
+      this.logger.debug('Document indexed via Rust backend', undefined, { documentId: document.id });
     } catch (error) {
-      console.error(`Failed to index document ${document.id} via Rust:`, error);
+      this.logger.error('Failed to index document via Rust', error as Error, undefined, { documentId: document.id });
       throw error;
     }
   }
@@ -166,7 +168,7 @@ export class LocalSearchEngine {
     if (!this.initialized) await this.initialize();
     
     // TODO: Implement document removal in Rust backend
-    console.log(`Document removal not yet implemented in Rust backend: ${documentId}`);
+    this.logger.warn('Document removal not yet implemented in Rust backend', undefined, { documentId });
   }
 
   async updateDocument(documentId: string, updates: Partial<LocalSearchDocument>): Promise<void> {
@@ -174,7 +176,7 @@ export class LocalSearchEngine {
 
     // For now, we'll re-index the entire document
     // TODO: Implement proper update in Rust backend
-    console.log(`Document update via re-indexing: ${documentId}`);
+    this.logger.debug('Document update via re-indexing', undefined, { documentId });
   }
 
   async search(query: string, options: LocalSearchOptions = {}): Promise<LocalSearchResult[]> {
@@ -215,7 +217,7 @@ export class LocalSearchEngine {
 
       return response.results;
     } catch (error) {
-      console.error(`Rust search failed for query "${query}":`, error);
+      this.logger.error('Rust search failed', error as Error, undefined, { query });
       return [];
     }
   }
@@ -234,14 +236,14 @@ export class LocalSearchEngine {
 
       return results;
     } catch (error) {
-      console.error(`Simple Rust search failed for query "${query}":`, error);
+      this.logger.error('Simple Rust search failed', error as Error, undefined, { query });
       return [];
     }
   }
 
   getDocument(id: string): LocalSearchDocument | undefined {
     // TODO: Implement document retrieval from Rust backend
-    console.log(`Document retrieval not yet implemented: ${id}`);
+    this.logger.warn('Document retrieval not yet implemented', undefined, { documentId: id });
     return undefined;
   }
 
@@ -254,7 +256,7 @@ export class LocalSearchEngine {
     if (!this.initialized) await this.initialize();
     
     // TODO: Implement index clearing in Rust backend
-    console.log('Index clearing not yet implemented in Rust backend');
+    this.logger.warn('Index clearing not yet implemented in Rust backend');
   }
 
   async searchWithProviders(options: {
@@ -292,7 +294,7 @@ export class LocalSearchEngine {
     try {
       return await getSearchSuggestions(partialQuery, limit);
     } catch (error) {
-      console.error(`Failed to get suggestions for "${partialQuery}":`, error);
+      this.logger.error('Failed to get suggestions', error as Error, undefined, { partialQuery });
       return [];
     }
   }
@@ -337,7 +339,7 @@ export class LocalSearchEngine {
     if (!this.initialized) await this.initialize();
     
     // TODO: Implement optimization in Rust backend
-    console.log('Search optimization not yet implemented in Rust backend');
+    this.logger.warn('Search optimization not yet implemented in Rust backend');
   }
 
   async close(): Promise<void> {

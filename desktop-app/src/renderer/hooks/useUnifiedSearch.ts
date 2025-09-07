@@ -11,21 +11,21 @@ import {
   ContentType,
   ProviderType 
 } from '@flow-desk/shared';
-import type { SearchOptions, SearchResult } from '../types/preload.d.ts';
+import type { SearchOptions, SearchResult } from '../../types/preload';
 
 // Logging stub for renderer process
 const log = {
-  error: (message: string, ...args: any[]) => {
+  error: (message: string, ...args: unknown[]) => {
     if (process.env.NODE_ENV !== 'production') {
       console.error('[Search]', message, ...args);
     }
   },
-  warn: (message: string, ...args: any[]) => {
+  warn: (message: string, ...args: unknown[]) => {
     if (process.env.NODE_ENV === 'development') {
       console.warn('[Search]', message, ...args);
     }
   },
-  debug: () => {}, // No-op
+  debug: (_message?: string, ..._args: unknown[]) => {}, // No-op
 };
 
 interface UseUnifiedSearchOptions {

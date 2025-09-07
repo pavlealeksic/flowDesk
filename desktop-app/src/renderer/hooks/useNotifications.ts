@@ -17,18 +17,13 @@ interface PreloadNotificationData {
   actions?: Array<{ label: string; action: string }>;
 }
 
-// Type for FlowDesk API with notifications support
+// Type for FlowDesk API with notifications support - simplified to match actual API
 interface FlowDeskWithNotifications {
-  notifications: {
-    show(notification: PreloadNotificationData): Promise<void>;
-    hide(notificationId: string): Promise<void>;
-    clear(): Promise<void>;
-    getPermissions(): Promise<string>;
-    requestPermissions(): Promise<string>;
-    getStatus(): Promise<{ enabled: boolean; permission: string }>;
+  system: {
+    showNotification(options: { title: string; body?: string; icon?: string; silent?: boolean }): Promise<void>;
   };
-  on(channel: string, callback: (...args: unknown[]) => void): void;
-  off(channel: string, callback: (...args: unknown[]) => void): void;
+  on?(channel: string, callback: (...args: unknown[]) => void): void;
+  off?(channel: string, callback: (...args: unknown[]) => void): void;
 }
 
 // Logging stub for renderer process
@@ -43,8 +38,8 @@ const log = {
       console.warn('[Notifications]', message, ...args);
     }
   },
-  info: () => {}, // No-op
-  debug: () => {}, // No-op
+  info: (_message?: string, ..._args: unknown[]) => {}, // No-op
+  debug: (_message?: string, ..._args: unknown[]) => {}, // No-op
 };
 
 interface NotificationData {
@@ -79,9 +74,19 @@ export const useNotifications = () => {
   useEffect(() => {
     const checkPermissions = async () => {
       try {
-        if ((window as { flowDesk: FlowDeskWithNotifications }).flowDesk?.notifications) {
-          const status = await (window as { flowDesk: FlowDeskWithNotifications }).flowDesk.notifications.getStatus()
-          setPermission(status)
+        // Use browser's native notification API to check permissions
+        if ('Notification' in window) {
+          setPermission({
+            permission: Notification.permission,
+            supported: true,
+            dndActive: false
+          })
+        } else {
+          setPermission({
+            permission: 'denied',
+            supported: false,
+            dndActive: false
+          })
         }
       } catch (error) {
         log.error('Failed to check notification permissions:', error)
@@ -94,11 +99,12 @@ export const useNotifications = () => {
   // Request notification permission
   const requestPermission = useCallback(async (): Promise<'granted' | 'denied' | 'default'> => {
     try {
-      if ((window as { flowDesk: FlowDeskWithNotifications }).flowDesk?.notifications) {
-        const result = await (window as { flowDesk: FlowDeskWithNotifications }).flowDesk.notifications.requestPermission()
+      if ('Notification' in window && Notification.permission === 'default') {
+        const result = await Notification.requestPermission()
         setPermission(prev => ({ ...prev, permission: result }))
         return result
       }
+      return Notification.permission
     } catch (error) {
       log.error('Failed to request notification permission:', error)
     }
@@ -130,16 +136,14 @@ export const useNotifications = () => {
       }
 
       // Send platform-specific notification
-      if ((window as { flowDesk: FlowDeskWithNotifications }).flowDesk?.notifications) {
-        const notificationId = await (window as { flowDesk: FlowDeskWithNotifications }).flowDesk.notifications.send({
+      if ((window as { flowDesk: FlowDeskWithNotifications }).flowDesk?.system) {
+        await (window as { flowDesk: FlowDeskWithNotifications }).flowDesk.system.showNotification({
           title: data.title,
           body: data.body,
           icon: data.icon,
-          actions: data.actions,
-          requireInteraction: data.requireInteraction,
-          silent: data.silent || !notificationSettings.sound,
-          data: { ...data.data, source: data.source, importance: data.importance }
+          silent: data.silent || !notificationSettings.sound
         })
+        const notificationId = `notif-${Date.now()}`
 
         // Also add to internal notification store
         dispatch(addNotification({
@@ -185,9 +189,8 @@ export const useNotifications = () => {
   // Clear notification
   const clearNotification = useCallback(async (notificationId?: string): Promise<void> => {
     try {
-      if ((window as { flowDesk: FlowDeskWithNotifications }).flowDesk?.notifications) {
-        await (window as { flowDesk: FlowDeskWithNotifications }).flowDesk.notifications.clear(notificationId)
-      }
+      // No specific API for clearing individual notifications in current implementation
+      log.info('Clearing notification:', notificationId)
     } catch (error) {
       log.error('Failed to clear notification:', error)
     }
@@ -196,9 +199,8 @@ export const useNotifications = () => {
   // Clear all notifications
   const clearAllNotifications = useCallback(async (): Promise<void> => {
     try {
-      if ((window as { flowDesk: FlowDeskWithNotifications }).flowDesk?.notifications) {
-        await (window as { flowDesk: FlowDeskWithNotifications }).flowDesk.notifications.clearAll()
-      }
+      // No specific API for clearing all notifications in current implementation
+      log.info('Clearing all notifications')
     } catch (error) {
       log.error('Failed to clear all notifications:', error)
     }
@@ -207,10 +209,9 @@ export const useNotifications = () => {
   // Set DND status
   const setDoNotDisturb = useCallback(async (active: boolean, duration?: number): Promise<void> => {
     try {
-      if ((window as { flowDesk: FlowDeskWithNotifications }).flowDesk?.notifications) {
-        await (window as { flowDesk: FlowDeskWithNotifications }).flowDesk.notifications.setDND(active, duration)
-        setPermission(prev => ({ ...prev, dndActive: active }))
-      }
+      // No specific API for DND in current implementation - just update local state
+      setPermission(prev => ({ ...prev, dndActive: active }))
+      log.info('DND status set:', active, duration)
     } catch (error) {
       log.error('Failed to set DND status:', error)
     }

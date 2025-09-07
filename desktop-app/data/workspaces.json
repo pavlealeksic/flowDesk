@@ -1,0 +1,32 @@
+[
+  {
+    "id": "a14f29dbfbe0f4ae3e602ae22f6ef063",
+    "name": "test",
+    "abbreviation": "T",
+    "color": "#4285f4",
+    "icon": "",
+    "browserIsolation": "shared",
+    "services": [
+      {
+        "id": "2f3c72d51559bd8e157bc8154e5c9da8",
+        "name": "Slack",
+        "type": "communication",
+        "url": "https://slack.com",
+        "isEnabled": true,
+        "config": {}
+      },
+      {
+        "id": "92421c9fbd7692df2efc221053b29bf8",
+        "name": "Discord",
+        "type": "communication",
+        "url": "https://discord.com/app",
+        "isEnabled": true,
+        "config": {}
+      }
+    ],
+    "members": [],
+    "created": "2025-09-06T22:22:30.800Z",
+    "lastAccessed": "2025-09-06T22:22:30.800Z",
+    "isActive": false
+  }
+]

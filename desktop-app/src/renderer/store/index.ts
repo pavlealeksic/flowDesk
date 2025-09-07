@@ -5,13 +5,12 @@ import { TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux'
 import appSlice from './slices/appSlice'
 import workspaceSlice from './slices/workspaceSlice'
 import themeSlice from './slices/themeSlice'
-import mailSlice from './slices/mailSlice'
-import calendarSlice from './slices/calendarSlice'
 import pluginSlice from './slices/pluginSlice'
 import notificationSlice from './slices/notificationSlice'
 import searchSlice from './slices/searchSlice'
 // automationSlice removed to simplify the app
 import productivitySlice from './slices/productivitySlice'
+import performanceSlice from './slices/performanceSlice'
 
 // Serialization helpers
 const isSerializable = (value: unknown): boolean => {
@@ -43,13 +42,12 @@ export const store = configureStore({
     app: appSlice,
     workspace: workspaceSlice,
     theme: themeSlice,
-    mail: mailSlice,
-    calendar: calendarSlice,
     plugin: pluginSlice,
     notification: notificationSlice,
     search: searchSlice,
     // automation: removed to simplify the app,
     productivity: productivitySlice,
+    performance: performanceSlice,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -71,15 +69,6 @@ export const store = configureStore({
           'workspace.workspaces.*.lastAccessed',
           'workspace.workspaces.*.createdAt',
           'workspace.workspaces.*.updatedAt',
-          'mail.threads.*.lastMessageDate',
-          'mail.scheduledMessages.*.scheduledDate',
-          'mail.scheduledMessages.*.createdAt',
-          'mail.messages.*.date',
-          'mail.messages.*.receivedAt',
-          'mail.unifiedMessages.*.date',
-          'mail.unifiedMessages.*.receivedAt',
-          'mail.searchResults.*.date',
-          'mail.searchResults.*.receivedAt',
         ],
         // Custom serializable check
         isSerializable,

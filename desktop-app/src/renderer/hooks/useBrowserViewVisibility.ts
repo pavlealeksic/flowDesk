@@ -1,14 +1,14 @@
 /**
- * Hook to manage BrowserView visibility when modals and overlays are open
+ * Hook to manage WebContentsView visibility when modals and overlays are open
  * 
- * This ensures proper z-index layering by hiding BrowserViews when UI elements
- * that should be above them are displayed
+ * This ensures proper z-index layering by hiding WebContentsViews when UI elements
+ * that should be above them are displayed. Uses modern WebContentsView API.
  */
 
 import { useEffect, useRef } from 'react'
 import { shouldHideBrowserViews, type ZIndexLayer } from '../constants/zIndex'
 
-interface BrowserViewVisibilityOptions {
+interface WebContentsViewVisibilityOptions {
   isVisible: boolean
   layer?: ZIndexLayer
   onVisibilityChange?: (isVisible: boolean) => void
@@ -17,15 +17,15 @@ interface BrowserViewVisibilityOptions {
 /**
  * Hook to control BrowserView visibility based on UI layer hierarchy
  */
-export const useBrowserViewVisibility = ({
+export const useWebContentsViewVisibility = ({
   isVisible,
   layer = 'MODAL',
   onVisibilityChange
-}: BrowserViewVisibilityOptions) => {
+}: WebContentsViewVisibilityOptions) => {
   const previousVisibilityRef = useRef<boolean>(false)
 
   useEffect(() => {
-    const shouldHide = isVisible && shouldHideBrowserViews(layer)
+    const shouldHide = isVisible && shouldHideWebContentsViews(layer)
     
     if (shouldHide && !previousVisibilityRef.current) {
       // Hide BrowserView

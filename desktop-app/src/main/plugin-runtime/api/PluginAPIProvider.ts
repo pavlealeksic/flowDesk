@@ -28,6 +28,7 @@ import { PluginEventBus } from '../events/PluginEventBus';
 import { PluginStorageManager } from '../storage/PluginStorageManager';
 import { PluginSecurityManager } from '../security/PluginSecurityManager';
 import { PluginLogger } from '../utils/PluginLogger';
+import { mainLoggingService } from '../../logging/LoggingService';
 
 /**
  * Plugin API Provider
@@ -40,6 +41,7 @@ export class PluginAPIProvider {
   private readonly storageManager: PluginStorageManager;
   private readonly securityManager: PluginSecurityManager;
   private readonly httpRateLimits = new Map<string, number[]>();
+  private readonly systemLogger = mainLoggingService.createLogger('PluginAPIProvider');
 
   constructor(
     eventBus: PluginEventBus,
@@ -217,7 +219,7 @@ export class PluginAPIProvider {
         } catch (error) {
           logger.error('Failed to show notification:', error);
           // Fallback to console notification
-          console.log(`[NOTIFICATION] ${options.title}: ${options.body}`);
+          this.systemLogger.info('Plugin notification shown', { pluginId: plugin.id }, { title: options.title, body: options.body });
         }
       },
 

@@ -100,9 +100,9 @@ export const getZIndexClass = (layer: ZIndexLayer): string => {
 }
 
 /**
- * Check if a layer should hide BrowserViews
+ * Check if a layer should hide WebContentsViews
  */
-export const shouldHideBrowserViews = (layer: ZIndexLayer): boolean => {
+export const shouldHideWebContentsViews = (layer: ZIndexLayer): boolean => {
   const hidingLayers: ZIndexLayer[] = [
     'MODAL_BACKDROP',
     'MODAL',
@@ -115,3 +115,9 @@ export const shouldHideBrowserViews = (layer: ZIndexLayer): boolean => {
   
   return hidingLayers.includes(layer)
 }
+
+/**
+ * Legacy compatibility function for BrowserView references
+ * @deprecated Use shouldHideWebContentsViews instead
+ */
+export const shouldHideBrowserViews = shouldHideWebContentsViews

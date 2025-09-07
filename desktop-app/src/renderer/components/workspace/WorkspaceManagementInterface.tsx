@@ -22,7 +22,7 @@ import { Button, Card, Input, Avatar, ServiceIcon } from '../ui'
 import { cn } from '../ui/utils'
 import { useNotifications } from '../ui/NotificationSystem'
 import { SmartLoading } from '../ui/LoadingStates'
-import type { Workspace, WorkspaceService } from '../../types/preload'
+import type { Workspace, WorkspaceService } from '../../../types/preload'
 
 interface ServiceStatus {
   id: string

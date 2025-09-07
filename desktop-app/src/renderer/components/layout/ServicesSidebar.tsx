@@ -102,7 +102,7 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
 
   if (!workspaceId) {
     return (
-      <div className={cn('w-64 bg-muted/30 border-r border-border flex flex-col', className)}>
+      <div className={cn('w-64 h-full bg-muted/30 border-r border-border flex flex-col', className)}>
         <div className="p-4 text-center text-muted-foreground">
           <div className="text-4xl mb-2">🏢</div>
           <p className="text-sm">Select a workspace to view services</p>
@@ -112,7 +112,7 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
   }
 
   return (
-    <div className={cn('w-64 bg-muted/30 border-r border-border flex flex-col', className)}>
+    <div className={cn('w-64 h-full bg-muted/30 border-r border-border flex flex-col', className)}>
       {/* Workspace Header */}
       <div className="p-4 border-b border-border">
         <div className="flex items-center justify-between mb-1">
