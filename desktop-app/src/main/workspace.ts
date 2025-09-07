@@ -356,7 +356,17 @@ export class WorkspaceManager extends EventEmitter {
   }
 
   async getWorkspaces(): Promise<Workspace[]> {
-    return Array.from(this.workspaces.values());
+    const workspaces = Array.from(this.workspaces.values());
+    log.debug('getWorkspaces called', { 
+      count: workspaces.length,
+      workspaces: workspaces.map(w => ({
+        id: w.id,
+        name: w.name,
+        serviceCount: w.services?.length || 0,
+        services: w.services?.map(s => ({ id: s.id, name: s.name })) || []
+      }))
+    });
+    return workspaces;
   }
 
   async getWorkspace(id: string): Promise<Workspace | null> {
@@ -396,6 +406,29 @@ export class WorkspaceManager extends EventEmitter {
     this.saveWorkspacesToDisk();
     this.emit('workspace-switched', id);
     log.info('Switched to workspace:', workspace.name);
+    
+    // Preload all services for notifications support
+    this.preloadWorkspaceServices(workspace);
+  }
+
+  /**
+   * Preload all services in a workspace for notifications support
+   * Creates WebContentsViews for all services but doesn't show them
+   */
+  private async preloadWorkspaceServices(workspace: Workspace): Promise<void> {
+    try {
+      for (const service of workspace.services) {
+        if (!this.webContentsViews.has(service.id)) {
+          const webContentsView = await this.createWebContentsViewForService(service, workspace);
+          this.webContentsViews.set(service.id, webContentsView);
+          // Load the URL in background
+          await webContentsView.webContents.loadURL(service.url);
+          log.info(`Preloaded service for notifications: ${service.name}`);
+        }
+      }
+    } catch (error) {
+      log.warn('Failed to preload some services:', error);
+    }
   }
 
   async updateWorkspace(id: string, updates: Partial<Workspace>): Promise<void> {

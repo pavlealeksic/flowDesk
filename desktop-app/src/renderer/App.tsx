@@ -133,10 +133,21 @@ function AppContent() {
   const memoizedWorkspaces = useMemo(() => {
     logger.debug('Workspaces memoized', undefined, {
       workspaceCount: workspaces.length,
-      workspaces: workspaces.map(w => ({ id: w.id, name: w.name }))
+      workspaces: workspaces.map(w => ({ 
+        id: w.id, 
+        name: w.name,
+        serviceCount: w.services?.length || 0,
+        services: w.services?.map(s => ({ id: s.id, name: s.name })) || []
+      }))
     })
     return workspaces
-  }, [workspaces.length, JSON.stringify(workspaces.map(w => ({ id: w.id, name: w.name, created: w.created.getTime() })))])
+  }, [workspaces.length, JSON.stringify(workspaces.map(w => ({ 
+    id: w.id, 
+    name: w.name, 
+    created: w.created.getTime(),
+    serviceCount: w.services?.length || 0,
+    serviceIds: w.services?.map(s => s.id).sort() || []
+  })))])
   
   const currentWorkspace = useMemo(() => {
     const workspace = memoizedWorkspaces.find(w => w.id === activeWorkspaceId)
@@ -424,14 +435,19 @@ function AppContent() {
           const selectedService = currentWorkspace?.services.find((s: any) => s.id === activeServiceId);
           return (
             <WorkspaceErrorBoundary>
-              <div className="h-full bg-white">
+              <div className="h-full bg-background">
                 {/* This area will be covered by WebContentsView */}
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-medium mb-2">Loading Service</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Starting {selectedService?.name || 'service'}...
+                <div className="flex items-center justify-center h-full px-8">
+                  <div className="text-center max-w-sm">
+                    <div className="mb-6">
+                      <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+                      <div className="w-24 h-1 bg-primary/20 rounded-full mx-auto overflow-hidden">
+                        <div className="h-full bg-primary rounded-full animate-pulse" />
+                      </div>
+                    </div>
+                    <h3 className="text-xl font-semibold mb-2 text-foreground">Loading {selectedService?.name}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      Connecting to {selectedService?.name || 'service'}... Your service will appear here in a moment.
                     </p>
                   </div>
                 </div>
@@ -519,17 +535,10 @@ function AppContent() {
               // Load the service in browser view
               if (activeWorkspaceId) {
                 try {
-                  setGlobalLoading(true);
-                  setGlobalLoadingMessage('Loading service...');
+                  // Service switching - no global loading needed
                   
                   await window.flowDesk.workspace.loadService(activeWorkspaceId, serviceId);
-                  console.log('Service loaded:', serviceId);
-                  
-                  // Show success toast
-                  const service = currentWorkspace?.services.find(s => s.id === serviceId);
-                  if (service) {
-                    toast.showSuccess('Service Loaded', `${service.name} is now ready to use`);
-                  }
+                  logger.info('Service switched', { serviceId });
                 } catch (error) {
                   const service = currentWorkspace?.services.find(s => s.id === serviceId);
                   const serviceName = service?.name || 'service';
@@ -557,8 +566,6 @@ function AppContent() {
                   } else {
                     setCurrentError(appError);
                   }
-                } finally {
-                  setGlobalLoading(false);
                 }
               }
             }, [activeWorkspaceId, currentWorkspace])}

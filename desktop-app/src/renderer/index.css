@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 /* CSS Custom Properties for Design System - Dark Theme */
-:root {
+:root,
+html {
   --background: 224 71.4% 4.1%;
   --foreground: 210 20% 98%;
   --card: 224 71.4% 4.1%;
@@ -61,6 +62,7 @@
   box-sizing: border-box;
 }
 
+html,
 body {
   font-family: var(--font-family-sans);
   font-size: var(--font-size-base);
@@ -71,6 +73,11 @@ body {
   background-color: hsl(var(--background));
   margin: 0;
   overflow: hidden;
+}
+
+/* Force dark mode for the entire app */
+html {
+  color-scheme: dark;
 }
 
 code {

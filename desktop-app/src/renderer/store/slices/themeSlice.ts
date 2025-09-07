@@ -17,8 +17,8 @@ interface ThemeState {
 }
 
 const initialState: ThemeState = {
-  mode: 'system',
-  isDarkMode: false,
+  mode: 'dark',
+  isDarkMode: true,
   isHighContrast: false,
   accentColor: '#0ea5e9',
   fontSize: 'medium',
