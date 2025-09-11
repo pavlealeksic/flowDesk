@@ -101,8 +101,124 @@ const mockMainLogger = {
   debug: jest.fn()
 };
 
-// Mock all dependencies
-jest.mock('electron', () => ({
+const mockConfigManager = {
+  getConfig: jest.fn().mockReturnValue({
+    environment: 'development',
+    memory: {
+      maxWebContentsViews: 10,
+      memoryThresholdMB: 500,
+      memoryMonitorInterval: 30000,
+      inactiveCleanupDelay: 1800000,
+      enableAutoCleanup: true,
+      enableMemoryMonitoring: true
+    },
+    performance: {
+      enabled: true,
+      samplingRate: 0.1,
+      metricsInterval: 10000,
+      enableReactProfiler: false,
+      enableBundleAnalysis: false,
+      maxPerformanceEntries: 1000
+    },
+    errorHandling: {
+      enableAutoRecovery: true,
+      maxRetryAttempts: 3,
+      retryBaseDelay: 1000,
+      retryMaxDelay: 30000,
+      enableErrorReporting: false
+    },
+    workspace: {
+      maxWorkspaces: 20,
+      maxServicesPerWorkspace: 15,
+      defaultBrowserIsolation: 'shared',
+      enablePreloading: true,
+      maxPreloadServices: 5,
+      autoSaveInterval: 30000
+    },
+    security: {
+      httpsOnly: false,
+      maxUrlLength: 2000,
+      allowedProtocols: ['https:', 'http:'],
+      enableCSP: true,
+      enableIframeSandbox: true,
+      rateLimiting: {
+        enabled: true,
+        maxRequestsPerMinute: 100,
+        windowSizeMs: 60000
+      }
+    },
+    development: {
+      enableDevTools: false,
+      enableHotReload: false,
+      enableDebugLogging: false,
+      mockExternalServices: false,
+      devServerPort: 5173
+    },
+    dataDirectory: 'data',
+    logging: {
+      level: 'info',
+      enableFileLogging: true,
+      maxLogFiles: 5,
+      maxLogSizeMB: 10
+    }
+  }),
+  validateConfig: jest.fn().mockReturnValue({ isValid: true }),
+  getMemoryConfig: jest.fn().mockReturnValue({
+    maxWebContentsViews: 10,
+    memoryThresholdMB: 500,
+    memoryMonitorInterval: 30000,
+    inactiveCleanupDelay: 1800000,
+    enableAutoCleanup: true,
+    enableMemoryMonitoring: true
+  }),
+  getWorkspaceConfig: jest.fn().mockReturnValue({
+    maxWorkspaces: 20,
+    maxServicesPerWorkspace: 15,
+    defaultBrowserIsolation: 'shared',
+    enablePreloading: true,
+    maxPreloadServices: 5,
+    autoSaveInterval: 30000
+  }),
+  getSecurityConfig: jest.fn().mockReturnValue({
+    httpsOnly: false,
+    maxUrlLength: 2000,
+    allowedProtocols: ['https:', 'http:'],
+    enableCSP: true,
+    enableIframeSandbox: true,
+    rateLimiting: {
+      enabled: true,
+      maxRequestsPerMinute: 100,
+      windowSizeMs: 60000
+    }
+  }),
+  getDevelopmentConfig: jest.fn().mockReturnValue({
+    enableDevTools: false,
+    enableHotReload: false,
+    enableDebugLogging: false,
+    mockExternalServices: false,
+    devServerPort: 5173
+  }),
+  getPerformanceConfig: jest.fn().mockReturnValue({
+    enabled: true,
+    samplingRate: 0.1,
+    metricsInterval: 10000,
+    enableReactProfiler: false,
+    enableBundleAnalysis: false,
+    maxPerformanceEntries: 1000
+  }),
+  getErrorHandlingConfig: jest.fn().mockReturnValue({
+    enableAutoRecovery: true,
+    maxRetryAttempts: 3,
+    retryBaseDelay: 1000,
+    retryMaxDelay: 30000,
+    enableErrorReporting: false
+  }),
+  updateConfig: jest.fn().mockReturnValue(true),
+  reloadConfig: jest.fn().mockReturnValue(true)
+};
+
+// Mock electron after setting up all mocks
+const mockElectron = {
   app: mockApp,
   BrowserWindow: mockBrowserWindow,
   ipcMain: mockIpcMain,
@@ -110,18 +226,30 @@ jest.mock('electron', () => ({
   systemPreferences: mockSystemPreferences,
   dialog: mockDialog,
   shell: mockShell
-}));
+};
+
+// Mock all dependencies
+jest.mock('electron', () => mockElectron);
+jest.mock('electron/default', () => mockElectron);
 
 jest.mock('path', () => ({
   join: jest.fn((...args: string[]) => args.join('/'))
 }));
 
-jest.mock('electron-log', () => ({
+const mockElectronLog = {
   transports: {
     file: { level: 'info' },
     console: { level: 'debug' }
-  }
-}));
+  },
+  info: jest.fn(),
+  error: jest.fn(),
+  warn: jest.fn(),
+  debug: jest.fn()
+};
+
+// Mock electron-log with a default export
+jest.mock('electron-log', () => mockElectronLog);
+jest.mock('electron-log/default', () => mockElectronLog);
 
 jest.mock('../../main/workspace', () => ({
   WorkspaceManager: jest.fn().mockImplementation(() => mockWorkspaceManager)
@@ -138,6 +266,10 @@ jest.mock('../../main/security-config', () => ({
 jest.mock('../../main/logging/LoggingService', () => ({
   mainLoggingService: mockMainLoggingService,
   mainLogger: mockMainLogger
+}));
+
+jest.mock('../../main/config/AppConfig', () => ({
+  configManager: mockConfigManager
 }));
 
 describe('Flow Desk Main Process', () => {

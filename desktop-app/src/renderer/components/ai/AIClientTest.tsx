@@ -6,12 +6,14 @@
 import React, { useState, useEffect } from 'react';
 import { aiClient } from './AIClient';
 import type { ProviderHealth, CompletionRequest } from './AIClient';
+import { useLogger } from '../../logging/RendererLoggingService';
 
 interface AIClientTestProps {
   className?: string;
 }
 
 export const AIClientTest: React.FC<AIClientTestProps> = ({ className }) => {
+  const logger = useLogger('AI-Client-Test');
   const [isInitialized, setIsInitialized] = useState(false);
   const [healthData, setHealthData] = useState<ProviderHealth[]>([]);
   const [testResponse, setTestResponse] = useState<string>('');
@@ -32,7 +34,7 @@ export const AIClientTest: React.FC<AIClientTestProps> = ({ className }) => {
       const health = await aiClient.getProviderHealth();
       setHealthData(health);
     } catch (err) {
-      console.error('Failed to initialize AI client:', err);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to initialize AI client:', err], method: 'console.error' });
       setError(err instanceof Error ? err.message : 'Initialization failed');
     } finally {
       setLoading(false);
@@ -56,7 +58,7 @@ export const AIClientTest: React.FC<AIClientTestProps> = ({ className }) => {
       const response = await aiClient.createCompletion(request);
       setTestResponse(response.content);
     } catch (err) {
-      console.error('Test completion failed:', err);
+      logger.error('Console error', undefined, { originalArgs: ['Test completion failed:', err], method: 'console.error' });
       setError(err instanceof Error ? err.message : 'Test failed');
     } finally {
       setLoading(false);

@@ -6,6 +6,10 @@
 
 import { contextBridge, ipcRenderer } from 'electron';
 // Import types from shared library instead of declaration file
+import { createLogger } from '../shared/logging/LoggerFactory';
+
+// Create logger instance for preload script
+const logger = createLogger('PreloadBackup');
 import type { 
   MailAccount, 
   MailFolder, 
@@ -882,8 +886,8 @@ contextBridge.exposeInMainWorld('searchAPI', flowDeskAPI.searchAPI);
 
 // Global type declaration is in src/types/global.d.ts
 
-console.log('Flow Desk preload script loaded successfully!');
-console.log('flowDesk API exposed to window:', !!window.flowDesk);
+logger.debug('Console log', undefined, { originalArgs: ['Flow Desk preload script loaded successfully!'], method: 'console.log' });
+logger.debug('Console log', undefined, { originalArgs: ['flowDesk API exposed to window:', !!window.flowDesk], method: 'console.log' });
 
 export type { 
   FlowDeskAPI, 

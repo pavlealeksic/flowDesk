@@ -456,45 +456,14 @@ export interface PluginAPI {
     createPanel(options: PanelOptions): Promise<Panel>;
   };
   
-  // Data API
+  // Data API (simplified - mail/calendar removed)
   data: {
-    // Mail API
-    mail: {
-      /** Get email accounts */
-      getAccounts(): Promise<any[]>;
-      /** Get messages */
-      getMessages(accountId: string, options?: any): Promise<any[]>;
-      /** Send message */
-      sendMessage(accountId: string, message: any): Promise<void>;
-      /** Search messages */
-      searchMessages(query: string, options?: any): Promise<any>;
-    };
-    // Calendar API
-    calendar: {
-      /** Get calendar accounts */
-      getAccounts(): Promise<any[]>;
-      /** Get events */
-      getEvents(accountId: string, options?: any): Promise<any[]>;
-      /** Create event */
-      createEvent(accountId: string, event: any): Promise<any>;
-      /** Update event */
-      updateEvent(eventId: string, updates: any): Promise<any>;
-      /** Delete event */
-      deleteEvent(eventId: string): Promise<void>;
-    };
-    // Contacts API
-    contacts: {
-      /** Get contacts */
-      getContacts(): Promise<any[]>;
-      /** Search contacts */
-      searchContacts(query: string): Promise<any[]>;
-    };
     // Files API
     files: {
       /** Read file */
       readFile(path: string): Promise<Buffer>;
       /** Write file */
-      writeFile(path: string, content: Buffer): Promise<void>;
+      writeFile(path: string, content: Buffer | string): Promise<void>;
       /** List directory */
       listDirectory(path: string): Promise<string[]>;
     };
@@ -508,26 +477,7 @@ export interface PluginAPI {
     websocket(url: string): Promise<WebSocket>;
   };
   
-  // Search API
-  search: {
-    /** Register search provider */
-    registerProvider(provider: SearchProvider): void;
-    /** Perform search */
-    search(query: string, options?: SearchOptions): Promise<SearchResult[]>;
-    /** Index content */
-    index(content: SearchableContent): Promise<void>;
-  };
-  
-  // Automation API
-  automation: {
-    /** Register trigger */
-    registerTrigger(trigger: TriggerDefinition): void;
-    /** Register action */
-    registerAction(action: ActionDefinition): void;
-    /** Execute automation */
-    execute(automationId: string, context: any): Promise<any>;
-  };
-  
+    
   // OAuth API
   oauth: {
     /** Start OAuth flow */
@@ -569,11 +519,20 @@ export interface NotificationOptions {
   body?: string;
   /** Notification icon */
   icon?: string;
+  /** Silent notification */
+  silent?: boolean;
+  /** Urgency level */
+  urgency?: 'low' | 'normal' | 'critical';
+  /** Timeout type */
+  timeoutType?: 'default' | 'never';
+  /** Click handler */
+  onClick?: () => void;
   /** Notification actions */
   actions?: Array<{
     action: string;
     title: string;
     icon?: string;
+    handler?: () => void;
   }>;
   /** Auto-hide timeout in ms */
   timeout?: number;
@@ -585,14 +544,26 @@ export interface NotificationOptions {
 export interface DialogOptions {
   /** Dialog title */
   title: string;
-  /** Dialog content (HTML or React component) */
-  content: string | any;
+  /** Dialog type */
+  type?: 'info' | 'warning' | 'error' | 'question' | 'open' | 'save';
+  /** Dialog message */
+  message?: string;
+  /** Dialog detail */
+  detail?: string;
   /** Dialog buttons */
-  buttons?: Array<{
-    label: string;
-    value: any;
-    variant?: 'primary' | 'secondary' | 'danger';
-  }>;
+  buttons?: string[];
+  /** Default button index */
+  defaultId?: number;
+  /** Cancel button index */
+  cancelId?: number;
+  /** Default path for file dialogs */
+  defaultPath?: string;
+  /** File filters for file dialogs */
+  filters?: Array<{ name: string; extensions: string[] }>;
+  /** Properties for open dialogs */
+  properties?: string[];
+  /** Dialog content (HTML or React component) */
+  content?: string | any;
   /** Dialog size */
   size?: 'small' | 'medium' | 'large';
   /** Whether dialog is modal */
@@ -821,10 +792,61 @@ export interface OAuthTokens {
   refreshToken?: string;
   /** Token expiry */
   expiresAt?: Date;
+  /** Token expires in seconds */
+  expiresIn?: number;
   /** Token type */
   tokenType: string;
   /** Token scope */
   scope?: string;
+}
+
+/**
+ * Plugin marketplace types
+ */
+export interface PluginMarketplaceListing {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  author: string;
+  category: PluginCategory;
+  tags: string[];
+  downloadCount: number;
+  rating: number;
+  ratingCount: number;
+  featured: boolean;
+  verified: boolean;
+  lastUpdated: Date;
+  screenshots?: string[];
+  iconUrl?: string;
+  manifest?: PluginManifest;
+}
+
+export interface PluginRating {
+  id: string;
+  pluginId: string;
+  userId: string;
+  rating: number;
+  comment?: string;
+  createdAt: Date;
+  helpful: number;
+}
+
+export interface PluginLicense {
+  type: string;
+  name: string;
+  url?: string;
+  text?: string;
+}
+
+export interface PluginDownloadInfo {
+  pluginId: string;
+  version: string;
+  downloadUrl: string;
+  checksum: string;
+  size: number;
+  format: 'tar.gz' | 'zip';
+  headers?: Record<string, string>;
 }
 
 // Zod schemas for runtime validation

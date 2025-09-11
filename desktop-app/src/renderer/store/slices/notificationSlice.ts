@@ -193,4 +193,5 @@ export const {
   clearError
 } = notificationSlice.actions
 
+export { type NotificationState }
 export default notificationSlice.reducer

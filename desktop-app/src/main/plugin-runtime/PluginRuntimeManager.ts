@@ -84,7 +84,7 @@ export class PluginRuntimeManager extends EventEmitter {
     
     // Initialize core components
     this.eventBus = new PluginEventBus();
-    this.securityManager = new PluginSecurityManager(config.security);
+    this.securityManager = new PluginSecurityManager({...config.security, auditLogging: true});
     this.storageManager = new PluginStorageManager(config.userDataDir);
     this.sandboxManager = new PluginSandboxManager(this.securityManager);
     this.lifecycleManager = new PluginLifecycleManager(
@@ -410,6 +410,34 @@ export class PluginRuntimeManager extends EventEmitter {
   }
 
   /**
+   * Get marketplace manager for plugin installation
+   */
+  getMarketplaceManager(): any {
+    return this.lifecycleManager;
+  }
+
+  /**
+   * Get storage manager for plugin data
+   */
+  getStorageManager(): PluginStorageManager {
+    return this.storageManager;
+  }
+
+  /**
+   * Get security manager for plugin security
+   */
+  getSecurityManager(): PluginSecurityManager {
+    return this.securityManager;
+  }
+
+  /**
+   * Get main window reference
+   */
+  getMainWindow(): BrowserWindow | undefined {
+    return this.mainWindow;
+  }
+
+  /**
    * Private: Discover installed plugins
    */
   private async discoverInstalledPlugins(): Promise<void> {
@@ -515,12 +543,12 @@ export class PluginRuntimeManager extends EventEmitter {
       user: {
         id: installation.userId,
         email: await this.getUserEmail(installation.userId),
-        name: await this.getUserName(installation.userId)
+        name: await this.getUserName(installation.userId),
         preferences: {}
       },
       workspace: installation.workspaceId ? {
         id: installation.workspaceId,
-        name: await this.getWorkspaceName(installation.workspaceId)
+        name: await this.getWorkspaceName(installation.workspaceId),
         settings: {}
       } : undefined,
       platform: {
@@ -575,7 +603,7 @@ export class PluginRuntimeManager extends EventEmitter {
     });
 
     this.eventBus.on('plugin:log', (installationId: string, level: string, message: string) => {
-      this.logger.log(level, `[${installationId}] ${message}`);
+      this.logger.log(level as any, `[${installationId}] ${message}`);
     });
   }
 }

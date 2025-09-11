@@ -7,12 +7,15 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { ConfigBackup } from '../../../types/preload';
+import type { ConfigBackup } from '@flow-desk/shared';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { useConfigSync } from '../../hooks/useConfigSync';
 import { cn } from '../ui/utils';
+import { useLogger } from '../../logging/RendererLoggingService';
+
+const logger = useLogger('EnhancedConfigSyncPanel');
 
 interface ConfigSyncPanelProps {
   className?: string;
@@ -54,7 +57,7 @@ export function EnhancedConfigSyncPanel({ className }: ConfigSyncPanelProps) {
   useEffect(() => {
     const updateRealTimeStatus = async () => {
       try {
-        const status = await window.flowDesk.invoke<any>('config-sync:get-detailed-status');
+        const status = await (window.flowDesk as any)?.invoke('config-sync:get-detailed-status');
         if (status) {
           setRealTimeStatus({
             status: status.currentStatus || 'idle',
@@ -91,7 +94,7 @@ export function EnhancedConfigSyncPanel({ className }: ConfigSyncPanelProps) {
           ]);
         }
       } catch (error) {
-        console.error('Failed to get real-time sync status:', error);
+        logger.error('Console error', undefined, { originalArgs: ['Failed to get real-time sync status:', error], method: 'console.error' });
         setRealTimeStatus(prev => ({ ...prev, status: 'error' }));
       }
     };
@@ -138,9 +141,9 @@ export function EnhancedConfigSyncPanel({ className }: ConfigSyncPanelProps) {
   const loadBackups = async () => {
     try {
       const backupList = await actions.listBackups();
-      setBackups(backupList);
+      setBackups(backupList as any);
     } catch (error) {
-      console.error('Failed to load backups:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to load backups:', error], method: 'console.error' });
     }
   };
 
@@ -186,7 +189,7 @@ export function EnhancedConfigSyncPanel({ className }: ConfigSyncPanelProps) {
       setShowQrCode(true);
       setQrExpiryTime(new Date(Date.now() + 5 * 60 * 1000)); // 5 minutes from now
     } catch (error) {
-      console.error('Failed to generate QR code:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to generate QR code:', error], method: 'console.error' });
     }
   };
 
@@ -198,7 +201,7 @@ export function EnhancedConfigSyncPanel({ className }: ConfigSyncPanelProps) {
         await loadBackups();
       }
     } catch (error) {
-      console.error('Failed to create backup:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to create backup:', error], method: 'console.error' });
     }
   };
 
@@ -208,16 +211,16 @@ export function EnhancedConfigSyncPanel({ className }: ConfigSyncPanelProps) {
         await actions.restoreBackup(backupId);
         await loadBackups();
       } catch (error) {
-        console.error('Failed to restore backup:', error);
+        logger.error('Console error', undefined, { originalArgs: ['Failed to restore backup:', error], method: 'console.error' });
       }
     }
   };
 
   const handleForceSync = async () => {
     try {
-      await window.flowDesk.invoke<void>('config-sync:force-sync');
+      await (window.flowDesk as any)?.invoke('config-sync:force-sync');
     } catch (error) {
-      console.error('Force sync failed:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Force sync failed:', error], method: 'console.error' });
     }
   };
 
@@ -590,7 +593,7 @@ export function EnhancedConfigSyncPanel({ className }: ConfigSyncPanelProps) {
                     <div>
                       <p className="font-medium">{backup.description || `Backup ${index + 1}`}</p>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {new Date(backup.createdAt).toLocaleString()}
+                        {new Date(backup.timestamp).toLocaleString()}
                         {backup.size && ` • ${(backup.size / 1024).toFixed(1)}KB`}
                       </p>
                     </div>

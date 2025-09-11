@@ -6,6 +6,10 @@
 
 import { ipcRenderer } from 'electron';
 import type { LogEntry, LogContext, LogLevel } from '../types/logging';
+import { createLogger } from '../shared/logging/LoggerFactory';
+
+// Create logger for this component
+const logger = createLogger('PreloadLogger');
 
 export class PreloadLogger {
   private component: string;
@@ -60,7 +64,7 @@ export class PreloadLogger {
     try {
       ipcRenderer.invoke('logging:log', entry).catch((err) => {
         // Fallback to console if IPC fails
-        console.error('[PRELOAD LOGGER] Failed to send log to main:', err);
+        logger.error('Failed to send log to main process', err, { method: 'console.error' });
         this.fallbackConsoleLog(entry);
       });
     } catch (ipcError) {
@@ -82,20 +86,20 @@ export class PreloadLogger {
     
     switch (entry.level) {
       case 'error':
-        console.error(message);
+        logger.error('Fallback console error', new Error(message), { method: 'console.error' });
         if (entry.error?.stack) {
-          console.error(entry.error.stack);
+          logger.error('Fallback console error stack', new Error(entry.error.stack), { method: 'console.error' });
         }
         break;
       case 'warn':
-        console.warn(message);
+        logger.warn('Fallback console warning', undefined, { method: 'console.warn' });
         break;
       case 'info':
-        console.info(message);
+        logger.info('Fallback console info', undefined, { method: 'console.info' });
         break;
       case 'debug':
       case 'trace':
-        console.log(message);
+        logger.debug('Fallback console log', undefined, { method: 'console.log' });
         break;
     }
   }

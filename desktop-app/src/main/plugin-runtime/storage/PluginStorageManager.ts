@@ -230,6 +230,7 @@ export class PluginStorageManager extends EventEmitter {
   createPluginStorageAPI(installationId: string, pluginId: string): PluginStorageAPI {
     const store = this.getOrCreatePluginStore(installationId, pluginId);
     const logger = this.logger.child({ installationId, pluginId });
+    const manager = this;
 
     return {
       async get<T>(key: string): Promise<T | null> {
@@ -246,15 +247,15 @@ export class PluginStorageManager extends EventEmitter {
       async set<T>(key: string, value: T): Promise<void> {
         try {
           // Check storage limits
-          await this.checkStorageLimit(installationId, key, value);
+          await manager.checkStorageLimit(installationId, key, value);
           
           store.set(key, value);
           
           // Update storage usage
-          await this.updateStorageUsage(installationId);
+          await manager.updateStorageUsage(installationId);
           
           logger.debug(`Storage set: ${key}`, { valueType: typeof value });
-          this.emit('pluginDataChanged', installationId, key, value);
+          manager.emit('pluginDataChanged', installationId, key, value);
         } catch (error) {
           logger.error(`Failed to set storage value for key ${key}`, error);
           throw error;
@@ -266,10 +267,10 @@ export class PluginStorageManager extends EventEmitter {
           store.delete(key);
           
           // Update storage usage
-          await this.updateStorageUsage(installationId);
+          await manager.updateStorageUsage(installationId);
           
           logger.debug(`Storage remove: ${key}`);
-          this.emit('pluginDataChanged', installationId, key, undefined);
+          manager.emit('pluginDataChanged', installationId, key, undefined);
         } catch (error) {
           logger.error(`Failed to remove storage value for key ${key}`, error);
           throw error;
@@ -281,10 +282,10 @@ export class PluginStorageManager extends EventEmitter {
           store.clear();
           
           // Update storage usage
-          this.storageUsage.set(installationId, 0);
+          manager.storageUsage.set(installationId, 0);
           
           logger.debug('Storage cleared');
-          this.emit('pluginStorageCleared', installationId);
+          manager.emit('pluginStorageCleared', installationId);
         } catch (error) {
           logger.error('Failed to clear plugin storage', error);
           throw error;
@@ -306,7 +307,7 @@ export class PluginStorageManager extends EventEmitter {
 
       async getUsage(): Promise<number> {
         try {
-          const usage = this.storageUsage.get(installationId) || 0;
+          const usage = manager.storageUsage.get(installationId) || 0;
           logger.debug(`Storage usage: ${usage} bytes`);
           return usage;
         } catch (error) {
@@ -550,6 +551,65 @@ export class PluginStorageManager extends EventEmitter {
         `Current: ${Math.round(currentUsage / 1024 / 1024)}MB, ` +
         `Limit: ${this.options.maxStoragePerPlugin}MB`
       );
+    }
+  }
+
+  /**
+   * Get plugin storage value
+   */
+  get(pluginId: string, key: string): Promise<any> {
+    const store = this.getOrCreatePluginStore('', pluginId);
+    return Promise.resolve(store.get(key));
+  }
+
+  /**
+   * Set plugin storage value
+   */
+  set(pluginId: string, key: string, value: any): Promise<void> {
+    const store = this.getOrCreatePluginStore('', pluginId);
+    store.set(key, value);
+    return Promise.resolve();
+  }
+
+  /**
+   * Get all keys for a plugin
+   */
+  getKeys(pluginId: string): Promise<string[]> {
+    const store = this.getOrCreatePluginStore('', pluginId);
+    const data = store.store;
+    return Promise.resolve(Object.keys(data));
+  }
+
+  /**
+   * Get storage usage for a plugin
+   */
+  getUsage(pluginId: string): Promise<number> {
+    return Promise.resolve(this.storageUsage.get(pluginId) || 0);
+  }
+
+  /**
+   * Get user data by user ID
+   */
+  async getUserData(userId: string): Promise<any> {
+    try {
+      const userStore = new Store({ name: `user-${userId}` });
+      return userStore.get('profile', null);
+    } catch (error) {
+      this.logger.warn(`Failed to get user data for ${userId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Get workspace data by workspace ID
+   */
+  async getWorkspaceData(workspaceId: string): Promise<any> {
+    try {
+      const workspaceStore = new Store({ name: `workspace-${workspaceId}` });
+      return workspaceStore.get('metadata', null);
+    } catch (error) {
+      this.logger.warn(`Failed to get workspace data for ${workspaceId}:`, error);
+      return null;
     }
   }
 }

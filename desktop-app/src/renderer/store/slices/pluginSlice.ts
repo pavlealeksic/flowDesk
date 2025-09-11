@@ -103,4 +103,5 @@ export const {
   clearError
 } = pluginSlice.actions
 
+export { type PluginState }
 export default pluginSlice.reducer

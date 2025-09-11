@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { useAppDispatch } from '../store'
 import { updateComponentPerformance, updateWebVitals } from '../store/slices/performanceSlice'
+import { useLogger } from '../logging/RendererLoggingService';
 
 // Performance monitoring - only active in development
 const isDev = process.env.NODE_ENV === 'development'
@@ -35,6 +36,7 @@ interface UsePerformanceMonitorOptions {
 export const usePerformanceMonitor = (options: UsePerformanceMonitorOptions) => {
   const { componentName, enabled = isDev, logToConsole = isDev } = options
   const dispatch = useAppDispatch()
+  const logger = useLogger('usePerformanceMonitor')
   const startTimeRef = useRef<number>(0)
   const renderCountRef = useRef<number>(0)
   const [webVitals, setWebVitals] = useState<Partial<PerformanceMetrics>>({})
@@ -128,11 +130,11 @@ export const usePerformanceMonitor = (options: UsePerformanceMonitorOptions) => 
       
       if (logToConsole && renderCountRef.current === 1) {
         console.group(`⚡ Performance Metrics - ${componentName}`)
-        console.log(`Component load time: ${loadTime.toFixed(2)}ms`)
-        console.log(`Re-render count: ${renderCountRef.current}`)
+        logger.debug('Console log', undefined, { originalArgs: [`Component load time: ${loadTime.toFixed(2)}ms`], method: 'console.log' })
+        logger.debug('Console log', undefined, { originalArgs: [`Re-render count: ${renderCountRef.current}`], method: 'console.log' })
         
-        if (webVitals.fcp) console.log(`FCP: ${webVitals.fcp.toFixed(2)}ms`)
-        if (webVitals.lcp) console.log(`LCP: ${webVitals.lcp.toFixed(2)}ms`)
+        if (webVitals.fcp) logger.debug('Console log', undefined, { originalArgs: [`FCP: ${webVitals.fcp.toFixed(2)}ms`], method: 'console.log' })
+        if (webVitals.lcp) logger.debug('Console log', undefined, { originalArgs: [`LCP: ${webVitals.lcp.toFixed(2)}ms`], method: 'console.log' })
         
         console.groupEnd()
       }
@@ -159,7 +161,7 @@ export const usePerformanceMonitor = (options: UsePerformanceMonitorOptions) => 
 
     if (issues.length > 0) {
       console.group(`🚨 Performance Issues - ${componentName}`)
-      issues.forEach(issue => console.warn(issue))
+      issues.forEach(issue => logger.warn('Console warning', undefined, { originalArgs: [issue], method: 'console.warn' }))
       console.groupEnd()
     }
   }, [enabled, componentName, webVitals])
@@ -179,7 +181,7 @@ export const usePerformanceMonitor = (options: UsePerformanceMonitorOptions) => 
         metricsRef.current.renderTime = renderTime
         
         if (logToConsole && renderTime > 16) {
-          console.warn(`🎨 Slow render for ${componentName}: ${renderTime.toFixed(2)}ms`)
+          logger.warn('Console warning', undefined, { originalArgs: [`🎨 Slow render for ${componentName}: ${renderTime.toFixed(2)}ms`], method: 'console.warn' })
         }
       }
     },

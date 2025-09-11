@@ -1,4 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import { useLogger } from '../logging/RendererLoggingService';
+
+const logger = useLogger('AccessibilityContext');
 
 // Accessibility settings interface
 interface AccessibilitySettings {
@@ -17,6 +20,7 @@ interface AccessibilitySettings {
   voiceNavigation: boolean;
   stickyKeys: boolean;
   soundFeedback: boolean;
+  settingsLoaded: boolean;
 }
 
 // Accessibility actions
@@ -39,6 +43,7 @@ type AccessibilityAction =
 
 // Default accessibility settings
 const defaultSettings: AccessibilitySettings = {
+  settingsLoaded: false,
   highContrast: false,
   textScaling: 1.0,
   textScale: 1.0,
@@ -129,8 +134,15 @@ function accessibilityReducer(state: AccessibilitySettings, action: Accessibilit
     case 'RESET_SETTINGS':
       return defaultSettings;
     case 'LOAD_FROM_SYSTEM':
-      // Load system accessibility preferences - implementation would depend on platform APIs
-      return state; // For now, just return current state
+      // Load system accessibility preferences based on platform
+      try {
+        // Note: System settings loading should be done outside the reducer
+        // For now, return current state
+        return { ...state, settingsLoaded: true };
+      } catch (error) {
+        console.warn('Failed to load system accessibility settings:', error);
+        return { ...state, settingsLoaded: false };
+      }
     default:
       return state;
   }
@@ -180,7 +192,7 @@ export function AccessibilityProvider({ children }: AccessibilityProviderProps) 
           }
         });
       } catch (e) {
-        console.warn('Failed to load accessibility settings:', e);
+        logger.warn('Console warning', undefined, { originalArgs: ['Failed to load accessibility settings:', e], method: 'console.warn' });
       }
     }
   }, []);
@@ -226,6 +238,30 @@ export function AccessibilityProvider({ children }: AccessibilityProviderProps) 
 
   const updateSetting = (action: AccessibilityAction) => {
     dispatch(action);
+  };
+
+  // Load system accessibility settings
+  const loadSystemAccessibilitySettings = async (): Promise<Partial<AccessibilitySettings>> => {
+    try {
+      // Platform-specific system accessibility settings
+      const systemSettings: Partial<AccessibilitySettings> = {};
+      
+      // Check system preferences (platform-dependent)
+      if (window.matchMedia) {
+        systemSettings.highContrast = window.matchMedia('(prefers-contrast: high)').matches;
+        systemSettings.reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        systemSettings.screenReader = window.matchMedia('(prefers-contrast: more)').matches;
+      }
+      
+      // Additional system detection could be added here
+      // For example, detecting OS-level accessibility features
+      
+      logger.info('Loaded system accessibility settings', systemSettings);
+      return systemSettings;
+    } catch (error) {
+      logger.error('Failed to load system accessibility settings:', error as Error);
+      throw error;
+    }
   };
 
   // Create actions object

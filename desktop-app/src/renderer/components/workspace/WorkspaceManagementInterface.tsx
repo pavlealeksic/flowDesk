@@ -23,6 +23,9 @@ import { cn } from '../ui/utils'
 import { useNotifications } from '../ui/NotificationSystem'
 import { SmartLoading } from '../ui/LoadingStates'
 import type { Workspace, WorkspaceService } from '../../../types/preload'
+import { useLogger } from '../../logging/RendererLoggingService';
+
+const logger = useLogger('WorkspaceManagementInterface');
 
 interface ServiceStatus {
   id: string
@@ -254,14 +257,9 @@ const CreateWorkspaceModal: React.FC<{
       name: name.trim(),
       description: description.trim() || undefined,
       services: [],
-      settings: {
-        theme: 'system',
-        notifications: true,
-        privacy: {
-          shareUsage: false,
-          allowTracking: false
-        }
-      }
+      color: '#3b82f6',
+      abbreviation: name.trim().charAt(0).toUpperCase(),
+      isActive: true
     })
     
     setName('')
@@ -505,7 +503,7 @@ export const WorkspaceManagementInterface: React.FC<WorkspaceManagementInterface
                   onSelect={() => onWorkspaceSelect(workspace.id)}
                   onEdit={() => {
                     // TODO: Implement edit modal
-                    console.log('Edit workspace:', workspace.id)
+                    logger.debug('Console log', undefined, { originalArgs: ['Edit workspace:', workspace.id], method: 'console.log' })
                   }}
                   onDelete={() => handleWorkspaceDelete(workspace.id)}
                   onDuplicate={() => handleWorkspaceDuplicate(workspace.id)}

@@ -15,6 +15,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
+import { useLogger } from '../../logging/RendererLoggingService';
 
 export interface AIProviderConfig {
   id: string;
@@ -53,6 +54,7 @@ export const AISettingsPanel: React.FC<AISettingsPanelProps> = ({
   onRefreshProviders,
   isLoading,
 }) => {
+  const logger = useLogger('AI-Settings');
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
   const [testingProviders, setTestingProviders] = useState<Set<string>>(new Set());
@@ -86,7 +88,7 @@ export const AISettingsPanel: React.FC<AISettingsPanelProps> = ({
         [providerId]: ''
       }));
     } catch (error) {
-      console.error('Failed to save API key:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to save API key:', error], method: 'console.error' });
     } finally {
       setSavingProviders(prev => {
         const newSet = new Set(prev);
@@ -104,7 +106,7 @@ export const AISettingsPanel: React.FC<AISettingsPanelProps> = ({
     try {
       await onDeleteApiKey(providerId);
     } catch (error) {
-      console.error('Failed to delete API key:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to delete API key:', error], method: 'console.error' });
     }
   };
 
@@ -113,9 +115,9 @@ export const AISettingsPanel: React.FC<AISettingsPanelProps> = ({
     
     try {
       const isHealthy = await onTestProvider(providerId);
-      console.log(`Provider ${providerId} test result:`, isHealthy);
+      logger.debug('Console log', undefined, { originalArgs: [`Provider ${providerId} test result:`, isHealthy], method: 'console.log' });
     } catch (error) {
-      console.error('Failed to test provider:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to test provider:', error], method: 'console.error' });
     } finally {
       setTestingProviders(prev => {
         const newSet = new Set(prev);

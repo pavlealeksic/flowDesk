@@ -28,6 +28,10 @@ export interface ConfigSyncOptions {
 
 export interface DeviceInfo {
   /** Unique device identifier */
+  id: string;
+  /** Device name (alias for deviceName) */
+  name: string;
+  /** Unique device identifier */
   deviceId: string;
   /** Human-readable device name */
   deviceName: string;
@@ -105,6 +109,7 @@ export class ConfigSyncEngine extends EventEmitter {
   private initialized = false;
   private rustHandle?: any; // Native binding handle
   private currentConfig?: WorkspaceConfig;
+  private pairedDevices = new Map<string, SyncDevice>();
   private syncState: SyncState = {
     status: 'idle',
     lastSync: undefined,
@@ -143,6 +148,9 @@ export class ConfigSyncEngine extends EventEmitter {
         this.currentConfig = config;
       }
 
+      // Load paired devices
+      await this.loadPairedDevices();
+      
       // Initialize transports
       await this.initializeTransports();
 
@@ -352,6 +360,60 @@ export class ConfigSyncEngine extends EventEmitter {
     }
   }
 
+  // Helper methods for device management
+  private generatePairingToken(): string {
+    const crypto = require('crypto');
+    return crypto.randomBytes(32).toString('hex');
+  }
+
+  private generateEncryptionKey(): string {
+    const crypto = require('crypto');
+    return crypto.randomBytes(32).toString('hex');
+  }
+
+  private async savePairedDevices(): Promise<void> {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      
+      const dataDir = path.dirname(this.options.storageConfig.baseDirectory);
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+      
+      const devicesPath = path.join(dataDir, 'paired-devices.json');
+      const devicesData = Array.from(this.pairedDevices.values());
+      
+      fs.writeFileSync(devicesPath, JSON.stringify(devicesData, null, 2));
+    } catch (error) {
+      if (this.options.debug) {
+        console.warn('Failed to save paired devices:', error);
+      }
+    }
+  }
+
+  private async loadPairedDevices(): Promise<void> {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      
+      const devicesPath = path.join(path.dirname(this.options.storageConfig.baseDirectory), 'paired-devices.json');
+      if (fs.existsSync(devicesPath)) {
+        const content = fs.readFileSync(devicesPath, 'utf8');
+        const devicesData = JSON.parse(content);
+        
+        this.pairedDevices.clear();
+        devicesData.forEach((device: SyncDevice) => {
+          this.pairedDevices.set(device.id, device);
+        });
+      }
+    } catch (error) {
+      if (this.options.debug) {
+        console.warn('Failed to load paired devices:', error);
+      }
+    }
+  }
+
   private async initializeTransports(): Promise<void> {
     // Initialize default transports based on platform
     const platform = this.options.deviceInfo.platform.os;
@@ -457,16 +519,54 @@ export class ConfigSyncEngine extends EventEmitter {
   }
 
   private async rustPairWithDevice(qrData: string): Promise<SyncDevice> {
-    // Call Rust method to pair with device
-    throw new Error('Not implemented');
+    // Implement device pairing logic
+    try {
+      const pairingData = JSON.parse(atob(qrData));
+      
+      // Validate pairing data
+      if (!pairingData.id || !pairingData.name) {
+        throw new Error('Invalid pairing data');
+      }
+
+      // Generate a secure pairing token
+      const pairingToken = this.generatePairingToken();
+      
+      // Create device record
+      const device: SyncDevice = {
+        id: pairingData.id,
+        name: pairingData.name,
+        platform: {
+          os: pairingData.platform || process.platform,
+          version: pairingData.version || '',
+          arch: process.arch
+        },
+        lastSeen: new Date(),
+        status: 'paired',
+        type: 'desktop',
+        publicKey: pairingData.publicKey || '',
+        trusted: false,
+        capabilities: pairingData.capabilities || ['config-sync'],
+        encryptionKey: this.generateEncryptionKey(),
+      };
+
+      // Store device information
+      this.pairedDevices.set(pairingData.id, device);
+      
+      // Save to persistent storage
+      await this.savePairedDevices();
+      
+      return device;
+    } catch (error) {
+      throw new Error(`Failed to pair with device: ${(error as Error).message}`);
+    }
   }
 
   private async rustGeneratePairingQR(): Promise<string> {
     // Call Rust method to generate pairing QR
     return JSON.stringify({
       type: 'flowdesk_pairing',
-      deviceId: this.options.deviceInfo.deviceId,
-      deviceName: this.options.deviceInfo.deviceName,
+      id: this.options.deviceInfo.id,
+      name: this.options.deviceInfo.name,
     });
   }
 
@@ -502,8 +602,32 @@ export class ConfigSyncEngine extends EventEmitter {
   }
 
   private async rustImportConfig(filePath: string): Promise<WorkspaceConfig> {
-    // Call Rust method to import config
-    throw new Error('Not implemented');
+    // Implement config import logic
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`Config file not found: ${filePath}`);
+      }
+
+      const content = fs.readFileSync(filePath, 'utf8');
+      const configData = JSON.parse(content);
+      
+      // Validate imported config
+      const validatedConfig = await this.rustValidateConfig(configData);
+      
+      if (!validatedConfig.valid) {
+        throw new Error(`Invalid config: ${validatedConfig.errors.join(', ')}`);
+      }
+
+      // Save imported config
+      await this.rustUpdateConfig(configData);
+      
+      return configData;
+    } catch (error) {
+      throw new Error(`Failed to import config: ${(error as Error).message}`);
+    }
   }
 
   private async rustValidateConfig(config: WorkspaceConfig): Promise<ConfigValidationResult> {

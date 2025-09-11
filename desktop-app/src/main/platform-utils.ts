@@ -9,7 +9,10 @@ import { app } from 'electron';
 import { join } from 'path';
 import { promises as fs, constants } from 'fs';
 import { platform, arch, homedir, networkInterfaces } from 'os';
-import log from 'electron-log';
+import { createLogger } from '../shared/logging/LoggerFactory';
+
+// Create logger for this module
+const logger = createLogger('PlatformUtils');
 
 export interface PlatformInfo {
   platform: NodeJS.Platform;
@@ -206,7 +209,7 @@ export async function setFilePermissions(filePath: string, type: 'file' | 'direc
     const permissions = getFilePermissions(type);
     await fs.chmod(filePath, permissions);
   } catch (error) {
-    log.warn(`Failed to set permissions for ${filePath}:`, error);
+    logger.warn(`Failed to set permissions for ${filePath}`, error as any, { method: 'electron-log.warn' });
   }
 }
 
@@ -266,21 +269,105 @@ function getPlatformDnsServers(): string[] {
   // Default fallback DNS servers
   const fallbackServers = ['8.8.8.8', '8.8.4.4', '1.1.1.1'];
   
-  // TODO: Implement platform-specific DNS detection
-  // This would require additional platform-specific modules
-  
-  switch (platform) {
-    case 'win32':
-      // Could use 'ipconfig /all' parsing
-      return fallbackServers;
-    case 'darwin':
-      // Could use 'scutil --dns' parsing
-      return fallbackServers;
-    case 'linux':
-      // Could parse /etc/resolv.conf
-      return fallbackServers;
-    default:
-      return fallbackServers;
+  try {
+    switch (platform) {
+      case 'win32':
+        return getWindowsDnsServers() || fallbackServers;
+      case 'darwin':
+        return getMacDnsServers() || fallbackServers;
+      case 'linux':
+        return getLinuxDnsServers() || fallbackServers;
+      default:
+        return fallbackServers;
+    }
+  } catch (error) {
+    logger.warn('Failed to detect DNS servers, using fallback', error as any, { method: 'console.warn' });
+    return fallbackServers;
+  }
+}
+
+/**
+ * Windows DNS detection using ipconfig
+ */
+function getWindowsDnsServers(): string[] | null {
+  try {
+    const { execSync } = require('child_process');
+    const output = execSync('ipconfig /all', { encoding: 'utf8' });
+    
+    const dnsServers: string[] = [];
+    const lines = output.split('\n');
+    
+    for (const line of lines) {
+      const match = line.match(/DNS Servers[\.:\s]+(\d+\.\d+\.\d+\.\d+)/);
+      if (match) {
+        dnsServers.push(match[1]);
+      }
+    }
+    
+    return dnsServers.length > 0 ? dnsServers : null;
+  } catch (error) {
+    logger.warn('Failed to get Windows DNS servers', error as any, { method: 'console.warn' });
+    return null;
+  }
+}
+
+/**
+ * macOS DNS detection using scutil
+ */
+function getMacDnsServers(): string[] | null {
+  try {
+    const { execSync } = require('child_process');
+    const output = execSync('scutil --dns', { encoding: 'utf8' });
+    
+    const dnsServers: string[] = [];
+    const lines = output.split('\n');
+    
+    for (const line of lines) {
+      const match = line.match(/nameserver\[\d+\]: (\d+\.\d+\.\d+\.\d+)/);
+      if (match) {
+        dnsServers.push(match[1]);
+      }
+    }
+    
+    // Remove duplicates and return unique servers
+    const uniqueServers = [...Array.from(new Set(dnsServers))];
+    return uniqueServers.length > 0 ? uniqueServers : null;
+  } catch (error) {
+    logger.warn('Failed to get macOS DNS servers', error as any, { method: 'console.warn' });
+    return null;
+  }
+}
+
+/**
+ * Linux DNS detection using resolv.conf
+ */
+function getLinuxDnsServers(): string[] | null {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    
+    const resolvConfPath = '/etc/resolv.conf';
+    if (!fs.existsSync(resolvConfPath)) {
+      return null;
+    }
+    
+    const content = fs.readFileSync(resolvConfPath, 'utf8');
+    const dnsServers: string[] = [];
+    
+    const lines = content.split('\n');
+    for (const line of lines) {
+      const match = line.match(/^\s*nameserver\s+(\d+\.\d+\.\d+\.\d+)/);
+      if (match) {
+        dnsServers.push(match[1]);
+      }
+    }
+    
+    // Remove duplicates and return unique servers
+    const uniqueServers = [...Array.from(new Set(dnsServers))];
+    return uniqueServers.length > 0 ? uniqueServers : null;
+  } catch (error) {
+    logger.warn('Failed to get Linux DNS servers', error as any, { method: 'console.warn' });
+    return null;
   }
 }
 
@@ -306,7 +393,7 @@ function detectSystemProxy(): ProxySettings | undefined {
         } : undefined
       };
     } catch (error) {
-      log.warn('Failed to parse proxy URL:', error);
+      logger.warn('Failed to parse proxy URL', error as any, { method: 'electron-log.warn' });
     }
   }
   

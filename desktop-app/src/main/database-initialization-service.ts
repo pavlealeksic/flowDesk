@@ -124,17 +124,14 @@ export class DatabaseInitializationService {
         return true;
       }
 
-      // Step 3: Initialize mail database
-      await this.initializeMailDatabase();
-      this.updateProgress('mail', 40, 'Mail database initialized');
+      // Step 3: Skip mail database (removed)  
+      this.updateProgress('mail', 40, 'Mail database skipped (removed)');
 
-      // Step 4: Initialize calendar database  
-      await this.initializeCalendarDatabase();
-      this.updateProgress('calendar', 65, 'Calendar database initialized');
+      // Step 4: Skip calendar database (removed)
+      this.updateProgress('calendar', 65, 'Calendar database skipped (removed)');
 
-      // Step 5: Initialize search index
-      await this.initializeSearchIndex();
-      this.updateProgress('search', 80, 'Search index initialized');
+      // Step 5: Skip search index (removed)
+      this.updateProgress('search', 80, 'Search index skipped (removed)');
 
       // Step 6: Run migrations if needed
       await this.runMigrations();
@@ -301,33 +298,7 @@ export class DatabaseInitializationService {
     }
   }
 
-  /**
-   * Initialize search index
-   */
-  private async initializeSearchIndex(): Promise<void> {
-    if (existsSync(this.config.searchIndexPath)) {
-      log.debug('Search index already exists, skipping creation');
-      return;
-    }
-
-    log.info('Creating search index...');
-    
-    try {
-      const rustEngine = require('../lib/rust-engine');
-      
-      // Create search index
-      await this.executeDatabaseCommand('init_search_index', this.config.searchIndexPath);
-      
-      log.info('Search index created successfully');
-    } catch (error) {
-      log.error('Failed to create search index via Rust:', error);
-      
-      // Create basic directory structure for Tantivy index
-      await fs.mkdir(this.config.searchIndexPath, { recursive: true });
-      log.info('Created search index directory as fallback');
-    }
-  }
-
+  
   /**
    * Execute database initialization command via CLI
    */
@@ -431,26 +402,10 @@ export class DatabaseInitializationService {
   private async validateDatabases(): Promise<void> {
     log.info('Validating databases...');
 
-    const databases = [
-      { path: this.config.mailDbPath, type: 'mail' },
-      { path: this.config.calendarDbPath, type: 'calendar' }
-    ];
+    // Skip database validation - mail and calendar databases removed
+    log.debug('Database validation skipped - mail and calendar functionality removed');
 
-    for (const db of databases) {
-      try {
-        await this.validateSQLiteDatabase(db.path);
-        log.debug(`${db.type} database validation passed`);
-      } catch (error) {
-        throw new Error(`${db.type} database validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    }
-
-    // Validate search index
-    if (existsSync(this.config.searchIndexPath)) {
-      log.debug('Search index validation passed');
-    } else {
-      log.warn('Search index directory not found, may need recreation');
-    }
+    // Search index removed - no validation needed
   }
 
   /**
@@ -489,8 +444,7 @@ export class DatabaseInitializationService {
       version: this.config.schemaVersion,
       databases: {
         mail: this.config.mailDbPath,
-        calendar: this.config.calendarDbPath,
-        searchIndex: this.config.searchIndexPath
+        calendar: this.config.calendarDbPath
       },
       initializedAt: new Date().toISOString(),
       platform: process.platform,

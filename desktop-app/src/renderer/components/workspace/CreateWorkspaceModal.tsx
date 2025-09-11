@@ -6,6 +6,9 @@
 
 import React, { useState } from 'react';
 import { Button, Input, Card, cn } from '../ui';
+import { useLogger } from '../../logging/RendererLoggingService';
+
+const logger = useLogger('CreateWorkspaceModal');
 
 interface CreateWorkspaceModalProps {
   isOpen: boolean;
@@ -60,7 +63,7 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
       });
       onClose();
     } catch (error) {
-      console.error('Failed to create workspace:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to create workspace:', error], method: 'console.error' });
     } finally {
       setIsCreating(false);
     }
@@ -102,7 +105,7 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
               value={formData.name}
               onChange={(e) => {
                 const value = e.target.value;
-                console.log('Name changed to:', value);
+                logger.debug('Console log', undefined, { originalArgs: ['Name changed to:', value], method: 'console.log' });
                 setFormData(prev => ({ ...prev, name: value }));
               }}
               placeholder="e.g., Personal, Work, Project Alpha"
@@ -222,7 +225,7 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({
             <Button
               type="submit"
               disabled={!formData.name.trim() || isCreating}
-              onClick={() => console.log('Button clicked, formData.name:', formData.name, 'trimmed:', formData.name.trim())}
+              onClick={() => logger.debug('Console log', undefined, { originalArgs: ['Button clicked, formData.name:', formData.name, 'trimmed:', formData.name.trim()], method: 'console.log' })}
             >
               {isCreating ? 'Creating...' : 'Create Workspace'}
             </Button>

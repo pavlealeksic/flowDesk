@@ -40,6 +40,8 @@ export interface NotificationOptions {
     body?: string;
     icon?: string;
     silent?: boolean;
+    urgency?: 'low' | 'normal' | 'critical';
+    timeoutType?: 'default' | 'never';
     actions?: NotificationAction[];
 }
 
@@ -47,6 +49,7 @@ export interface NotificationAction {
     action: string;
     title: string;
     icon?: string;
+    handler?: () => void;
 }
 
 export interface SearchResult {
@@ -177,8 +180,6 @@ export interface FlowDeskAPI {
         clearData(id: string): Promise<void>;
         getWindows(id: string): Promise<any[]>;
         createWindow(options: any): Promise<number>;
-        hideBrowserViews?(): Promise<void>;
-        showBrowserViews?(): Promise<void>;
     };
 
     // Theme management
@@ -199,6 +200,8 @@ export interface FlowDeskAPI {
     browserView: {
         hide(): Promise<void>;
         show(): Promise<void>;
+        hideBrowserViews(): Promise<void>;
+        showBrowserViews(): Promise<void>;
     };
 
     // Generic invoke for IPC calls
@@ -238,9 +241,29 @@ export interface FlowDeskAPI {
 
     // Mail API (optional - removed but may be referenced)
     mail?: {
+        sendMail(options: any): Promise<void>;
+        getMailboxes(): Promise<any[]>;
+        getCurrentMailbox(): Promise<any>;
+        listMessages(mailboxId: string, options?: any): Promise<any[]>;
+        getMessage(messageId: string): Promise<any>;
+        deleteMessage(messageId: string): Promise<void>;
+        markAsRead(messageId: string): Promise<void>;
+        markAsUnread(messageId: string): Promise<void>;
+        moveMessage(messageId: string, mailboxId: string): Promise<void>;
         getAccounts(): Promise<any[]>;
         getMessages(): Promise<any[]>;
         sendMessage(data: any): Promise<void>;
+        getAllSnippets(): Promise<any[]>;
+        saveSnippet(data: any): Promise<any>;
+        updateSnippet(id: string, data: any): Promise<any>;
+        deleteSnippet(id: string): Promise<void>;
+        useSnippet(id: string): Promise<any>;
+        getTemplates(): Promise<any[]>;
+        getAllTemplates(): Promise<any[]>;
+        saveTemplate(data: any): Promise<any>;
+        getTemplate(id: string): Promise<any>;
+        updateTemplate(id: string, data: any): Promise<any>;
+        deleteTemplate(id: string): Promise<void>;
         [key: string]: any;
     };
 
@@ -253,9 +276,4 @@ export interface FlowDeskAPI {
     };
 }
 
-// Global window interface extension
-declare global {
-    interface Window {
-        flowDesk: FlowDeskAPI;
-    }
-}
+// Global window interface extension is now handled in preload.ts to avoid conflicts

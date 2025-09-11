@@ -21,6 +21,7 @@ import {
   MoreVertical
 } from '../ui'
 import { type BaseComponentProps, type WorkspaceInfo } from '../ui/types'
+import { useLogger } from '../../logging/RendererLoggingService';
 
 interface AppLauncherItem {
   id: string
@@ -225,6 +226,7 @@ export const LeftRail: React.FC<LeftRailProps> = ({
   const dispatch = useAppDispatch()
   const { workspaces, currentWorkspaceId } = useAppSelector(state => state.workspace)
   const [apps] = useState<AppLauncherItem[]>(defaultApps)
+  const logger = useLogger('LeftRail')
 
   // Convert workspace data to the format expected by WorkspaceSwitcher
   const workspaceList: WorkspaceInfo[] = Object.values(workspaces).map(ws => ({
@@ -243,12 +245,12 @@ export const LeftRail: React.FC<LeftRailProps> = ({
 
   const handleCreateWorkspace = () => {
     // Implement workspace creation logic
-    console.log('Create workspace')
+    logger.debug('Console log', undefined, { originalArgs: ['Create workspace'], method: 'console.log' })
   }
 
   const handleManageWorkspaces = () => {
     // Implement workspace management logic
-    console.log('Manage workspaces')
+    logger.debug('Console log', undefined, { originalArgs: ['Manage workspaces'], method: 'console.log' })
   }
 
   const handleAppSelect = (appId: string) => {

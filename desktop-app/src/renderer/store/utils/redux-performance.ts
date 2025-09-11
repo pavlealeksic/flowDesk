@@ -1,121 +1,101 @@
-import { createSelector } from '@reduxjs/toolkit'
+import { rendererLogger } from '../../logging/RendererLoggingService';
+import { createSelector } from '@reduxjs/toolkit';
 
-/**
- * Redux Performance Utilities
- * 
- * This module contains utilities to optimize Redux performance by:
- * 1. Normalizing state shape
- * 2. Creating efficient selectors
- * 3. Handling serialization properly
- * 4. Managing state updates efficiently
- */
-
-// Date serialization utilities
-export const serializeDate = (date: Date | string | null | undefined): string | null => {
-  if (!date) return null
-  if (typeof date === 'string') return date
-  return date.toISOString()
+// Performance metrics tracking
+interface PerformanceMetrics {
+  executionTime: number;
+  selectorCalls: number;
+  cacheHits: number;
+  cacheMisses: number;
+  averageExecutionTime: number;
 }
 
-export const deserializeDate = (dateString: string | null | undefined): Date | null => {
-  if (!dateString) return null
-  try {
-    return new Date(dateString)
-  } catch {
-    return null
-  }
-}
+const performanceMetrics = new Map<string, PerformanceMetrics>();
+const logger = rendererLogger;
 
-// State normalization utilities
-export interface NormalizedEntity {
-  id: string
-  [key: string]: unknown
-}
+// Time constants
+const SECOND = 1000;
+const MINUTE = 60 * SECOND;
+const HOUR = 60 * MINUTE;
 
-export interface NormalizedState<T extends NormalizedEntity> {
-  byId: Record<string, T>
-  allIds: string[]
-}
-
-export const normalizeArray = <T extends NormalizedEntity>(array: T[]): NormalizedState<T> => {
-  const byId: Record<string, T> = {}
-  const allIds: string[] = []
-
-  array.forEach((item) => {
-    byId[item.id] = item
-    allIds.push(item.id)
-  })
-
-  return { byId, allIds }
-}
-
-export const denormalizeState = <T extends NormalizedEntity>(
-  normalizedState: NormalizedState<T>
-): T[] => {
-  return normalizedState.allIds.map(id => normalizedState.byId[id]).filter(Boolean)
-}
-
-// Selector performance utilities
-export const createCachedSelector = <State, Result>(
-  selectors: ((state: State) => unknown)[],
-  resultFunc: (...args: unknown[]) => Result,
-  keySelector?: (state: State, ...args: unknown[]) => string
+// Create a performance-enhanced selector
+export const createPerformanceSelector = <State, Result>(
+  selector: (state: State) => Result,
+  selectorName: string
 ) => {
-  if (keySelector) {
-    return createSelector(selectors, resultFunc, {
-      memoizeOptions: {
-        resultEqualityCheck: (a, b) => a === b
+  let lastExecutionTime = 0;
+  let callCount = 0;
+  let totalTime = 0;
+
+  return (state: State): Result => {
+    const startTime = performance.now();
+    
+    try {
+      const result = selector(state);
+      
+      const endTime = performance.now();
+      const executionTime = endTime - startTime;
+      
+      // Update performance metrics
+      callCount++;
+      totalTime += executionTime;
+      lastExecutionTime = executionTime;
+      
+      const metrics = performanceMetrics.get(selectorName) || {
+        executionTime: 0,
+        selectorCalls: 0,
+        cacheHits: 0,
+        cacheMisses: 0,
+        averageExecutionTime: 0
+      };
+      
+      metrics.executionTime += executionTime;
+      metrics.selectorCalls++;
+      metrics.averageExecutionTime = metrics.executionTime / metrics.selectorCalls;
+      
+      performanceMetrics.set(selectorName, metrics);
+      
+      // Log slow selectors
+      if (executionTime > 16) {
+        logger.warn('Console warning', undefined, { originalArgs: [`Slow selector detected: ${selectorName} (${executionTime.toFixed(2)}ms)`], method: 'console.warn' });
       }
-    })
+      
+      return result;
+    } catch (error) {
+      logger.error('Console error', undefined, { originalArgs: [`Selector error in ${selectorName}:`, error], method: 'console.error' });
+      throw error;
+    }
   }
-  return createSelector(selectors, resultFunc)
-}
+};
 
-// Performance monitoring utilities
-export interface PerformanceMetrics {
-  selectorCalls: number
-  averageExecutionTime: number
-  lastExecutionTime: number
-}
+// Monitor performance over time
+export const startPerformanceMonitoring = (interval: number = 5000) => {
+  const intervalId = setInterval(() => {
+    const metrics = Array.from(performanceMetrics.entries());
+    
+    metrics.forEach(([selectorName, metrics]) => {
+      if (metrics.averageExecutionTime > 10 && metrics.selectorCalls > 5) {
+        logger.warn('Console warning', undefined, { originalArgs: [`Slow selector detected: ${selectorName} (avg: ${metrics.averageExecutionTime.toFixed(2)}ms)`], method: 'console.warn' });
+      }
+    });
+  }, interval);
+  
+  return intervalId;
+};
 
-const performanceMetrics = new Map<string, PerformanceMetrics>()
+// Get performance metrics for a specific selector
+export const getSelectorPerformance = (selectorName: string): PerformanceMetrics | undefined => {
+  return performanceMetrics.get(selectorName);
+};
 
-export const measureSelectorPerformance = <T>(
-  selectorName: string,
-  selector: () => T
-): T => {
-  const start = performance.now()
-  const result = selector()
-  const executionTime = performance.now() - start
-
-  const existing = performanceMetrics.get(selectorName) || {
-    selectorCalls: 0,
-    averageExecutionTime: 0,
-    lastExecutionTime: 0
-  }
-
-  const newMetrics: PerformanceMetrics = {
-    selectorCalls: existing.selectorCalls + 1,
-    averageExecutionTime: (existing.averageExecutionTime * existing.selectorCalls + executionTime) / (existing.selectorCalls + 1),
-    lastExecutionTime: executionTime
-  }
-
-  performanceMetrics.set(selectorName, newMetrics)
-
-  // Warn if selector is consistently slow
-  if (newMetrics.averageExecutionTime > 10 && newMetrics.selectorCalls > 5) {
-    console.warn(`Slow selector detected: ${selectorName} (avg: ${newMetrics.averageExecutionTime.toFixed(2)}ms)`)
-  }
-
-  return result
-}
-
+// Get all performance metrics
 export const getPerformanceMetrics = (): Map<string, PerformanceMetrics> => {
-  return new Map(performanceMetrics)
-}
+  return new Map(performanceMetrics);
+};
 
+// Clear performance metrics
 export const clearPerformanceMetrics = (): void => {
-  performanceMetrics.clear()
+  performanceMetrics.clear();
 }
 
 // Debounced action dispatcher
@@ -134,81 +114,110 @@ export const createDebouncedDispatch = (dispatch: (action: unknown) => void, del
   }
 }
 
-// Batched state updates
-export const createBatchedUpdater = <T>(
-  updateAction: (updates: T[]) => unknown,
-  batchSize: number = 10,
-  batchDelay: number = 100
+// Memoized action creator
+export const createMemoizedAction = <T extends (...args: any[]) => any>(
+  actionCreator: T,
+  memoize: (args: Parameters<T>) => boolean = () => true
 ) => {
-  let batch: T[] = []
-  let timeoutId: NodeJS.Timeout | null = null
+  const lastCall = new Map<string, { result: ReturnType<T>; timestamp: number }>();
 
-  const flush = (dispatch: (action: unknown) => void) => {
-    if (batch.length > 0) {
-      dispatch(updateAction([...batch]))
-      batch = []
-    }
-    if (timeoutId) {
-      clearTimeout(timeoutId)
-      timeoutId = null
-    }
-  }
+  return (...args: Parameters<T>): ReturnType<T> => {
+    const key = JSON.stringify(args);
+    const now = Date.now();
 
-  return (dispatch: (action: unknown) => void, update: T) => {
-    batch.push(update)
-
-    if (batch.length >= batchSize) {
-      flush(dispatch)
-    } else if (!timeoutId) {
-      timeoutId = setTimeout(() => flush(dispatch), batchDelay)
+    if (lastCall.has(key)) {
+      const { result, timestamp } = lastCall.get(key)!;
+      if (now - timestamp < 1000) { // Cache for 1 second
+        return result;
+      }
     }
+
+    const result = actionCreator(...args);
+    lastCall.set(key, { result, timestamp: now });
+
+    return result;
   }
 }
 
-// Memory leak detection utilities
-const stateHistory = new Map<string, { size: number, timestamp: number }>()
+// State size monitoring
+export const monitorStateSize = (state: unknown, sliceName: string) => {
+  const stateSize = JSON.stringify(state).length;
+  const warnings: string[] = [];
 
-export const trackStateSize = (sliceName: string, state: unknown): void => {
-  const size = JSON.stringify(state).length
-  const timestamp = Date.now()
-
-  stateHistory.set(sliceName, { size, timestamp })
-
-  // Clean old entries (keep last 100)
-  if (stateHistory.size > 100) {
-    const entries = Array.from(stateHistory.entries()).sort((a, b) => a[1].timestamp - b[1].timestamp)
-    const toRemove = entries.slice(0, entries.length - 100)
-    toRemove.forEach(([key]) => stateHistory.delete(key))
+  // Warn if state is larger than 5MB
+  if (stateSize > 5 * 1024 * 1024) {
+    warnings.push(`Large state detected in ${sliceName}: ${(stateSize / 1024 / 1024).toFixed(2)}MB`);
   }
+
+  return warnings;
 }
 
-export const detectMemoryLeaks = (): string[] => {
-  const warnings: string[] = []
-  const now = Date.now()
-  const HOUR = 60 * 60 * 1000
+// State history tracking
+interface StateEntry {
+  size: number;
+  timestamp: number;
+  data: unknown;
+}
 
-  stateHistory.forEach((entry, sliceName) => {
+const stateHistory = new Map<string, StateEntry[]>();
+
+export const trackStateHistory = (sliceName: string, state: unknown) => {
+  const now = Date.now();
+  const stateSize = JSON.stringify(state).length;
+
+  const entry: StateEntry = {
+    size: stateSize,
+    timestamp: now,
+    data: state
+  };
+
+  if (!stateHistory.has(sliceName)) {
+    stateHistory.set(sliceName, []);
+  }
+
+  const history = stateHistory.get(sliceName)!;
+  history.push(entry);
+
+  // Keep only last 100 entries
+  if (history.length > 100) {
+    history.shift();
+  }
+
+  // Analyze state patterns
+  const warnings: string[] = [];
+
+  stateHistory.forEach((entries, name) => {
     // Warn if state is larger than 5MB
-    if (entry.size > 5 * 1024 * 1024) {
-      warnings.push(`Large state detected in ${sliceName}: ${(entry.size / 1024 / 1024).toFixed(2)}MB`)
+    if (entries.length > 0 && entries[entries.length - 1].size > 5 * 1024 * 1024) {
+      warnings.push(`Large state detected in ${name}: ${(entries[entries.length - 1].size / 1024 / 1024).toFixed(2)}MB`);
     }
 
     // Warn if state size has been consistently growing
-    const recentEntries = Array.from(stateHistory.entries())
-      .filter(([_, e]) => now - e.timestamp < HOUR)
-      .filter(([name]) => name === sliceName)
+    const recentEntries = entries.filter(entry => now - entry.timestamp < HOUR);
 
     if (recentEntries.length > 10) {
-      const sizes = recentEntries.map(([_, e]) => e.size)
-      const isGrowing = sizes.every((size, index) => index === 0 || size >= sizes[index - 1])
+      const sizes = recentEntries.map(entry => entry.size);
+      const isGrowing = sizes.every((size, index) => index === 0 || size >= sizes[index - 1]);
       
       if (isGrowing) {
-        warnings.push(`Memory leak suspected in ${sliceName}: state size consistently growing`)
+        warnings.push(`Memory leak suspected in ${name}: state size consistently growing`);
       }
     }
-  })
+  });
 
-  return warnings
+  return warnings;
+}
+
+export const getStateHistory = (sliceName: string): StateEntry[] => {
+  return stateHistory.get(sliceName) || [];
+}
+
+export const clearStateHistory = (sliceName?: string): void => {
+  if (sliceName) {
+    stateHistory.delete(sliceName);
+  } else {
+    stateHistory.clear();
+  }
 }
 
 // Production optimizations
@@ -221,7 +230,7 @@ export const createProductionSelector = <State, Result>(
       return selector(state)
     } catch (error) {
       if (process.env.NODE_ENV !== 'production') {
-        console.error('Selector error:', error)
+        logger.error('Console error', undefined, { originalArgs: ['Selector error:', error], method: 'console.error' })
       }
       return fallback
     }

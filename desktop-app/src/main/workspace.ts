@@ -20,6 +20,19 @@ import { randomBytes } from 'crypto';
 import { join } from 'path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { LAYOUT_CONSTANTS } from './constants/layout';
+import { configManager } from './config/AppConfig';
+import { createLogger } from '../shared/logging/LoggerFactory';
+import type { WorkspaceService } from './workspace-manager-new';
+
+// Mock config manager for tests
+let testConfigManager: any = null;
+export const setTestConfigManager = (manager: any) => {
+  testConfigManager = manager;
+};
+
+export const getConfigManager = () => {
+  return testConfigManager || configManager;
+};
 
 /**
  * Configuration options for webview behavior within services
@@ -52,7 +65,7 @@ export interface WebviewOptions {
  * @property {Record<string, string>} [config.customHeaders] - Custom HTTP headers
  * @property {string} [config.userAgent] - Custom user agent string
  */
-export interface WorkspaceService {
+export interface LocalWorkspaceService {
   id: string;
   name: string;
   type: string;
@@ -120,7 +133,7 @@ export interface Workspace {
  * 
  * // Listen for workspace changes
  * workspaceManager.on('workspace-switched', (workspaceId) => {
- *   console.log(`Switched to workspace: ${workspaceId}`);
+ *   logger.debug('Console log', undefined, { originalArgs: [`Switched to workspace: ${workspaceId}`], method: 'console.log' });
  * });
  * 
  * // Create a new workspace
@@ -167,6 +180,13 @@ export class WorkspaceManager extends EventEmitter {
     this.dataPath = join(process.cwd(), 'data');
     this.ensureDataDirectory();
     this.loadWorkspacesFromDisk();
+    
+    // Set up memory monitoring if enabled
+    this.setupMemoryMonitoring();
+  }
+
+  private getConfigManager() {
+    return getConfigManager();
   }
 
   private ensureDataDirectory(): void {
@@ -184,12 +204,39 @@ export class WorkspaceManager extends EventEmitter {
       const filePath = this.getWorkspacesFilePath();
       if (existsSync(filePath)) {
         const data = JSON.parse(readFileSync(filePath, 'utf8'));
+        
+        // Validate workspace data structure
+        if (!Array.isArray(data)) {
+          throw new Error('Invalid workspaces data: expected array');
+        }
+        
         data.forEach((workspace: any) => {
-          // Convert date strings back to Date objects
-          workspace.created = new Date(workspace.created);
-          workspace.lastAccessed = new Date(workspace.lastAccessed);
-          this.workspaces.set(workspace.id, workspace);
+          // Validate required workspace fields
+          if (!workspace.id || !workspace.name) {
+            log.warn('Invalid workspace structure, skipping:', workspace);
+            return;
+          }
+          
+          // Convert date strings back to Date objects with validation
+          try {
+            workspace.created = workspace.created ? new Date(workspace.created) : new Date();
+            workspace.lastAccessed = workspace.lastAccessed ? new Date(workspace.lastAccessed) : new Date();
+            
+            // Validate dates are valid
+            if (isNaN(workspace.created.getTime()) || isNaN(workspace.lastAccessed.getTime())) {
+              throw new Error('Invalid date format in workspace data');
+            }
+            
+            this.workspaces.set(workspace.id, workspace);
+          } catch (dateError) {
+            log.warn('Failed to parse workspace dates:', workspace.id, dateError);
+            // Create fallback workspace with current date
+            workspace.created = new Date();
+            workspace.lastAccessed = new Date();
+            this.workspaces.set(workspace.id, workspace);
+          }
         });
+        
         log.info(`Loaded ${this.workspaces.size} workspaces from disk`);
       } else {
         // Create default workspace if none exist
@@ -197,6 +244,19 @@ export class WorkspaceManager extends EventEmitter {
       }
     } catch (error) {
       log.error('Failed to load workspaces from disk:', error);
+      
+      // Try to recover by backing up corrupted file and creating default
+      try {
+        const filePath = this.getWorkspacesFilePath();
+        if (existsSync(filePath)) {
+          const backupPath = filePath + '.corrupted.' + Date.now();
+          require('fs').copyFileSync(filePath, backupPath);
+          log.info('Backed up corrupted workspaces file to:', backupPath);
+        }
+      } catch (backupError) {
+        log.warn('Failed to backup corrupted workspaces file:', backupError);
+      }
+      
       // Create default workspace on error
       this.createDefaultWorkspace();
     }
@@ -221,13 +281,151 @@ export class WorkspaceManager extends EventEmitter {
     log.info('Created default workspace:', defaultWorkspace.name);
   }
 
+  private setupMemoryMonitoring(): void {
+    const memoryConfig = this.getConfigManager().getMemoryConfig();
+    
+    if (memoryConfig.enableMemoryMonitoring && memoryConfig.memoryMonitorInterval > 0) {
+      const interval = setInterval(() => {
+        this.checkMemoryUsage();
+      }, memoryConfig.memoryMonitorInterval);
+      
+      // Store interval ID for cleanup
+      (this as any).memoryMonitorInterval = interval;
+      
+      log.info('Memory monitoring started', { 
+        interval: memoryConfig.memoryMonitorInterval,
+        threshold: memoryConfig.memoryThresholdMB,
+        enableAutoCleanup: memoryConfig.enableAutoCleanup
+      });
+    }
+  }
+
+  private checkMemoryUsage(): void {
+    const memoryConfig = this.getConfigManager().getMemoryConfig();
+    
+    // Check web contents view count
+    const webContentsCount = this.webContentsViews.size;
+    if (webContentsCount > memoryConfig.maxWebContentsViews) {
+      log.warn(`Exceeding web contents view limit: ${webContentsCount} > ${memoryConfig.maxWebContentsViews}`);
+      
+      if (memoryConfig.enableAutoCleanup) {
+        this.cleanupInactiveWebContentsViews();
+      }
+    }
+    
+    // Additional memory monitoring could be added here
+    // For example: monitoring process memory usage
+  }
+
+  private cleanupInactiveWebContentsViews(): void {
+    // Remove oldest inactive web contents views
+    const viewsToClean = Array.from(this.webContentsViews.entries())
+      .filter(([_, view]) => view !== this.currentWebContentsView)
+      .slice(0, 2); // Remove up to 2 views
+    
+    for (const [serviceId, view] of viewsToClean) {
+      this.cleanupWebContentsView(serviceId);
+      log.info('Cleaned up inactive web contents view:', serviceId);
+    }
+  }
+
+  private cleanupWebContentsView(serviceId: string): void {
+    const webContentsView = this.webContentsViews.get(serviceId);
+    if (!webContentsView) {
+      log.debug('Web contents view not found for cleanup:', serviceId);
+      return;
+    }
+
+    try {
+      // Stop all ongoing operations
+      if (webContentsView.webContents && typeof webContentsView.webContents.stop === 'function') {
+        webContentsView.webContents.stop();
+        log.debug('Stopped web contents operations:', serviceId);
+      }
+
+      // Destroy web contents if available
+      if (webContentsView.webContents && 'destroy' in webContentsView.webContents) {
+        try {
+          (webContentsView.webContents as any).destroy();
+          log.debug('Destroyed web contents:', serviceId);
+        } catch (destroyError) {
+          log.warn('Failed to destroy web contents, continuing cleanup:', serviceId, destroyError);
+        }
+      }
+
+      // Remove from tracking
+      this.webContentsViews.delete(serviceId);
+      log.debug('Cleaned up web contents view:', serviceId);
+
+    } catch (error) {
+      log.error('Critical error during web contents cleanup:', serviceId, error);
+      
+      // Always remove from tracking even if cleanup fails to prevent memory leaks
+      try {
+        this.webContentsViews.delete(serviceId);
+        log.info('Force removed web contents view from tracking due to cleanup error:', serviceId);
+      } catch (cleanupError) {
+        log.error('Failed to remove web contents view from tracking:', serviceId, cleanupError);
+      }
+    }
+  }
+
   private saveWorkspacesToDisk(): void {
     try {
       const workspacesArray = Array.from(this.workspaces.values());
-      writeFileSync(this.getWorkspacesFilePath(), JSON.stringify(workspacesArray, null, 2));
-      log.info('Saved workspaces to disk');
+      
+      // Validate workspaces before saving
+      if (!Array.isArray(workspacesArray)) {
+        throw new Error('Invalid workspaces array: expected array');
+      }
+      
+      // Validate each workspace before saving
+      workspacesArray.forEach((workspace, index) => {
+        if (!workspace.id || !workspace.name) {
+          throw new Error(`Invalid workspace at index ${index}: missing required fields`);
+        }
+        
+        // Ensure dates are Date objects for serialization
+        if (workspace.created && !(workspace.created instanceof Date)) {
+          workspace.created = new Date(workspace.created);
+        }
+        if (workspace.lastAccessed && !(workspace.lastAccessed instanceof Date)) {
+          workspace.lastAccessed = new Date(workspace.lastAccessed);
+        }
+      });
+      
+      // Write to temporary file first to prevent data corruption
+      const tempPath = this.getWorkspacesFilePath() + '.tmp';
+      writeFileSync(tempPath, JSON.stringify(workspacesArray, null, 2));
+      
+      // Atomic rename operation
+      require('fs').renameSync(tempPath, this.getWorkspacesFilePath());
+      
+      log.info(`Saved ${workspacesArray.length} workspaces to disk`);
     } catch (error) {
       log.error('Failed to save workspaces to disk:', error);
+      
+      // Try to save individual workspaces if bulk save fails
+      try {
+        log.info('Attempting to save workspaces individually...');
+        let savedCount = 0;
+        const tempDir = this.dataPath + '/temp_backup';
+        require('fs').mkdirSync(tempDir, { recursive: true });
+        
+        this.workspaces.forEach((workspace, id) => {
+          try {
+            const individualPath = join(tempDir, `${id}.json`);
+            writeFileSync(individualPath, JSON.stringify(workspace, null, 2));
+            savedCount++;
+          } catch (individualError) {
+            log.error(`Failed to save workspace ${id}:`, individualError);
+          }
+        });
+        
+        log.info(`Successfully saved ${savedCount} out of ${this.workspaces.size} workspaces individually`);
+      } catch (recoveryError) {
+        log.error('Failed to recover workspace save:', recoveryError);
+      }
     }
   }
 
@@ -323,7 +521,7 @@ export class WorkspaceManager extends EventEmitter {
    *   color: '#4285f4',
    *   browserIsolation: 'isolated'
    * });
-   * console.log(`Created workspace: ${workspace.name} (${workspace.id})`);
+   * logger.debug('Console log', undefined, { originalArgs: [`Created workspace: ${workspace.name} (${workspace.id}], method: 'console.log' })`);
    * ```
    */
   async createWorkspace(data: {
@@ -332,13 +530,36 @@ export class WorkspaceManager extends EventEmitter {
     color: string;
     browserIsolation?: 'shared' | 'isolated';
   }): Promise<Workspace> {
+    // Validate workspace data
+    if (!data.name || data.name.trim().length === 0) {
+      throw new Error('Workspace name is required');
+    }
+
+    if (!data.color || data.color.trim().length === 0) {
+      throw new Error('Workspace color is required');
+    }
+
+    // Check workspace limits
+    const workspaceConfig = this.getConfigManager().getWorkspaceConfig();
+    if (this.workspaces.size >= workspaceConfig.maxWorkspaces) {
+      throw new Error(`Maximum number of workspaces (${workspaceConfig.maxWorkspaces}) reached`);
+    }
+
+    // Check for duplicate names
+    const workspaceName = data.name.trim();
+    const existingWorkspace = Array.from(this.workspaces.values())
+      .find(w => w.name.toLowerCase() === workspaceName.toLowerCase());
+    if (existingWorkspace) {
+      throw new Error('A workspace with this name already exists');
+    }
+
     const workspace: Workspace = {
       id: this.generateId(),
-      name: data.name,
-      abbreviation: this.generateAbbreviation(data.name),
-      color: data.color,
+      name: workspaceName,
+      abbreviation: this.generateAbbreviation(workspaceName),
+      color: data.color.trim(),
       icon: data.icon,
-      browserIsolation: data.browserIsolation || 'shared',
+      browserIsolation: data.browserIsolation || workspaceConfig.defaultBrowserIsolation,
       services: [],
       members: [],
       created: new Date(),
@@ -412,22 +633,114 @@ export class WorkspaceManager extends EventEmitter {
   }
 
   /**
-   * Preload all services in a workspace for notifications support
-   * Creates WebContentsViews for all services but doesn't show them
+   * Preload services in a workspace for notifications support
+   * Creates WebContentsViews for services but limits memory usage
    */
   private async preloadWorkspaceServices(workspace: Workspace): Promise<void> {
+    const serviceConfig = this.getConfigManager().getServiceConfig();
+    const enabledServices = workspace.services.filter(s => s.isEnabled).slice(0, serviceConfig.maxPreloadedServices);
+    
+    if (enabledServices.length === 0) {
+      log.debug('No services to preload for workspace:', workspace.id);
+      return;
+    }
+    
+    const preloadedServices: string[] = [];
+    const failedServices: Array<{ service: WorkspaceService; error: Error }> = [];
+    
     try {
-      for (const service of workspace.services) {
-        if (!this.webContentsViews.has(service.id)) {
-          const webContentsView = await this.createWebContentsViewForService(service, workspace);
-          this.webContentsViews.set(service.id, webContentsView);
-          // Load the URL in background
-          await webContentsView.webContents.loadURL(service.url);
-          log.info(`Preloaded service for notifications: ${service.name}`);
+      // Clean up old views from other workspaces first
+      await this.cleanupUnusedViews(workspace.id);
+      
+      for (const service of enabledServices) {
+        try {
+          if (!this.webContentsViews.has(service.id)) {
+            // Validate service URL before loading
+            if (!service.url || typeof service.url !== 'string') {
+              throw new Error(`Invalid service URL: ${service.url}`);
+            }
+            
+            // Validate service configuration
+            if (!service.name || typeof service.name !== 'string') {
+              throw new Error(`Invalid service name: ${service.name}`);
+            }
+            
+            const webContentsView = await this.createWebContentsViewForService(service, workspace);
+            this.webContentsViews.set(service.id, webContentsView);
+            
+            // Add cleanup timer for inactive views
+            setTimeout(() => this.cleanupInactiveView(service.id), serviceConfig.serviceCleanupDelay);
+            
+            // Load URL in background with timeout
+            const networkConfig = this.getConfigManager().getNetworkConfig();
+            const loadPromise = webContentsView.webContents.loadURL(service.url);
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Service load timeout')), networkConfig.serviceLoadTimeout)
+            );
+            
+            await Promise.race([loadPromise, timeoutPromise]);
+            preloadedServices.push(service.id);
+            log.info(`Preloaded service: ${service.name}`);
+          }
+        } catch (serviceError) {
+          log.error(`Failed to preload service ${service.name}:`, serviceError);
+          failedServices.push({ service, error: serviceError as Error });
+          
+          // Try to cleanup the failed view if it was created
+          if (this.webContentsViews.has(service.id)) {
+            this.cleanupWebContentsView(service.id);
+          }
         }
       }
+      
+      // Log summary of preloading operation
+      if (preloadedServices.length > 0) {
+        log.info(`Successfully preloaded ${preloadedServices.length} services for workspace ${workspace.id}`);
+      }
+      
+      if (failedServices.length > 0) {
+        log.warn(`Failed to preload ${failedServices.length} services for workspace ${workspace.id}`);
+        
+        // Log details of failed services but not in production to avoid exposing sensitive data
+        if (this.getConfigManager().getDevelopmentConfig().enableDebugLogging) {
+          failedServices.forEach(({ service, error }) => {
+            log.error(`Failed to preload service ${service.name}:`, error.message);
+          });
+        }
+      }
+      
     } catch (error) {
-      log.warn('Failed to preload some services:', error);
+      log.error('Critical error during service preloading:', error);
+      throw new Error(`Service preloading failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private async cleanupUnusedViews(currentWorkspaceId: string): Promise<void> {
+    const currentWorkspace = this.workspaces.get(currentWorkspaceId);
+    if (!currentWorkspace) return;
+    
+    const currentServiceIds = new Set(currentWorkspace.services.map(s => s.id));
+    const viewsToCleanup: string[] = [];
+    
+    for (const [serviceId] of Array.from(this.webContentsViews.entries())) {
+      if (!currentServiceIds.has(serviceId)) {
+        viewsToCleanup.push(serviceId);
+      }
+    }
+    
+    for (const serviceId of viewsToCleanup) {
+      this.cleanupWebContentsView(serviceId);
+    }
+    
+    if (viewsToCleanup.length > 0) {
+      log.info(`Cleaned up ${viewsToCleanup.length} unused WebContentsViews`);
+    }
+  }
+
+  private cleanupInactiveView(serviceId: string): void {
+    if (this.currentServiceId !== serviceId && this.webContentsViews.has(serviceId)) {
+      this.cleanupWebContentsView(serviceId);
+      log.info(`Cleaned up inactive view: ${serviceId}`);
     }
   }
 
@@ -470,11 +783,63 @@ export class WorkspaceManager extends EventEmitter {
       throw new Error(`Workspace ${workspaceId} not found`);
     }
 
+    // Validate service data
+    if (!name || name.trim().length === 0) {
+      throw new Error('Service name is required');
+    }
+
+    if (!type || type.trim().length === 0) {
+      throw new Error('Service type is required');
+    }
+
+    if (!url || url.trim().length === 0) {
+      throw new Error('Service URL is required');
+    }
+
+    // Check service limits
+    const workspaceConfig = this.getConfigManager().getWorkspaceConfig();
+    if (workspace.services.length >= workspaceConfig.maxServicesPerWorkspace) {
+      throw new Error(`Maximum number of services per workspace (${workspaceConfig.maxServicesPerWorkspace}) reached`);
+    }
+
+    // Check for duplicate service names in the same workspace
+    const serviceName = name.trim();
+    const existingService = workspace.services.find(s => s.name.toLowerCase() === serviceName.toLowerCase());
+    if (existingService) {
+      throw new Error('A service with this name already exists in this workspace');
+    }
+
+    // Validate URL format
+    try {
+      const urlObj = new URL(url);
+      const securityConfig = this.getConfigManager().getSecurityConfig();
+      
+      // Check URL length
+      if (urlObj.toString().length > securityConfig.maxUrlLength) {
+        throw new Error(`URL exceeds maximum length of ${securityConfig.maxUrlLength} characters`);
+      }
+
+      // Check allowed protocols
+      if (!securityConfig.allowedProtocols.includes(urlObj.protocol)) {
+        throw new Error(`Protocol ${urlObj.protocol} is not allowed. Allowed protocols: ${securityConfig.allowedProtocols.join(', ')}`);
+      }
+
+      // HTTPS-only mode check
+      if (securityConfig.httpsOnly && urlObj.protocol !== 'https:') {
+        throw new Error('Only HTTPS URLs are allowed in this configuration');
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new Error(`Invalid URL: ${error.message}`);
+      }
+      throw new Error('Invalid URL format');
+    }
+
     const service: WorkspaceService = {
       id: this.generateId(),
-      name,
-      type,
-      url,
+      name: serviceName,
+      type: type.trim() as any,
+      url: url.trim(),
       isEnabled: true,
       config: {}
     };
@@ -484,7 +849,7 @@ export class WorkspaceManager extends EventEmitter {
     this.saveWorkspacesToDisk();
     
     this.emit('service-created', workspaceId, service);
-    log.info('Created service:', name, 'in workspace:', workspace.name);
+    log.info('Created service:', service.name, 'in workspace:', workspace.name);
     
     return service.id;
   }
@@ -650,17 +1015,6 @@ export class WorkspaceManager extends EventEmitter {
     });
   }
 
-  private cleanupWebContentsView(serviceId: string): void {
-    const webContentsView = this.webContentsViews.get(serviceId);
-    if (webContentsView) {
-      if (this.mainWindow) {
-        this.mainWindow.contentView.removeChildView(webContentsView);
-      }
-      (webContentsView.webContents as any).destroy();
-      this.webContentsViews.delete(serviceId);
-    }
-  }
-
   private generateId(): string {
     return randomBytes(16).toString('hex');
   }
@@ -675,6 +1029,9 @@ export class WorkspaceManager extends EventEmitter {
 
   // Cleanup method
   destroy(): void {
+    if ((this as any).memoryMonitorInterval) {
+      clearInterval((this as any).memoryMonitorInterval);
+    }
     this.webContentsViews.forEach((webContentsView, serviceId) => {
       this.cleanupWebContentsView(serviceId);
     });

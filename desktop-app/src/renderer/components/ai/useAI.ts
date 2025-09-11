@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { useLogger } from '../../logging/RendererLoggingService';
 import aiClient, { 
   AIMessage, 
   CompletionRequest, 
@@ -43,6 +44,7 @@ export interface UseAIActions {
 }
 
 export const useAI = (): UseAIState & UseAIActions => {
+  const logger = useLogger('AI');
   const [state, setState] = useState<UseAIState>({
     isInitialized: false,
     isLoading: false,
@@ -66,7 +68,7 @@ export const useAI = (): UseAIState & UseAIActions => {
         isLoading: false 
       }));
     } catch (error) {
-      console.error('Failed to initialize AI:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to initialize AI:', error], method: 'console.error' });
       setState(prev => ({ 
         ...prev, 
         isLoading: false, 
@@ -95,7 +97,7 @@ export const useAI = (): UseAIState & UseAIActions => {
         }));
       }
     } catch (error) {
-      console.error('Failed to refresh providers:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to refresh providers:', error], method: 'console.error' });
     }
   }, [state.currentProvider]);
 
@@ -131,7 +133,7 @@ export const useAI = (): UseAIState & UseAIActions => {
         isLoading: false,
       }));
     } catch (error) {
-      console.error('Failed to send message:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to send message:', error], method: 'console.error' });
       setState(prev => ({ 
         ...prev, 
         isLoading: false,
@@ -178,7 +180,7 @@ export const useAI = (): UseAIState & UseAIActions => {
 
       setState(prev => ({ ...prev, isLoading: false }));
     } catch (error) {
-      console.error('Failed to send streaming message:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to send streaming message:', error], method: 'console.error' });
       setState(prev => ({ 
         ...prev, 
         isLoading: false,
@@ -228,7 +230,7 @@ export const useAI = (): UseAIState & UseAIActions => {
       await refreshProviders(); // Refresh to update health status
       return result;
     } catch (error) {
-      console.error(`Failed to test provider ${provider}:`, error);
+      logger.error('Console error', undefined, { originalArgs: [`Failed to test provider ${provider}:`, error], method: 'console.error' });
       return false;
     }
   }, [refreshProviders]);
@@ -238,7 +240,7 @@ export const useAI = (): UseAIState & UseAIActions => {
       const usageStats = await aiClient.getUsageStats();
       setState(prev => ({ ...prev, usageStats }));
     } catch (error) {
-      console.error('Failed to get usage stats:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to get usage stats:', error], method: 'console.error' });
     }
   }, []);
 

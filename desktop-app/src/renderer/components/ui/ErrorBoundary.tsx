@@ -2,6 +2,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react'
 import { AlertTriangle, RefreshCw, Home, Bug, Copy, Check } from 'lucide-react'
 import { Button } from './Button'
 import { cn } from './utils'
+import { rendererLogger } from '../../logging/RendererLoggingService';
 
 interface Props {
   children: ReactNode
@@ -50,8 +51,8 @@ export class ErrorBoundary extends Component<Props, State> {
     })
 
     // Log error details
-    console.error('Error caught by boundary:', error)
-    console.error('Error info:', errorInfo)
+    rendererLogger.error('Console error', undefined, { originalArgs: ['Error caught by boundary:', error], method: 'console.error' })
+    rendererLogger.error('Console error', undefined, { originalArgs: ['Error info:', errorInfo], method: 'console.error' })
 
     // Report to error tracking service
     this.reportError(error, errorInfo)
@@ -93,8 +94,8 @@ export class ErrorBoundary extends Component<Props, State> {
     }
 
     // Example: Send to analytics
-    if (window.flowDesk?.analytics) {
-      window.flowDesk.analytics.captureException(error, {
+    if ((window.flowDesk as any)?.analytics) {
+      (window.flowDesk as any).analytics.captureException(error, {
         context: 'error_boundary',
         extra: errorReport
       })
@@ -282,7 +283,7 @@ export const MailErrorBoundary: React.FC<{ children: ReactNode }> = ({ children 
       </div>
     }
     onError={(error, errorInfo) => {
-      console.error('Mail component error:', error, errorInfo)
+      rendererLogger.error('Console error', undefined, { originalArgs: ['Mail component error:', error, errorInfo], method: 'console.error' })
       // Send mail-specific error tracking
     }}
   >
@@ -308,7 +309,7 @@ export const CalendarErrorBoundary: React.FC<{ children: ReactNode }> = ({ child
       </div>
     }
     onError={(error, errorInfo) => {
-      console.error('Calendar component error:', error, errorInfo)
+      rendererLogger.error('Console error', undefined, { originalArgs: ['Calendar component error:', error, errorInfo], method: 'console.error' })
     }}
   >
     {children}
@@ -333,7 +334,7 @@ export const WorkspaceErrorBoundary: React.FC<{ children: ReactNode }> = ({ chil
       </div>
     }
     onError={(error, errorInfo) => {
-      console.error('Workspace component error:', error, errorInfo)
+      rendererLogger.error('Console error', undefined, { originalArgs: ['Workspace component error:', error, errorInfo], method: 'console.error' })
     }}
   >
     {children}

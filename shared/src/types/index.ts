@@ -44,7 +44,9 @@ export type {
   SyncResult,
   // Automation types removed to simplify the app
   NotificationConfigs,
-  NotificationRule as ConfigNotificationRule
+  NotificationRule as ConfigNotificationRule,
+  // Export simplified Workspace type for compatibility
+  WorkspaceMetadata as Workspace
 } from './config';
 
 // Export specific types from search to avoid conflicts  
@@ -73,6 +75,18 @@ export type {
 } from './notifications';
 
 // Automation types removed to simplify the app
+
+// Additional types for compatibility
+export type {
+  ConfigBackup,
+  AppSettings
+} from './config';
+
+// Export existing search types to avoid duplication
+export type {
+  SearchOptions,
+  SearchResult
+} from './search';
 
 // Legacy types have been removed to prevent duplicate exports
 // Import types directly from their respective modules:

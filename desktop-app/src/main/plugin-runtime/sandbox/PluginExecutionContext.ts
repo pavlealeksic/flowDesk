@@ -131,7 +131,7 @@ export class PluginExecutionContext extends EventEmitter {
 
       // Cleanup browser resources
       if (this.browserView) {
-        this.browserView.webContents.destroy();
+        this.browserView.webContents.close();
         this.browserView = undefined;
       }
 
@@ -317,8 +317,7 @@ export class PluginExecutionContext extends EventEmitter {
     try {
       // Execute plugin code in sandboxed context
       const script = new vm.Script(this.pluginCode, {
-        filename: `${this.installation.pluginId}-main.js`,
-        timeout: this.sandboxConfig.timeoutMs
+        filename: `${this.installation.pluginId}-main.js`
       });
 
       await script.runInContext(this.vmContext, {
@@ -380,7 +379,7 @@ export class PluginExecutionContext extends EventEmitter {
       this.logger.debug('Plugin UI DOM ready');
     });
 
-    webContents.on('crashed', () => {
+    (webContents as any).on('crashed', () => {
       this.logger.error('Plugin UI crashed');
       this.executionState.status = 'error';
       this.executionState.errorCount++;
@@ -420,7 +419,7 @@ export class PluginExecutionContext extends EventEmitter {
   /**
    * Private: Create safe setTimeout
    */
-  private createSafeSetTimeout(): typeof setTimeout {
+  private createSafeSetTimeout(): any {
     return (callback: Function, ms: number = 0): NodeJS.Timeout => {
       const timeout = setTimeout(() => {
         this.executionTimeouts.delete(timeout);
@@ -439,7 +438,7 @@ export class PluginExecutionContext extends EventEmitter {
   /**
    * Private: Create safe setInterval
    */
-  private createSafeSetInterval(): typeof setInterval {
+  private createSafeSetInterval(): any {
     return (callback: Function, ms: number = 0): NodeJS.Timeout => {
       const interval = setInterval(() => {
         try {
@@ -461,7 +460,7 @@ export class PluginExecutionContext extends EventEmitter {
    */
   private createEventListener(): (event: string, callback: Function) => void {
     return (event: string, callback: Function) => {
-      this.on(event, callback);
+      this.on(event, callback as (...args: any[]) => void);
     };
   }
 
@@ -470,7 +469,7 @@ export class PluginExecutionContext extends EventEmitter {
    */
   private createEventRemover(): (event: string, callback: Function) => void {
     return (event: string, callback: Function) => {
-      this.off(event, callback);
+      this.off(event, callback as (...args: any[]) => void);
     };
   }
 

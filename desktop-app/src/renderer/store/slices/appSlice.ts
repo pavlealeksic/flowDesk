@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
-import type { AppSettings } from '../../../types/preload'
+import type { AppSettings } from '@flow-desk/shared'
 // FlowDeskAPI type is defined globally in preload script
 
 interface SystemInfo {
@@ -56,8 +56,8 @@ export const initializeApp = createAsyncThunk(
   'app/initialize',
   async () => {
     const [systemInfo, settings] = await Promise.all([
-      window.flowDesk.system.getInfo(),
-      window.flowDesk.settings.get()
+      (window.flowDesk as any)?.system?.getInfo(),
+      (window.flowDesk as any)?.settings?.get()
     ])
     
     return { systemInfo, settings }
@@ -67,7 +67,7 @@ export const initializeApp = createAsyncThunk(
 export const updateSetting = createAsyncThunk(
   'app/updateSetting',
   async ({ key, value }: { key: string; value: unknown }) => {
-    const success = await window.flowDesk.settings.set(key, value)
+    const success = await (window.flowDesk as any)?.settings?.set(key, value)
     if (!success) {
       throw new Error(`Failed to update setting: ${key}`)
     }
@@ -176,4 +176,5 @@ export const {
   setKeyboardShortcuts
 } = appSlice.actions
 
+export { type AppState }
 export default appSlice.reducer

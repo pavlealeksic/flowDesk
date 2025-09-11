@@ -91,7 +91,7 @@ export class PluginManifestLoader {
       try {
         manifestData = JSON.parse(manifestContent);
       } catch (parseError) {
-        result.errors.push(`Invalid JSON in manifest file: ${parseError.message}`);
+        result.errors.push(`Invalid JSON in manifest file: ${(parseError as Error).message}`);
         return result;
       }
 
@@ -110,7 +110,7 @@ export class PluginManifestLoader {
 
       return result;
     } catch (error) {
-      result.errors.push(`Failed to load manifest file: ${error.message}`);
+      result.errors.push(`Failed to load manifest file: ${(error as Error).message}`);
       this.logger.error(`Failed to load manifest from ${manifestPath}`, error);
       return result;
     }
@@ -179,7 +179,7 @@ export class PluginManifestLoader {
 
       return result;
     } catch (error) {
-      result.errors.push(`Validation error: ${error.message}`);
+      result.errors.push(`Validation error: ${(error as Error).message}`);
       this.logger.error('Manifest validation error', error);
       return result;
     }

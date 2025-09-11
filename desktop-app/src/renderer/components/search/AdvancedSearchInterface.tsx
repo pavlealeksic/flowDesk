@@ -21,6 +21,9 @@ import { Button, Input, Card } from '../ui'
 import { useNotifications } from '../ui/NotificationSystem'
 import { InlineShortcut } from '../ui/KeyboardShortcuts'
 import type { EmailMessage, CalendarEvent } from '@flow-desk/shared'
+import { useLogger } from '../../logging/RendererLoggingService';
+
+const logger = useLogger('AdvancedSearchInterface');
 
 export interface SearchResult {
   id: string
@@ -346,7 +349,7 @@ export const AdvancedSearchInterface: React.FC<AdvancedSearchInterfaceProps> = (
       setResults(searchResults)
       setSelectedIndex(-1)
     } catch (error) {
-      console.error('Search error:', error)
+      logger.error('Console error', undefined, { originalArgs: ['Search error:', error], method: 'console.error' })
       info('Search Error', 'Failed to perform search. Please try again.')
       setResults([])
     } finally {

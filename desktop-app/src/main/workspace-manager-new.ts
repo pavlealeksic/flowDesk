@@ -42,6 +42,8 @@ export interface ServiceConfig {
     username?: string;
     password?: string;
   };
+  webviewOptions?: any;
+  customHeaders?: Record<string, string>;
 }
 
 interface WorkspaceStore {
@@ -59,6 +61,7 @@ export class WorkspaceManager {
   private sessions: Map<string, Electron.Session> = new Map();
   private workspaces: Map<string, Workspace> = new Map();
   private activeWorkspaceId?: string;
+  private activeServiceId?: string; // Track currently active service
   private mainWindow?: BrowserWindow;
   private browserViewsHidden: boolean = false;
 
@@ -78,14 +81,14 @@ export class WorkspaceManager {
 
   private loadWorkspaces() {
     try {
-      const storedWorkspaces = this.store.store.workspaces;
-      const activeId = this.store.store.activeWorkspaceId;
+      const storedWorkspaces = (this.store as any).get('workspaces', {});
+      const activeId = (this.store as any).get('activeWorkspaceId', null);
 
       for (const [id, workspace] of Object.entries(storedWorkspaces)) {
         this.workspaces.set(id, {
-          ...workspace,
-          created: new Date(workspace.created),
-          lastAccessed: new Date(workspace.lastAccessed)
+          ...workspace as any,
+          created: new Date((workspace as any).created),
+          lastAccessed: new Date((workspace as any).lastAccessed)
         });
       }
 
@@ -98,15 +101,12 @@ export class WorkspaceManager {
 
   private saveWorkspaces() {
     const workspacesObj: Record<string, Workspace> = {};
-    for (const [id, workspace] of this.workspaces) {
+    for (const [id, workspace] of Array.from(this.workspaces.entries())) {
       workspacesObj[id] = workspace;
     }
 
-    this.store.store = {
-      ...this.store.store,
-      workspaces: workspacesObj,
-      activeWorkspaceId: this.activeWorkspaceId
-    };
+    (this.store as any).set('workspaces', workspacesObj);
+    (this.store as any).set('activeWorkspaceId', this.activeWorkspaceId);
   }
 
   /**
@@ -359,6 +359,43 @@ export class WorkspaceManager {
   }
 
   /**
+   * Set the currently active service
+   */
+  setActiveService(workspaceId: string, serviceId: string): void {
+    const workspace = this.workspaces.get(workspaceId);
+    if (!workspace) {
+      throw new Error('Workspace not found');
+    }
+
+    const service = workspace.services.find(s => s.id === serviceId);
+    if (!service) {
+      throw new Error('Service not found');
+    }
+
+    this.activeServiceId = serviceId;
+    log.info(`Set active service: ${service.name} (${serviceId}) in workspace ${workspace.name}`);
+  }
+
+  /**
+   * Get the currently active service ID
+   */
+  getActiveServiceId(): string | undefined {
+    return this.activeServiceId;
+  }
+
+  /**
+   * Get the currently active service
+   */
+  getActiveService(workspaceId: string): WorkspaceService | undefined {
+    if (!this.activeServiceId) return undefined;
+    
+    const workspace = this.workspaces.get(workspaceId);
+    if (!workspace) return undefined;
+    
+    return workspace.services.find(s => s.id === this.activeServiceId);
+  }
+
+  /**
    * Show BrowserViews (when modals close)
    */
   showBrowserViews(): void {
@@ -367,22 +404,27 @@ export class WorkspaceManager {
     try {
       if (this.mainWindow && this.browserViews.size > 0) {
         // Find the currently active service's BrowserView
-        // For now, we'll show the first available one
-        // TODO: Implement proper active service tracking
-        const firstBrowserView = this.browserViews.values().next().value;
-        if (firstBrowserView) {
-          this.mainWindow.setBrowserView(firstBrowserView);
+        const activeServiceBrowserView = this.activeServiceId ? 
+          this.browserViews.get(this.activeServiceId) : 
+          this.browserViews.values().next().value;
+        
+        if (activeServiceBrowserView) {
+          this.mainWindow.setBrowserView(activeServiceBrowserView);
           
           // Reposition the browser view
           const bounds = this.mainWindow.getBounds();
-          firstBrowserView.setBounds({
+          activeServiceBrowserView.setBounds({
             x: 300, // After sidebars
             y: 0,
             width: bounds.width - 300,
             height: bounds.height
           });
           
-          log.debug('BrowserViews shown after modal close');
+          const serviceName = this.activeServiceId ? 
+            this.getActiveService(this.activeWorkspaceId!)?.name || 'Unknown' : 
+            'First available service';
+          
+          log.debug(`BrowserViews shown for active service: ${serviceName}`);
         }
       }
       this.browserViewsHidden = false;
@@ -403,7 +445,7 @@ export class WorkspaceManager {
    */
   async cleanup(): Promise<void> {
     // Destroy all browser views
-    for (const browserView of this.browserViews.values()) {
+    for (const browserView of Array.from(this.browserViews.values())) {
       try {
         browserView.webContents.close();
       } catch (error) {

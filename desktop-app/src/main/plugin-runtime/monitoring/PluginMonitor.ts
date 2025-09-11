@@ -467,7 +467,7 @@ export class PluginMonitor extends EventEmitter {
    * Private: Perform health checks on all plugins
    */
   private performHealthChecks(): void {
-    for (const [installationId, metrics] of this.metrics.entries()) {
+    for (const [installationId, metrics] of Array.from(this.metrics.entries())) {
       this.performHealthCheck(installationId, metrics);
     }
   }

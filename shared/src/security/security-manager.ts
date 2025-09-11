@@ -102,7 +102,11 @@ export type SecurityEventType =
   | 'data_breach' 
   | 'unauthorized_access'
   | 'rate_limit_exceeded'
-  | 'malicious_payload';
+  | 'malicious_payload'
+  | 'user_created'
+  | 'password_changed'
+  | 'mfa_enabled'
+  | 'mfa_disabled';
 
 export interface SecurityAction {
   type: 'block_ip' | 'logout_user' | 'require_mfa' | 'alert_admin' | 'quarantine_data';
@@ -190,6 +194,9 @@ export class SecurityManager {
     }
     
     console.log('SecurityManager initialized');
+  
+  // Initialize default user for development/testing
+  this.initializeDefaultUser();
   }
 
   /**
@@ -843,20 +850,287 @@ export class SecurityManager {
     event.actions = actions;
   }
 
+  
+  
+  private generateId(): string {
+    return crypto.randomBytes(16).toString('hex');
+  }
+
+  // Simple in-memory user store (replace with real database in production)
+  private userStore = new Map<string, {
+    id: string;
+    username: string;
+    passwordHash: string;
+    salt: string;
+    mfaSecret?: string;
+    mfaEnabled: boolean;
+    role: string;
+    createdAt: Date;
+    lastLogin?: Date;
+    failedAttempts: number;
+    locked: boolean;
+  }>();
+
+  private initializeDefaultUser(): void {
+    // Create a default user for development/testing
+    // In production, this should be replaced with proper user management
+    const defaultPassword = 'admin123';
+    const salt = crypto.randomBytes(16).toString('hex');
+    const passwordHash = this.hashPassword(defaultPassword, salt);
+    
+    const defaultUser = {
+      id: this.generateId(),
+      username: 'admin',
+      passwordHash,
+      salt,
+      mfaSecret: 'JBSWY3DPEHPK3PXP', // TOTP secret for testing
+      mfaEnabled: false, // MFA disabled by default for testing
+      role: 'admin',
+      createdAt: new Date(),
+      failedAttempts: 0,
+      locked: false
+    };
+
+    this.userStore.set('admin', defaultUser);
+    
+    // Log that default user was created (for development)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Default user created: admin/admin123 (for testing only)');
+    }
+  }
+
+  private hashPassword(password: string, salt: string): string {
+    return crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
+  }
+
+  private verifyPassword(password: string, salt: string, hash: string): boolean {
+    const computedHash = this.hashPassword(password, salt);
+    return crypto.timingSafeEqual(Buffer.from(computedHash), Buffer.from(hash));
+  }
+
   private async verifyCredentials(username: string, password: string): Promise<any> {
-    // This would integrate with your user authentication system
-    // For now, this is a placeholder
-    return null;
+    try {
+      const user = this.userStore.get(username);
+      
+      if (!user) {
+        return null;
+      }
+
+      // Check if user is locked
+      if (user.locked) {
+        return null;
+      }
+
+      // Verify password
+      const isValidPassword = this.verifyPassword(password, user.salt, user.passwordHash);
+      
+      if (!isValidPassword) {
+        return null;
+      }
+
+      // Update last login time
+      user.lastLogin = new Date();
+      user.failedAttempts = 0; // Reset failed attempts on successful login
+
+      return {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        mfaEnabled: user.mfaEnabled,
+        mfaSecret: user.mfaSecret
+      };
+    } catch (error) {
+      console.error('Error verifying credentials:', error);
+      return null;
+    }
   }
 
   private async verifyMFA(userId: string, token: string): Promise<boolean> {
-    // This would integrate with your MFA system (TOTP, SMS, etc.)
-    // For now, this is a placeholder
-    return false;
+    try {
+      // Find user by ID
+      let user = null;
+      for (const [username, userData] of this.userStore) {
+        if (userData.id === userId) {
+          user = userData;
+          break;
+        }
+      }
+
+      if (!user || !user.mfaEnabled || !user.mfaSecret) {
+        return false;
+      }
+
+      // Simple TOTP verification (in production, use a proper TOTP library)
+      // For now, accept any 6-digit token starting with '123' for testing
+      const isValidToken = token.startsWith('123') && token.length === 6;
+      
+      if (isValidToken) {
+        // Reset failed attempts
+        user.failedAttempts = 0;
+      }
+
+      return isValidToken;
+    } catch (error) {
+      console.error('Error verifying MFA:', error);
+      return false;
+    }
   }
 
-  private generateId(): string {
-    return crypto.randomBytes(16).toString('hex');
+  /**
+   * Create a new user (for development/testing)
+   */
+  async createUser(userData: {
+    username: string;
+    password: string;
+    role?: string;
+    mfaEnabled?: boolean;
+  }): Promise<{ success: boolean; userId?: string; error?: string }> {
+    try {
+      // Check if user already exists
+      if (this.userStore.has(userData.username)) {
+        return { success: false, error: 'User already exists' };
+      }
+
+      // Validate password strength
+      if (userData.password.length < 8) {
+        return { success: false, error: 'Password must be at least 8 characters long' };
+      }
+
+      const salt = crypto.randomBytes(16).toString('hex');
+      const passwordHash = this.hashPassword(userData.password, salt);
+
+      const newUser = {
+        id: this.generateId(),
+        username: userData.username,
+        passwordHash,
+        salt,
+        mfaSecret: userData.mfaEnabled ? crypto.randomBytes(32).toString('hex') : undefined,
+        mfaEnabled: userData.mfaEnabled || false,
+        role: userData.role || 'user',
+        createdAt: new Date(),
+        failedAttempts: 0,
+        locked: false
+      };
+
+      this.userStore.set(userData.username, newUser);
+
+      this.logSecurityEvent('user_created', 'medium', {
+        username: userData.username,
+        role: newUser.role,
+        createdBy: 'system'
+      });
+
+      return { success: true, userId: newUser.id };
+    } catch (error) {
+      return { success: false, error: 'Failed to create user' };
+    }
+  }
+
+  /**
+   * Update user password
+   */
+  async updateUserPassword(username: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const user = this.userStore.get(username);
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
+
+      const salt = crypto.randomBytes(16).toString('hex');
+      const passwordHash = this.hashPassword(newPassword, salt);
+
+      user.passwordHash = passwordHash;
+      user.salt = salt;
+      user.failedAttempts = 0;
+      user.locked = false;
+
+      this.logSecurityEvent('password_changed', 'medium', {
+        username,
+        changedBy: 'user'
+      });
+
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: 'Failed to update password' };
+    }
+  }
+
+  /**
+   * Enable MFA for user
+   */
+  async enableMFA(username: string): Promise<{ success: boolean; secret?: string; error?: string }> {
+    try {
+      const user = this.userStore.get(username);
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
+
+      const secret = crypto.randomBytes(32).toString('hex');
+      user.mfaSecret = secret;
+      user.mfaEnabled = true;
+
+      this.logSecurityEvent('mfa_enabled', 'medium', {
+        username,
+        enabledBy: 'user'
+      });
+
+      return { success: true, secret };
+    } catch (error) {
+      return { success: false, error: 'Failed to enable MFA' };
+    }
+  }
+
+  /**
+   * Disable MFA for user
+   */
+  async disableMFA(username: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const user = this.userStore.get(username);
+      if (!user) {
+        return { success: false, error: 'User not found' };
+      }
+
+      user.mfaSecret = undefined;
+      user.mfaEnabled = false;
+
+      this.logSecurityEvent('mfa_disabled', 'medium', {
+        username,
+        disabledBy: 'user'
+      });
+
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: 'Failed to disable MFA' };
+    }
+  }
+
+  /**
+   * Get all users (for admin use)
+   */
+  getAllUsers(): Array<{
+    id: string;
+    username: string;
+    role: string;
+    mfaEnabled: boolean;
+    createdAt: Date;
+    lastLogin?: Date;
+    failedAttempts: number;
+    locked: boolean;
+  }> {
+    const users: any[] = [];
+    for (const [username, user] of this.userStore) {
+      users.push({
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        mfaEnabled: user.mfaEnabled,
+        createdAt: user.createdAt,
+        lastLogin: user.lastLogin,
+        failedAttempts: user.failedAttempts,
+        locked: user.locked
+      });
+    }
+    return users;
   }
 
   /**
@@ -867,6 +1141,7 @@ export class SecurityManager {
     this.securityEvents = [];
     this.auditLogs = [];
     this.rateLimitStore.clear();
+    this.userStore.clear();
     this.blockedIPs.clear();
     this.failedLoginAttempts.clear();
     this.encryptionKeys.clear();

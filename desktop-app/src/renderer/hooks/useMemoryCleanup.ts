@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react'
+import { useLogger } from '../logging/RendererLoggingService';
 
 interface MemoryCleanupOptions {
   // Maximum number of items to keep in memory
@@ -22,6 +23,7 @@ export const useMemoryCleanup = (options: MemoryCleanupOptions = {}) => {
     enablePerfMonitoring = false
   } = options
 
+  const logger = useLogger('useMemoryCleanup')
   const cleanupCallbacks = useRef<Set<() => void>>(new Set())
   const memoryUsage = useRef<number>(0)
   const performanceObserver = useRef<PerformanceObserver | null>(null)
@@ -87,7 +89,7 @@ export const useMemoryCleanup = (options: MemoryCleanupOptions = {}) => {
           try {
             callback()
           } catch (error) {
-            console.error('Cleanup callback error:', error)
+            logger.error('Console error', undefined, { originalArgs: ['Cleanup callback error:', error], method: 'console.error' })
           }
         })
 
@@ -98,7 +100,7 @@ export const useMemoryCleanup = (options: MemoryCleanupOptions = {}) => {
           
           // Log memory usage if monitoring is enabled
           if (enablePerfMonitoring && memory.used > memory.limit * 0.8) {
-            console.warn('High memory usage detected:', memory)
+            logger.warn('Console warning', undefined, { originalArgs: ['High memory usage detected:', memory], method: 'console.warn' })
           }
         }
 
@@ -123,7 +125,7 @@ export const useMemoryCleanup = (options: MemoryCleanupOptions = {}) => {
         const entries = list.getEntries()
         entries.forEach(entry => {
           if (entry.entryType === 'measure' || entry.entryType === 'navigation') {
-            console.log(`Performance: ${entry.name} took ${entry.duration}ms`)
+            logger.debug('Console log', undefined, { originalArgs: [`Performance: ${entry.name} took ${entry.duration}ms`], method: 'console.log' })
           }
         })
       })
@@ -131,7 +133,7 @@ export const useMemoryCleanup = (options: MemoryCleanupOptions = {}) => {
       try {
         performanceObserver.current.observe({ entryTypes: ['measure', 'navigation'] })
       } catch (error) {
-        console.warn('Performance observer not supported:', error)
+        logger.warn('Console warning', undefined, { originalArgs: ['Performance observer not supported:', error], method: 'console.warn' })
       }
     }
 
@@ -150,7 +152,7 @@ export const useMemoryCleanup = (options: MemoryCleanupOptions = {}) => {
         try {
           callback()
         } catch (error) {
-          console.error('Unmount cleanup error:', error)
+          logger.error('Console error', undefined, { originalArgs: ['Unmount cleanup error:', error], method: 'console.error' })
         }
       })
       

@@ -111,19 +111,12 @@ export type ErrorCode =
   | 'PRECONDITION_FAILED';
 
 // Recovery actions that can be suggested to users
-export type RecoveryAction = 
-  | 'retry'
-  | 'refresh'
-  | 'restart_app'
-  | 'clear_cache'
-  | 'check_network'
-  | 'contact_support'
-  | 'ignore'
-  | 'update_app'
-  | 'change_settings'
-  | 'login_again'
-  | 'free_disk_space'
-  | 'check_permissions';
+export interface RecoveryAction {
+  label: string;
+  action: () => void;
+  primary?: boolean;
+  destructive?: boolean;
+}
 
 // Context information attached to errors
 export interface ErrorContext {

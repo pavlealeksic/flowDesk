@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../store';
 import type { WorkspaceConfig } from '@flow-desk/shared/types';
+import { useLogger } from '../logging/RendererLoggingService';
 // Define types locally since not available in preload
 interface ConfigSyncConflict {
   id: string;
@@ -68,6 +69,7 @@ export interface UseConfigSyncResult {
  */
 export function useConfigSync(): UseConfigSyncResult {
   const dispatch = useAppDispatch();
+  const logger = useLogger('useConfigSync');
   
   const [state, setState] = useState<ConfigSyncState>({
     initialized: false,
@@ -84,7 +86,7 @@ export function useConfigSync(): UseConfigSyncResult {
   useEffect(() => {
     const loadSyncStatus = async () => {
       try {
-        const status = await window.flowDesk.invoke('config-sync:get-status') as {
+        const status = await (window.flowDesk as any)?.invoke('config-sync:get-status') as {
           initialized: boolean;
           autoSync: boolean;
           lastSync: string | null;
@@ -98,7 +100,7 @@ export function useConfigSync(): UseConfigSyncResult {
           syncInterval: status.syncInterval,
         }));
       } catch (error) {
-        console.error('Failed to load sync status:', error);
+        logger.error('Console error', undefined, { originalArgs: ['Failed to load sync status:', error], method: 'console.error' });
         setState(prev => ({
           ...prev,
           error: error instanceof Error ? error.message : 'Unknown error',
@@ -169,36 +171,42 @@ export function useConfigSync(): UseConfigSyncResult {
     };
 
     // Register event listeners
-    window.flowDesk.on('config-sync:sync-started', handleSyncStarted);
-    window.flowDesk.on('config-sync:sync-completed', handleSyncCompleted);
-    window.flowDesk.on('config-sync:sync-failed', handleSyncFailed);
-    window.flowDesk.on('config-sync:auto-sync-changed', handleAutoSyncChanged);
-    window.flowDesk.on('config-sync:sync-interval-changed', handleSyncIntervalChanged);
-    window.flowDesk.on('config-sync:config-updated', handleConfigUpdated);
-    window.flowDesk.on('config-sync:config-imported', handleConfigImported);
-    window.flowDesk.on('config-sync:device-paired', handleDevicePaired);
-    window.flowDesk.on('config-sync:error', handleError);
+    if (window.flowDesk) {
+      (window.flowDesk as any).on('config-sync:sync-started', handleSyncStarted);
+      (window.flowDesk as any).on('config-sync:sync-completed', handleSyncCompleted);
+      (window.flowDesk as any).on('config-sync:sync-failed', handleSyncFailed);
+      (window.flowDesk as any).on('config-sync:auto-sync-changed', handleAutoSyncChanged);
+      (window.flowDesk as any).on('config-sync:sync-interval-changed', handleSyncIntervalChanged);
+      (window.flowDesk as any).on('config-sync:config-updated', handleConfigUpdated);
+      (window.flowDesk as any).on('config-sync:config-imported', handleConfigImported);
+      (window.flowDesk as any).on('config-sync:device-paired', handleDevicePaired);
+      (window.flowDesk as any).on('config-sync:error', handleError);
 
-    // Cleanup listeners
+      // Cleanup listeners
+      return () => {
+        (window.flowDesk as any)?.removeAllListeners('config-sync:sync-started');
+        (window.flowDesk as any)?.removeAllListeners('config-sync:sync-completed');
+        (window.flowDesk as any)?.removeAllListeners('config-sync:sync-failed');
+        (window.flowDesk as any)?.removeAllListeners('config-sync:auto-sync-changed');
+        (window.flowDesk as any)?.removeAllListeners('config-sync:sync-interval-changed');
+        (window.flowDesk as any)?.removeAllListeners('config-sync:config-updated');
+        (window.flowDesk as any)?.removeAllListeners('config-sync:config-imported');
+        (window.flowDesk as any)?.removeAllListeners('config-sync:device-paired');
+        (window.flowDesk as any)?.removeAllListeners('config-sync:error');
+      };
+    }
+
     return () => {
-      window.flowDesk.removeAllListeners('config-sync:sync-started');
-      window.flowDesk.removeAllListeners('config-sync:sync-completed');
-      window.flowDesk.removeAllListeners('config-sync:sync-failed');
-      window.flowDesk.removeAllListeners('config-sync:auto-sync-changed');
-      window.flowDesk.removeAllListeners('config-sync:sync-interval-changed');
-      window.flowDesk.removeAllListeners('config-sync:config-updated');
-      window.flowDesk.removeAllListeners('config-sync:config-imported');
-      window.flowDesk.removeAllListeners('config-sync:device-paired');
-      window.flowDesk.removeAllListeners('config-sync:error');
+      // No cleanup needed if window.flowDesk is not available
     };
   }, [dispatch]);
 
   // Actions
   const performSync = useCallback(async () => {
     try {
-      await window.flowDesk.invoke('config-sync:perform-sync');
+      await (window.flowDesk as any)?.invoke('config-sync:perform-sync');
     } catch (error) {
-      console.error('Sync failed:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Sync failed:', error], method: 'console.error' });
       setState(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Sync failed',
@@ -208,25 +216,25 @@ export function useConfigSync(): UseConfigSyncResult {
 
   const setAutoSync = useCallback(async (enabled: boolean) => {
     try {
-      await window.flowDesk.invoke('config-sync:set-auto-sync', enabled);
+      await (window.flowDesk as any)?.invoke('config-sync:set-auto-sync', enabled);
     } catch (error) {
-      console.error('Failed to set auto-sync:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to set auto-sync:', error], method: 'console.error' });
     }
   }, []);
 
   const setSyncInterval = useCallback(async (minutes: number) => {
     try {
-      await window.flowDesk.invoke('config-sync:set-sync-interval', minutes);
+      await (window.flowDesk as any)?.invoke('config-sync:set-sync-interval', minutes);
     } catch (error) {
-      console.error('Failed to set sync interval:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to set sync interval:', error], method: 'console.error' });
     }
   }, []);
 
   const exportConfig = useCallback(async (): Promise<string | null> => {
     try {
-      return await window.flowDesk.invoke('config-sync:export-config');
+      return await (window.flowDesk as any)?.invoke('config-sync:export-config');
     } catch (error) {
-      console.error('Export failed:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Export failed:', error], method: 'console.error' });
       setState(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Export failed',
@@ -237,9 +245,9 @@ export function useConfigSync(): UseConfigSyncResult {
 
   const importConfig = useCallback(async (): Promise<WorkspaceConfig | null> => {
     try {
-      return await window.flowDesk.invoke('config-sync:import-config');
+      return await (window.flowDesk as any)?.invoke('config-sync:import-config');
     } catch (error) {
-      console.error('Import failed:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Import failed:', error], method: 'console.error' });
       setState(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Import failed',
@@ -250,18 +258,18 @@ export function useConfigSync(): UseConfigSyncResult {
 
   const generatePairingQR = useCallback(async (): Promise<string> => {
     try {
-      return await window.flowDesk.invoke('config-sync:generate-pairing-qr') as string;
+      return await (window.flowDesk as any)?.invoke('config-sync:generate-pairing-qr') as string;
     } catch (error) {
-      console.error('Failed to generate pairing QR:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to generate pairing QR:', error], method: 'console.error' });
       throw error;
     }
   }, []);
 
   const pairWithDevice = useCallback(async (qrData: string) => {
     try {
-      return await window.flowDesk.invoke('config-sync:pair-with-device', qrData) as { success: boolean; error?: string };
+      return await (window.flowDesk as any)?.invoke('config-sync:pair-with-device', qrData) as { success: boolean; error?: string };
     } catch (error) {
-      console.error('Device pairing failed:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Device pairing failed:', error], method: 'console.error' });
       setState(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Pairing failed',
@@ -272,27 +280,27 @@ export function useConfigSync(): UseConfigSyncResult {
 
   const createBackup = useCallback(async (description?: string): Promise<string> => {
     try {
-      return await window.flowDesk.invoke('config-sync:create-backup', description);
+      return await (window.flowDesk as any)?.invoke('config-sync:create-backup', description);
     } catch (error) {
-      console.error('Backup creation failed:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Backup creation failed:', error], method: 'console.error' });
       throw error;
     }
   }, []);
 
   const listBackups = useCallback(async (): Promise<ConfigBackup[]> => {
     try {
-      return await window.flowDesk.invoke('config-sync:list-backups') as ConfigBackup[];
+      return await (window.flowDesk as any)?.invoke('config-sync:list-backups') as ConfigBackup[];
     } catch (error) {
-      console.error('Failed to list backups:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to list backups:', error], method: 'console.error' });
       return [];
     }
   }, []);
 
   const restoreBackup = useCallback(async (backupId: string) => {
     try {
-      await window.flowDesk.invoke('config-sync:restore-backup', backupId);
+      await (window.flowDesk as any)?.invoke('config-sync:restore-backup', backupId);
     } catch (error) {
-      console.error('Backup restore failed:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Backup restore failed:', error], method: 'console.error' });
       setState(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Restore failed',
@@ -303,10 +311,10 @@ export function useConfigSync(): UseConfigSyncResult {
 
   const refreshDiscoveredDevices = useCallback(async () => {
     try {
-      const devices = await window.flowDesk.invoke('config-sync:get-discovered-devices') as ConfigSyncDevice[];
+      const devices = await (window.flowDesk as any)?.invoke('config-sync:get-discovered-devices') as ConfigSyncDevice[];
       setState(prev => ({ ...prev, discoveredDevices: devices }));
     } catch (error) {
-      console.error('Failed to refresh discovered devices:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to refresh discovered devices:', error], method: 'console.error' });
     }
   }, []);
 

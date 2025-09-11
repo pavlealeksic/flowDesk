@@ -6,7 +6,7 @@
 
 import log from 'electron-log';
 import { app, session, protocol } from 'electron';
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 import { URL } from 'url';
 
 // Environment detection
@@ -142,7 +142,7 @@ export class SecurityConfig {
     // Configure Content Security Policy
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       const responseHeaders = {
-        ...details.responseHeaders,
+        ...(details.responseHeaders || {}),
         'Content-Security-Policy': [
           "default-src 'self'",
           "script-src 'self' 'unsafe-inline'",
@@ -158,7 +158,7 @@ export class SecurityConfig {
         'X-Frame-Options': ['DENY'],
         'X-XSS-Protection': ['1; mode=block'],
         'Referrer-Policy': ['strict-origin-when-cross-origin']
-      };
+      } as any;
       
       callback({ responseHeaders });
     });
@@ -417,7 +417,7 @@ export class SecurityConfig {
    */
   clearExpiredRateLimits(): void {
     const now = Date.now();
-    for (const [key, limit] of this.rateLimitMap.entries()) {
+    for (const [key, limit] of Array.from(this.rateLimitMap.entries())) {
       if (now > limit.resetTime) {
         this.rateLimitMap.delete(key);
       }

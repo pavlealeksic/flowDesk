@@ -5,7 +5,7 @@
  * for plugins and their dependencies.
  */
 
-import semver from 'semver';
+import * as semver from 'semver';
 import { PluginLogger } from '../utils/PluginLogger';
 
 export interface VersionCompatibilityResult {
@@ -292,7 +292,7 @@ export class PluginVersionValidator {
     };
 
     // Resolve all dependencies
-    for (const [pluginId] of versionRequirements) {
+    for (const [pluginId] of Array.from(versionRequirements.entries())) {
       const dep = pluginDependencies.find(d => d.pluginId === pluginId);
       if (!dep || !dep.optional) {
         resolveDependency(pluginId);
@@ -358,7 +358,7 @@ export class PluginVersionValidator {
       minor: parsed.minor,
       patch: parsed.patch,
       prerelease: parsed.prerelease.map(p => p.toString()),
-      build: parsed.build,
+      build: [...parsed.build],
       isPrerelease: parsed.prerelease.length > 0,
       isStable: parsed.prerelease.length === 0 && parsed.major >= 1
     };

@@ -7,7 +7,7 @@ import workspaceSlice from './slices/workspaceSlice'
 import themeSlice from './slices/themeSlice'
 import pluginSlice from './slices/pluginSlice'
 import notificationSlice from './slices/notificationSlice'
-import searchSlice from './slices/searchSlice'
+// searchSlice removed to simplify the app
 // automationSlice removed to simplify the app
 import productivitySlice from './slices/productivitySlice'
 import performanceSlice from './slices/performanceSlice'
@@ -44,7 +44,7 @@ export const store = configureStore({
     theme: themeSlice,
     plugin: pluginSlice,
     notification: notificationSlice,
-    search: searchSlice,
+    // search: removed to simplify the app,
     // automation: removed to simplify the app,
     productivity: productivitySlice,
     performance: performanceSlice,

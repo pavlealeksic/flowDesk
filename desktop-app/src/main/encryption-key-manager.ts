@@ -39,24 +39,48 @@ export interface KeyMetadata {
 export class EncryptionKeyManager {
   private static instance: EncryptionKeyManager;
   
-  private readonly SERVICE_NAME = 'FlowDeskEncryption';
-  private readonly ACCOUNT_PREFIX = 'flowdesk_';
   private readonly KEY_VERSION = 1;
-  private readonly KEY_LENGTH = 32; // 256 bits
-  private readonly ITERATIONS = 100000;
+  
+  // Configuration values (can be overridden by config manager)
+  private SERVICE_NAME: string;
+  private ACCOUNT_PREFIX: string;
+  private KEY_LENGTH: number;
+  private ITERATIONS: number;
   
   private keys: EncryptionKeys | null = null;
   private metadata: KeyMetadata | null = null;
   private isInitialized = false;
+
+  constructor() {
+    // Initialize with default values
+    this.SERVICE_NAME = 'FlowDeskEncryption';
+    this.ACCOUNT_PREFIX = 'flowdesk_';
+    this.KEY_LENGTH = 32; // 256 bits
+    this.ITERATIONS = 100000;
+    
+    log.info('Encryption Key Manager initialized for platform:', process.platform);
+  }
+
+  /**
+   * Update configuration from config manager
+   * This should be called when configuration is loaded
+   */
+  updateConfiguration(config: {
+    serviceName?: string;
+    accountPrefix?: string;
+    keyLength?: number;
+    iterations?: number;
+  }): void {
+    if (config.serviceName) this.SERVICE_NAME = config.serviceName;
+    if (config.accountPrefix) this.ACCOUNT_PREFIX = config.accountPrefix;
+    if (config.keyLength) this.KEY_LENGTH = config.keyLength;
+    if (config.iterations) this.ITERATIONS = config.iterations;
+  }
   
   // Fallback file paths for Linux when Secret Service is unavailable
   private readonly fallbackDir = join(app.getPath('userData'), '.encryption');
   private readonly fallbackKeyFile = join(this.fallbackDir, 'keys.enc');
   private readonly fallbackMetaFile = join(this.fallbackDir, 'meta.json');
-
-  private constructor() {
-    log.info('Encryption Key Manager initialized for platform:', process.platform);
-  }
 
   public static getInstance(): EncryptionKeyManager {
     if (!EncryptionKeyManager.instance) {

@@ -7,6 +7,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '../store';
+import { useLogger } from '../logging/RendererLoggingService';
+
+const logger = useLogger('useNotifications');
 
 interface NotificationRule {
   id: string;
@@ -162,7 +165,7 @@ export function useNotifications(): UseNotificationsResult {
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load notification data');
-      console.error('Failed to load notification data:', err);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to load notification data:', err], method: 'console.error' });
     } finally {
       setLoading(false);
     }

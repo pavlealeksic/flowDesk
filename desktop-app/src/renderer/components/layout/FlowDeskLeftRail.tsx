@@ -22,6 +22,7 @@ import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { useAppSelector, useAppDispatch } from '../../store';
 import { loadWorkspaces } from '../../store/slices/workspaceSlice';
 import CreateWorkspaceModal from '../workspace/CreateWorkspaceModal';
+import { useLogger } from '../../logging/RendererLoggingService';
 import { 
   Button, 
   cn,
@@ -98,6 +99,7 @@ export const FlowDeskLeftRail: React.FC<FlowDeskLeftRailProps> = memo(({
   onWorkspaceSelect,
   activeWorkspaceId
 }) => {
+  const logger = useLogger('Left-Rail');
   const dispatch = useAppDispatch();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [contextMenuWorkspace, setContextMenuWorkspace] = useState<string | null>(null);
@@ -117,14 +119,9 @@ export const FlowDeskLeftRail: React.FC<FlowDeskLeftRailProps> = memo(({
     browserIsolation: 'shared' | 'isolated';
   }) => {
     try {
-      const workspaceId = await window.flowDesk.workspace.create({
-        name: workspaceData.name,
-        icon: workspaceData.icon,
-        color: workspaceData.color,
-        browserIsolation: workspaceData.browserIsolation
-      });
-      
-      console.log('Created workspace:', workspaceId, workspaceData);
+      if (!window.flowDesk) throw new Error('FlowDesk API not available');
+      const workspaceId = await window.flowDesk.workspace.create(workspaceData.name, workspaceData.color);
+      logger.info('Workspace created', undefined, { workspaceId, name: workspaceData.name });
       
       // Refresh workspace list
       dispatch(loadWorkspaces());
@@ -132,30 +129,31 @@ export const FlowDeskLeftRail: React.FC<FlowDeskLeftRailProps> = memo(({
       // Switch to the new workspace
       onWorkspaceSelect(workspaceId);
     } catch (error) {
-      console.error('Failed to create workspace:', error);
+      logger.error('Failed to create workspace', error as Error, { workspaceData });
       throw error;
     }
   }, [dispatch, onWorkspaceSelect]);
 
   const handleEditWorkspace = useCallback((workspaceId: string) => {
     // TODO: Implement edit workspace modal
-    console.log('Edit workspace:', workspaceId);
+    logger.debug('Edit workspace requested', undefined, { workspaceId });
     setContextMenuWorkspace(null);
   }, []);
 
   const handleDeleteWorkspace = useCallback(async (workspaceId: string) => {
     try {
+      if (!window.flowDesk) throw new Error('FlowDesk API not available');
       await window.flowDesk.workspace.delete(workspaceId);
       dispatch(loadWorkspaces());
       setContextMenuWorkspace(null);
     } catch (error) {
-      console.error('Failed to delete workspace:', error);
+      logger.error('Failed to delete workspace', error as Error, { workspaceId });
     }
   }, [dispatch]);
 
   const handleWorkspaceSettings = useCallback((workspaceId: string) => {
     // TODO: Implement workspace settings
-    console.log('Workspace settings:', workspaceId);
+    logger.debug('Workspace settings requested', undefined, { workspaceId });
     setContextMenuWorkspace(null);
   }, []);
 

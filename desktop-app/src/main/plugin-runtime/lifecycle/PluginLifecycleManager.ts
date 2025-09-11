@@ -174,7 +174,6 @@ export class PluginLifecycleManager extends EventEmitter {
         const installationId = this.generateInstallationId(pluginId, userId, workspaceId);
         
         const installationData: CreatePluginInstallationInput = {
-          id: installationId,
           userId,
           workspaceId,
           pluginId,
@@ -216,6 +215,7 @@ export class PluginLifecycleManager extends EventEmitter {
         // Create installation record
         const installation: PluginInstallation = {
           ...installationData,
+          id: installationId,
           installedAt: new Date(),
           updatedAt: new Date(),
           status: 'active'

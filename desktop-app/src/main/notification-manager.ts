@@ -194,7 +194,7 @@ export class DesktopNotificationManager {
   }
 
   clearAllNotifications(): void {
-    for (const notification of this.activeNotifications.values()) {
+    for (const notification of Array.from(this.activeNotifications.values())) {
       notification.close();
     }
     this.activeNotifications.clear();

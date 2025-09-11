@@ -7,6 +7,7 @@
  */
 
 const { contextBridge, ipcRenderer } = require('electron');
+import { createLogger } from '../shared/logging/LoggerFactory';
 
 // Security check - ensure we're in the right context
 if (!process.contextIsolated) {
@@ -338,4 +339,4 @@ window.addEventListener('unhandledrejection', (event) => {
   pluginAPI.logger.error('Unhandled promise rejection:', event.reason);
 });
 
-console.log('Flow Desk Plugin Environment Loaded');
+logger.debug('Console log', undefined, { originalArgs: ['Flow Desk Plugin Environment Loaded'], method: 'console.log' });

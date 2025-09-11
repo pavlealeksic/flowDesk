@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useRef } from 'react'
-import { shouldHideBrowserViews, type ZIndexLayer } from '../constants/zIndex'
+import { shouldHideWebContentsViews, type ZIndexLayer } from '../constants/zIndex'
 
 interface WebContentsViewVisibilityOptions {
   isVisible: boolean
@@ -29,15 +29,15 @@ export const useWebContentsViewVisibility = ({
     
     if (shouldHide && !previousVisibilityRef.current) {
       // Hide BrowserView
-      if (window.flowDesk?.workspace?.hideBrowserViews) {
-        window.flowDesk.workspace.hideBrowserViews()
+      if (window.flowDesk?.browserView?.hide) {
+        window.flowDesk.browserView.hide()
       }
       previousVisibilityRef.current = true
       onVisibilityChange?.(false)
     } else if (!shouldHide && previousVisibilityRef.current) {
       // Show BrowserView
-      if (window.flowDesk?.workspace?.showBrowserViews) {
-        window.flowDesk.workspace.showBrowserViews()
+      if (window.flowDesk?.browserView?.show) {
+        window.flowDesk.browserView.show()
       }
       previousVisibilityRef.current = false
       onVisibilityChange?.(true)
@@ -49,8 +49,8 @@ export const useWebContentsViewVisibility = ({
     return () => {
       if (previousVisibilityRef.current) {
         // Restore BrowserView visibility on cleanup
-        if (window.flowDesk?.workspace?.showBrowserViews) {
-          window.flowDesk.workspace.showBrowserViews()
+        if (window.flowDesk?.browserView?.show) {
+          window.flowDesk.browserView.show()
         }
       }
     }
@@ -65,7 +65,7 @@ class BrowserViewVisibilityManager {
   private isHidden = false
 
   addBlockingOverlay(id: string, layer: ZIndexLayer) {
-    if (shouldHideBrowserViews(layer)) {
+    if (shouldHideWebContentsViews(layer)) {
       this.blockingOverlays.add(id)
       this.updateVisibility()
     }
@@ -80,13 +80,13 @@ class BrowserViewVisibilityManager {
     const shouldHide = this.blockingOverlays.size > 0
 
     if (shouldHide && !this.isHidden) {
-      if (window.flowDesk?.workspace?.hideBrowserViews) {
-        window.flowDesk.workspace.hideBrowserViews()
+      if (window.flowDesk?.browserView?.hide) {
+        window.flowDesk.browserView.hide()
       }
       this.isHidden = true
     } else if (!shouldHide && this.isHidden) {
-      if (window.flowDesk?.workspace?.showBrowserViews) {
-        window.flowDesk.workspace.showBrowserViews()
+      if (window.flowDesk?.browserView?.show) {
+        window.flowDesk.browserView.show()
       }
       this.isHidden = false
     }

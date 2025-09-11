@@ -7,6 +7,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Button, Card, cn } from '../ui';
 import { X, Globe, Edit } from 'lucide-react';
+import { useLogger } from '../../logging/RendererLoggingService';
+
+const logger = useLogger('EditServiceModal');
 
 interface EditServiceModalProps {
   isOpen: boolean;
@@ -96,7 +99,7 @@ export const EditServiceModal: React.FC<EditServiceModalProps> = ({
     try {
       // Use the flowDesk workspace API to update the service
       if (window.flowDesk?.workspace) {
-        await window.flowDesk.workspace.updateService(
+        await (window.flowDesk as any).workspace.updateService(
           workspaceId,
           serviceId,
           {
@@ -114,7 +117,7 @@ export const EditServiceModal: React.FC<EditServiceModalProps> = ({
         throw new Error('FlowDesk workspace API not available');
       }
     } catch (error) {
-      console.error('Failed to update service:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to update service:', error], method: 'console.error' });
       setError(error instanceof Error ? error.message : 'Failed to save service');
     } finally {
       setIsSaving(false);

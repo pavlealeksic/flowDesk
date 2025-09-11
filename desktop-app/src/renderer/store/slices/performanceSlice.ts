@@ -124,4 +124,5 @@ export const selectHighReRenderComponents = (state: { performance: PerformanceSt
 export const selectWebVitals = (state: { performance: PerformanceState }) => state.performance.webVitals
 export const selectPerformanceWarnings = (state: { performance: PerformanceState }) => state.performance.performanceWarnings
 
+export { type PerformanceState }
 export default performanceSlice.reducer

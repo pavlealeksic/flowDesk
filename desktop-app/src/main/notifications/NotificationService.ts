@@ -78,7 +78,7 @@ export class NotificationService {
   }
 
   markAllAsRead(): void {
-    for (const notification of this.notifications.values()) {
+    for (const notification of Array.from(this.notifications.values())) {
       notification.isRead = true;
     }
   }

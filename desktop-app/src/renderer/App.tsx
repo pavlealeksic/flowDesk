@@ -33,26 +33,20 @@ import { useLogger } from './logging/RendererLoggingService'
 import {
   PluginPanels,
   NotificationsHub,
-  cn,
   Loader2,
   Button
 } from './components'
+import { cn } from './components/ui/utils'
 import { AccessibilityProvider } from './contexts/AccessibilityContext'
 import ColorBlindnessFilters from './components/accessibility/ColorBlindnessFilters'
 import { NotificationContainer } from './components/ui/NotificationSystem'
 import { WorkspaceErrorBoundary } from './components/ui/ErrorBoundary'
 import { KeyboardShortcutManager, commonShortcuts, useKeyboardShortcuts } from './components/ui/KeyboardShortcuts'
 import { LoadingOverlay } from './components/ui/LoadingStates'
-import type { SearchResult, SearchFilters } from './components/search/AdvancedSearchInterface'
 import { getZIndexClass } from './constants/zIndex'
 import { useBlockingOverlay } from './hooks/useBrowserViewVisibility'
 
 // Lazy load heavy components for better initial load performance
-const AdvancedSearchInterface = lazy(() => 
-  import('./components/search/AdvancedSearchInterface').then(module => ({ 
-    default: module.AdvancedSearchInterface 
-  }))
-)
 const AccessibilitySettings = lazy(() => import('./components/accessibility/AccessibilitySettings'))
 const AddServiceModal = lazy(() => import('./components/workspace/AddServiceModal'))
 const EditServiceModal = lazy(() => import('./components/workspace/EditServiceModal'))
@@ -73,7 +67,7 @@ import { useMemoryCleanup } from './hooks/useMemoryCleanup'
 import { usePerformanceMonitor, useBundleMonitor } from './hooks/usePerformanceMonitor'
 import { handleError, classifyError, type AppError, workspaceErrors, serviceErrors } from './utils/errorHandler'
 import { ToastSystem, useToast } from './components/ui/ToastSystem'
-import type { Workspace } from '../types/preload'
+import type { WorkspaceMetadata } from '@flow-desk/shared'
 import './App.css'
 
 type AppView = 'workspace'
@@ -121,13 +115,17 @@ function AppContent() {
   // Optimized workspaces selector with shallow equality check
   const workspaces = useAppSelector(state => {
     const workspaceValues = Object.values(state.workspace?.workspaces || {})
-    // Convert ISO strings back to Date objects for compatibility with Workspace interface
+    // Convert workspace data to compatible format
     return workspaceValues.map(workspace => ({
       ...workspace,
-      created: new Date(workspace.created),
-      lastAccessed: new Date(workspace.lastAccessed)
+      created: workspace.created,
+      lastAccessed: workspace.lastAccessed,
+      createdAt: workspace.created,
+      type: workspace.type || 'personal',
+      ownerId: workspace.ownerId || 'user',
+      tags: workspace.tags || []
     }))
-  }) as Workspace[]
+  }) as WorkspaceMetadata[]
 
   // Memoize workspaces to prevent unnecessary re-renders on the same data
   const memoizedWorkspaces = useMemo(() => {
@@ -136,17 +134,17 @@ function AppContent() {
       workspaces: workspaces.map(w => ({ 
         id: w.id, 
         name: w.name,
-        serviceCount: w.services?.length || 0,
-        services: w.services?.map(s => ({ id: s.id, name: s.name })) || []
+        serviceCount: (w as any).services?.length || 0,
+        services: (w as any).services?.map((s: any) => ({ id: s.id, name: s.name })) || []
       }))
     })
     return workspaces
   }, [workspaces.length, JSON.stringify(workspaces.map(w => ({ 
     id: w.id, 
     name: w.name, 
-    created: w.created.getTime(),
-    serviceCount: w.services?.length || 0,
-    serviceIds: w.services?.map(s => s.id).sort() || []
+    created: (w as any).created?.getTime() || w.createdAt.getTime(),
+    serviceCount: (w as any).services?.length || 0,
+    serviceIds: (w as any).services?.map((s: any) => s.id).sort() || []
   })))])
   
   const currentWorkspace = useMemo(() => {
@@ -160,7 +158,6 @@ function AppContent() {
   }, [memoizedWorkspaces, activeWorkspaceId])
   
   const [activeServiceId, setActiveServiceId] = useState<string | undefined>()
-  const [showSearchOverlay, setShowSearchOverlay] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
   const [showAddServiceModal, setShowAddServiceModal] = useState(false)
   const [showEditServiceModal, setShowEditServiceModal] = useState(false)
@@ -168,67 +165,28 @@ function AppContent() {
   const [showAccessibilitySettings, setShowAccessibilitySettings] = useState(false)
 
   // WebContentsView visibility management for proper z-index layering
-  useBlockingOverlay('search-overlay', showSearchOverlay, 'SEARCH_OVERLAY')
   useBlockingOverlay('add-service-modal', showAddServiceModal, 'MODAL')
   useBlockingOverlay('edit-service-modal', showEditServiceModal, 'MODAL')
   useBlockingOverlay('accessibility-settings', showAccessibilitySettings, 'ACCESSIBILITY_OVERLAY')
   useBlockingOverlay('global-loading', globalLoading, 'LOADING_OVERLAY')
-  useBlockingOverlay('error-dialog', !!currentError, 'ERROR_OVERLAY')
+  useBlockingOverlay('error-dialog', !!currentError, 'ERROR_BOUNDARY')
 
   // Memoize overlay state calculation
   const hasOverlayVisible = useMemo(() => {
-    return showSearchOverlay || showAddServiceModal || showEditServiceModal || showAccessibilitySettings || globalLoading || showNotifications || !!currentError
-  }, [showSearchOverlay, showAddServiceModal, showEditServiceModal, showAccessibilitySettings, globalLoading, showNotifications, currentError])
+    return showAddServiceModal || showEditServiceModal || showAccessibilitySettings || globalLoading || showNotifications || !!currentError
+  }, [showAddServiceModal, showEditServiceModal, showAccessibilitySettings, globalLoading, showNotifications, currentError])
 
   // Hide web contents view when any overlay is shown
   useEffect(() => {
     if (hasOverlayVisible) {
-      window.flowDesk?.browserView?.hide?.()
+      void window.flowDesk?.browserView?.hide?.()
     } else {
-      window.flowDesk?.browserView?.show?.()
+      void window.flowDesk?.browserView?.show?.()
     }
   }, [hasOverlayVisible])
 
-  // Global search functionality
-  const handleGlobalSearch = useCallback(async (query: string, filters: SearchFilters): Promise<SearchResult[]> => {
-    setGlobalLoading(true)
-    setGlobalLoadingMessage('Searching...')
-    
-    try {
-      // Implement global search across all data types
-      const results: SearchResult[] = []
-      
-      // This would be replaced with actual search implementation
-      await new Promise(resolve => setTimeout(resolve, 500)) // Simulate API call
-      
-      return results
-    } catch (error) {
-      console.error('Global search error:', error)
-      throw error
-    } finally {
-      setGlobalLoading(false)
-    }
-  }, [])
-
-  const handleSearchResultSelect = useCallback((result: SearchResult) => {
-    // Navigate to the appropriate view based on result type
-    switch (result.type) {
-      case 'contact':
-        // TODO: Open contact view
-        break
-      case 'file':
-        // TODO: Open file
-        break
-    }
-    setShowSearchOverlay(false)
-  }, [])
-
   // Enhanced keyboard shortcuts
   const shortcuts = useKeyboardShortcuts([
-    {
-      ...commonShortcuts.globalSearch,
-      action: () => setShowSearchOverlay(true)
-    },
     {
       ...commonShortcuts.goToWorkspace,
       action: () => setActiveView('workspace')
@@ -273,55 +231,150 @@ function AppContent() {
     const initializeApp = async () => {
       setGlobalLoading(true);
       setGlobalLoadingMessage('Initializing application...');
+      let initializationError: AppError | null = null;
       
       try {
-        // Wait for preload script to load
+        // Wait for preload script to load with better error handling
         let retries = 0;
-        while (!window.flowDesk && retries < 50) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+        const maxRetries = 50;
+        const retryDelay = 100;
+        
+        while (!window.flowDesk && retries < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
           retries++;
+          
+          // Log progress for debugging
+          if (retries % 10 === 0) {
+            logger.debug(`Waiting for preload script... attempt ${retries}/${maxRetries}`);
+          }
         }
         
-        if (window.flowDesk) {
-          console.log('Flow Desk API available, initializing app...');
-          dispatch(loadThemeSettings());
-          
-          // Load workspaces with error handling
-          try {
-            await dispatch(loadWorkspaces()).unwrap();
-          } catch (error) {
-            const appError = await handleError(error, {
-              operation: 'Load workspaces',
-              component: 'App',
-              onRetry: () => {
-                setCurrentError(null);
-                dispatch(loadWorkspaces());
-              },
-              onDismiss: () => setCurrentError(null)
-            });
-            setCurrentError(appError);
-          }
-        } else {
-          const appError = workspaceErrors.loadFailed('Application failed to initialize properly');
-          appError.recoveryActions = [
-            {
-              label: 'Restart App',
-              action: () => window.location.reload(),
-              primary: true
-            },
-            {
-              label: 'Dismiss',
-              action: () => setCurrentError(null)
-            }
-          ];
-          setCurrentError(appError);
+        if (!window.flowDesk) {
+          throw new Error(`Failed to load Flow Desk API after ${maxRetries} attempts. Please restart the application.`);
         }
+        
+        logger.info('Flow Desk API available, initializing app...');
+        
+        // Load theme settings first
+        try {
+          await dispatch(loadThemeSettings()).unwrap();
+          logger.info('Theme settings loaded successfully');
+        } catch (themeError) {
+          logger.warn('Failed to load theme settings:', undefined, { error: themeError as Error });
+          // Continue without theme settings
+        }
+        
+        // Load workspaces with comprehensive error handling
+        try {
+          await dispatch(loadWorkspaces()).unwrap();
+          logger.info('Workspaces loaded successfully');
+        } catch (error) {
+          logger.error('Failed to load workspaces:', error as Error);
+          const appError = await handleError(error, {
+            operation: 'Load workspaces',
+            component: 'App',
+            onRetry: () => {
+              setCurrentError(null);
+              dispatch(loadWorkspaces());
+            },
+            onDismiss: () => setCurrentError(null)
+          });
+          initializationError = appError;
+        }
+        
+        // Load additional data if workspaces loaded successfully
+        if (!initializationError) {
+          try {
+            // Additional data loading can be implemented here when needed
+            // Potential future integrations:
+            // - Plugin marketplace data
+            // - Service catalog data  
+            // - Theme templates
+            // User preferences
+            
+            logger.info('Additional data loading skipped - implementation pending');
+          } catch (additionalError) {
+            logger.warn('Failed to load additional data:', undefined, { error: additionalError as Error });
+            // Don't fail initialization if additional data fails to load
+          }
+        }
+        
+      } catch (error) {
+        logger.error('Critical initialization error:', error as Error);
+        
+        // Create comprehensive error with recovery options
+        const criticalError = workspaceErrors.loadFailed(
+          error instanceof Error ? error.message : 'Application failed to initialize properly'
+        );
+        
+        criticalError.recoveryActions = [
+          {
+            label: 'Restart App',
+            action: () => window.location.reload(),
+            primary: true
+          },
+          {
+            label: 'Clear Local Storage',
+            action: () => {
+              localStorage.clear();
+              sessionStorage.clear();
+              window.location.reload();
+            },
+            destructive: true
+          },
+          {
+            label: 'Dismiss',
+            action: () => setCurrentError(null)
+          }
+        ];
+        
+        initializationError = criticalError;
       } finally {
         setGlobalLoading(false);
+        if (initializationError) {
+          setCurrentError(initializationError);
+        }
       }
     };
     
-    initializeApp();
+    // Add error boundary for the initialization function itself
+    try {
+      initializeApp();
+    } catch (uncaughtError) {
+      logger.error('Uncaught initialization error:', uncaughtError as Error);
+      setGlobalLoading(false);
+      setCurrentError((prev) => ({
+        id: 'init-crash',
+        name: 'InitCrashError',
+        message: 'Application crashed during initialization',
+        userMessage: 'Application crashed during initialization',
+        technicalMessage: uncaughtError instanceof Error ? uncaughtError.message : String(uncaughtError),
+        code: 'INTERNAL_ERROR',
+        category: 'SYSTEM',
+        severity: 'critical',
+        timestamp: Date.now(),
+        retryCount: 0,
+        maxRetries: 3,
+        isRetryable: true,
+        canRetry: true,
+        recoveryActions: [
+          {
+            label: 'Reload Page',
+            action: () => {
+              localStorage.clear();
+              sessionStorage.clear();
+              window.location.reload();
+            },
+            destructive: true
+          },
+          {
+            label: 'Dismiss',
+            action: () => {}
+          }
+        ],
+        context: { source: 'initialization' }
+      }));
+    }
   }, [dispatch])
 
   // Apply theme when it changes
@@ -333,30 +386,49 @@ function AppContent() {
   // This useEffect is no longer needed since Redux slice handles this automatically
 
   const handleAddService = useCallback(async (serviceData: { name: string; type: string; url: string }) => {
+    let addError: AppError | null = null;
+    
     try {
+      // Validate inputs before proceeding
+      if (!serviceData.name || !serviceData.name.trim()) {
+        throw new Error('Service name is required');
+      }
+      
+      if (!serviceData.url || !serviceData.url.trim()) {
+        throw new Error('Service URL is required');
+      }
+      
+      if (!serviceData.type || !serviceData.type.trim()) {
+        throw new Error('Service type is required');
+      }
+      
+      // Validate URL format
+      try {
+        new URL(serviceData.url);
+      } catch (urlError) {
+        throw new Error(`Invalid URL format: ${serviceData.url}`);
+      }
+      
       if (!activeWorkspaceId) {
-        const error = workspaceErrors.notFound('No workspace selected');
-        error.recoveryActions = [
-          {
-            label: 'Select Workspace',
-            action: () => setCurrentError(null)
-          }
-        ];
-        setCurrentError(error);
-        return;
+        throw new Error('No workspace selected. Please select or create a workspace first.');
       }
 
       setGlobalLoading(true);
       setGlobalLoadingMessage(`Adding ${serviceData.name}...`);
 
-      const serviceId = await window.flowDesk.workspace.addService(
+      const serviceId = await window.flowDesk!.workspace.addService(
         activeWorkspaceId,
-        serviceData.name,
-        serviceData.type,
-        serviceData.url
+        serviceData.name.trim(),
+        serviceData.type.trim(),
+        serviceData.url.trim()
       );
 
-      console.log('Added service:', serviceId, serviceData);
+      logger.info('Service added successfully', { 
+        serviceId, 
+        serviceName: serviceData.name,
+        serviceType: serviceData.type,
+        workspaceId: activeWorkspaceId 
+      });
       
       // Show success toast
       toast.showSuccess(
@@ -364,10 +436,18 @@ function AppContent() {
         `${serviceData.name} has been added to your workspace`
       );
       
-      // Refresh workspace data
-      await dispatch(loadWorkspaces()).unwrap();
+      // Refresh workspace data with error handling
+      try {
+        await dispatch(loadWorkspaces()).unwrap();
+        logger.info('Workspace data refreshed after service addition');
+      } catch (refreshError) {
+        logger.warn('Failed to refresh workspace data after adding service:', undefined, { error: refreshError as Error });
+        // Don't fail the operation if refresh fails, but log the issue
+      }
       
     } catch (error) {
+      logger.error('Failed to add service:', error as Error);
+      
       const appError = await handleError(error, {
         operation: 'Add service',
         component: 'App',
@@ -375,7 +455,11 @@ function AppContent() {
           setCurrentError(null);
           handleAddService(serviceData);
         },
-        onDismiss: () => setCurrentError(null)
+        onDismiss: () => setCurrentError(null),
+        onError: (err) => {
+          // Additional error handling if needed
+          logger.error('Service add error:', undefined, { error: err as Error });
+        }
       });
       
       // Classify as service error if it's an IPC error
@@ -383,12 +467,15 @@ function AppContent() {
         const ipcError = error as any;
         const serviceError = serviceErrors.creationFailed(serviceData.name, serviceData.url, ipcError.userMessage);
         serviceError.recoveryActions = appError.recoveryActions;
-        setCurrentError(serviceError);
+        addError = serviceError;
       } else {
-        setCurrentError(appError);
+        addError = appError;
       }
     } finally {
       setGlobalLoading(false);
+      if (addError) {
+        setCurrentError(addError);
+      }
     }
   }, [activeWorkspaceId, dispatch]);
 
@@ -400,7 +487,7 @@ function AppContent() {
       switch (e.key) {
         case 'k':
           e.preventDefault()
-          setShowSearchOverlay(true)
+          setActiveView('workspace')
           break
         case '1':
           e.preventDefault()
@@ -414,7 +501,6 @@ function AppContent() {
     }
     
     if (e.key === 'Escape') {
-      setShowSearchOverlay(false)
       setShowNotifications(false)
       setShowAccessibilitySettings(false)
       setCurrentError(null)
@@ -432,7 +518,7 @@ function AppContent() {
       case 'workspace':
         if (activeServiceId) {
           // Show the selected service content - WebContentsView will be overlaid here
-          const selectedService = currentWorkspace?.services.find((s: any) => s.id === activeServiceId);
+          const selectedService = (currentWorkspace as any)?.services.find((s: any) => s.id === activeServiceId);
           return (
             <WorkspaceErrorBoundary>
               <div className="h-full bg-background">
@@ -485,7 +571,7 @@ function AppContent() {
           </WorkspaceErrorBoundary>
         )
     }
-  }, [activeView, activeServiceId, currentWorkspace?.services])
+  }, [activeView, activeServiceId, (currentWorkspace as any)?.services])
 
   return (
     <KeyboardShortcutManager shortcuts={shortcuts}>
@@ -528,7 +614,7 @@ function AppContent() {
             <ServicesSidebar
             workspaceId={activeWorkspaceId}
             workspaceName={currentWorkspace?.name || 'Workspace'}
-            services={currentWorkspace?.services || []}
+            services={(currentWorkspace as any)?.services || []}
             activeServiceId={activeServiceId}
             onServiceSelect={useCallback(async (serviceId: string) => {
               setActiveServiceId(serviceId);
@@ -537,10 +623,10 @@ function AppContent() {
                 try {
                   // Service switching - no global loading needed
                   
-                  await window.flowDesk.workspace.loadService(activeWorkspaceId, serviceId);
+                  await window.flowDesk!.workspace.loadService(activeWorkspaceId, serviceId);
                   logger.info('Service switched', { serviceId });
                 } catch (error) {
-                  const service = currentWorkspace?.services.find(s => s.id === serviceId);
+                  const service = (currentWorkspace as any)?.services.find((s: any) => s.id === serviceId);
                   const serviceName = service?.name || 'service';
                   
                   const appError = await handleError(error, {
@@ -549,9 +635,9 @@ function AppContent() {
                     onRetry: async () => {
                       setCurrentError(null);
                       try {
-                        await window.flowDesk.workspace.loadService(activeWorkspaceId, serviceId);
+                        await window.flowDesk!.workspace.loadService(activeWorkspaceId, serviceId);
                       } catch (retryError) {
-                        console.error('Retry failed:', retryError);
+                        logger.error('Console error', undefined, { originalArgs: ['Retry failed:', retryError], method: 'console.error' });
                       }
                     },
                     onDismiss: () => setCurrentError(null)
@@ -577,14 +663,14 @@ function AppContent() {
             onDeleteService={useCallback(async (serviceId: string) => {
               if (!activeWorkspaceId) return;
               
-              const service = currentWorkspace?.services.find(s => s.id === serviceId);
+              const service = (currentWorkspace as any)?.services.find((s: any) => s.id === serviceId);
               const serviceName = service?.name || 'service';
               
               try {
                 setGlobalLoading(true);
                 setGlobalLoadingMessage(`Removing ${serviceName}...`);
                 
-                await window.flowDesk.workspace.removeService(activeWorkspaceId, serviceId);
+                await window.flowDesk!.workspace.removeService(activeWorkspaceId, serviceId);
                 await dispatch(loadWorkspaces()).unwrap();
                 
                 // Show success toast
@@ -601,10 +687,10 @@ function AppContent() {
                   onRetry: async () => {
                     setCurrentError(null);
                     try {
-                      await window.flowDesk.workspace.removeService(activeWorkspaceId, serviceId);
+                      await window.flowDesk!.workspace.removeService(activeWorkspaceId, serviceId);
                       await dispatch(loadWorkspaces()).unwrap();
                     } catch (retryError) {
-                      console.error('Retry failed:', retryError);
+                      logger.error('Service load retry failed', retryError as Error, { method: 'console.error' });
                     }
                   },
                   onDismiss: () => setCurrentError(null)
@@ -626,19 +712,19 @@ function AppContent() {
             onRetryService={useCallback(async (serviceId: string) => {
               if (!activeWorkspaceId) return;
               
-              const service = currentWorkspace?.services.find(s => s.id === serviceId);
+              const service = (currentWorkspace as any)?.services.find((s: any) => s.id === serviceId);
               const serviceName = service?.name || 'service';
               
               try {
                 setGlobalLoading(true);
                 setGlobalLoadingMessage(`Retrying ${serviceName}...`);
                 
-                await window.flowDesk.workspace.loadService(activeWorkspaceId, serviceId);
+                await window.flowDesk!.workspace.loadService(activeWorkspaceId, serviceId);
                 
                 // Show success toast
                 toast.showSuccess('Service Retried', `${serviceName} connection has been restored`);
                 
-                console.log('Service retry successful:', serviceId);
+                logger.info('Service retry successful', { serviceId }, { method: 'console.log' });
               } catch (error) {
                 // Show error toast for retry failures (less intrusive than modal)
                 toast.showError(
@@ -646,16 +732,16 @@ function AppContent() {
                   `Failed to reconnect to ${serviceName}. Please try again later.`
                 );
                 
-                console.error('Service retry failed:', error);
+                logger.error('Service retry failed', error as Error, { method: 'console.error' });
               } finally {
                 setGlobalLoading(false);
               }
             }, [activeWorkspaceId, currentWorkspace, toast])}
             onEditWorkspace={useCallback((workspaceId: string) => {
-              console.log('Edit workspace functionality to be implemented:', workspaceId);
+              logger.info('Edit workspace functionality to be implemented', { workspaceId }, { method: 'console.log' as any });
             }, [])}
             onWorkspaceSettings={useCallback((workspaceId: string) => {
-              console.log('Workspace settings functionality to be implemented:', workspaceId);
+              logger.info('Workspace settings functionality to be implemented', { workspaceId }, { method: 'console.log' as any });
             }, [])}
             />
           </ReactProfilerWrapper>
@@ -671,41 +757,14 @@ function AppContent() {
             <PluginPanels
               className="absolute inset-0 pointer-events-none"
               dockedPanelWidth={280}
-              onPluginClose={(id) => console.log('Close plugin:', id)}
-              onPluginSettings={(id) => console.log('Plugin settings:', id)}
+              onPluginClose={(id) => logger.info('Close plugin requested', { pluginId: id }, { method: 'console.log' })}
+              onPluginSettings={(id) => logger.info('Plugin settings requested', { pluginId: id }, { method: 'console.log' })}
             />
           </main>
         </div>
       </div>
 
-      {/* Advanced Search Overlay */}
-      {showSearchOverlay && (
-        <div 
-          className={cn("fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center", getZIndexClass('SEARCH_OVERLAY'))}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="search-title"
-          onClick={useCallback((e: React.MouseEvent) => {
-            if (e.target === e.currentTarget) {
-              setShowSearchOverlay(false)
-            }
-          }, [])}
-        >
-          <div className="w-full max-w-3xl mx-4">
-            <h2 id="search-title" className="sr-only">Global Search</h2>
-            <Suspense fallback={<ComponentLoader name="Search" />}>
-              <AdvancedSearchInterface
-                onSearch={handleGlobalSearch}
-                onResultSelect={handleSearchResultSelect}
-                autoFocus
-                showFilters
-                placeholder="Search contacts and files..."
-              />
-            </Suspense>
-          </div>
-        </div>
-      )}
-
+  
       {/* Notifications Overlay */}
       {showNotifications && (
         <aside 
@@ -715,10 +774,10 @@ function AppContent() {
         >
           <NotificationsHub
             onNotificationAction={(id, action) => {
-              console.log('Notification action:', id)
+              logger.info('Notification action triggered', { notificationId: id }, { method: 'console.log' })
               action()
             }}
-            onNotificationDismiss={(id) => console.log('Dismiss notification:', id)}
+            onNotificationDismiss={(id) => logger.info('Notification dismissed', { notificationId: id }, { method: 'console.log' })}
           />
         </aside>
       )}
@@ -759,14 +818,14 @@ function AppContent() {
           }, [])}
           workspaceId={currentWorkspace?.id || ''}
           serviceId={editingServiceId}
-          currentService={currentWorkspace?.services.find((s: any) => s.id === editingServiceId)}
+          currentService={(currentWorkspace as any)?.services.find((s: any) => s.id === editingServiceId)}
           onSave={useCallback(async (serviceId: string, updates: any) => {
             try {
-              console.log('Service updated successfully:', serviceId, updates);
+              logger.info('Service updated successfully', { serviceId, updates }, { method: 'console.log' });
               // Refresh the workspaces to show the updated service
               dispatch(loadWorkspaces());
             } catch (error) {
-              console.error('Failed to update service:', error);
+              logger.error('Failed to update service', error as Error, { method: 'console.error' });
             }
           }, [dispatch])}
         />
@@ -775,7 +834,7 @@ function AppContent() {
       {/* Error Dialog */}
       {currentError && (
         <div 
-          className={cn("fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4", getZIndexClass('ERROR_OVERLAY'))}
+          className={cn("fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4", getZIndexClass('ERROR_BOUNDARY'))}
           role="dialog"
           aria-modal="true"
           aria-labelledby="error-title"
@@ -829,7 +888,7 @@ function AppContent() {
                 {currentError.recoveryActions?.map((action, index) => (
                   <Button
                     key={index}
-                    variant={action.primary ? 'default' : 'outline'}
+                    variant={action.primary ? 'primary' : 'outline'}
                     size="sm"
                     onClick={action.action}
                     className="w-full sm:w-auto"

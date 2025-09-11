@@ -11,6 +11,7 @@ import { dialog, app } from 'electron';
 import { promises as fs } from 'fs';
 import * as crypto from 'crypto';
 import * as path from 'path';
+import { createLogger } from '../shared/logging/LoggerFactory';
 
 export class ImportExportTransport implements BaseSyncTransport {
   public readonly name = 'import_export';
@@ -57,7 +58,7 @@ export class ImportExportTransport implements BaseSyncTransport {
 
       return importData;
     } catch (error) {
-      console.error('Failed to import configuration:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to import configuration:', error], method: 'console.error' });
       throw new Error(`Import failed: ${error.message}`);
     }
   }
@@ -109,9 +110,9 @@ export class ImportExportTransport implements BaseSyncTransport {
       // Write to file
       await fs.writeFile(filePath, fileContent, 'utf8');
 
-      console.log(`Configuration exported to: ${filePath}`);
+      logger.debug('Console log', undefined, { originalArgs: [`Configuration exported to: ${filePath}`], method: 'console.log' });
     } catch (error) {
-      console.error('Failed to export configuration:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to export configuration:', error], method: 'console.error' });
       throw new Error(`Export failed: ${error.message}`);
     }
   }
@@ -239,7 +240,7 @@ export class ImportExportTransport implements BaseSyncTransport {
         return [];
       }
     } catch (error) {
-      console.error('Failed to list backups:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to list backups:', error], method: 'console.error' });
       return [];
     }
   }
@@ -263,13 +264,13 @@ export class ImportExportTransport implements BaseSyncTransport {
           await fs.unlink(backup.path);
           deletedCount++;
         } catch (error) {
-          console.error(`Failed to delete backup ${backup.path}:`, error);
+          logger.error('Console error', undefined, { originalArgs: [`Failed to delete backup ${backup.path}:`, error], method: 'console.error' });
         }
       }
       
       return deletedCount;
     } catch (error) {
-      console.error('Failed to clean old backups:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to clean old backups:', error], method: 'console.error' });
       return 0;
     }
   }

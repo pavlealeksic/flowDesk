@@ -10,6 +10,7 @@ import { WorkspaceSyncConfig } from '@flow-desk/shared/sync/WorkspaceSyncEngine'
 import { EventEmitter } from 'events';
 import * as dgram from 'dgram';
 import * as crypto from 'crypto';
+import { createLogger } from '../shared/logging/LoggerFactory';
 
 interface LANDevice {
   deviceInfo: DeviceInfo;
@@ -85,7 +86,7 @@ export class LANSyncTransport extends EventEmitter implements BaseSyncTransport 
       const targetDevice = availableDevices[0];
       return await this.requestConfigurationFromDevice(targetDevice);
     } catch (error) {
-      console.error('Failed to download configuration via LAN:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to download configuration via LAN:', error], method: 'console.error' });
       throw error;
     } finally {
       this.stopDiscovery();
@@ -120,7 +121,7 @@ export class LANSyncTransport extends EventEmitter implements BaseSyncTransport 
 
       await Promise.allSettled(promises);
     } catch (error) {
-      console.error('Failed to upload configuration via LAN:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to upload configuration via LAN:', error], method: 'console.error' });
       throw error;
     } finally {
       this.stopDiscovery();
@@ -169,7 +170,7 @@ export class LANSyncTransport extends EventEmitter implements BaseSyncTransport 
 
       this.emit('discoveryStarted');
     } catch (error) {
-      console.error('Failed to start LAN discovery:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to start LAN discovery:', error], method: 'console.error' });
       throw error;
     }
   }
@@ -297,7 +298,7 @@ export class LANSyncTransport extends EventEmitter implements BaseSyncTransport 
       '255.255.255.255',
       (error) => {
         if (error) {
-          console.error('Discovery broadcast failed:', error);
+          logger.error('Console error', undefined, { originalArgs: ['Discovery broadcast failed:', error], method: 'console.error' });
         }
       }
     );
@@ -332,7 +333,7 @@ export class LANSyncTransport extends EventEmitter implements BaseSyncTransport 
         }
       }
     } catch (error) {
-      console.error('Failed to handle discovery message:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to handle discovery message:', error], method: 'console.error' });
     }
   }
 
@@ -381,7 +382,7 @@ export class LANSyncTransport extends EventEmitter implements BaseSyncTransport 
           break;
       }
     } catch (error) {
-      console.error('Failed to handle sync message:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to handle sync message:', error], method: 'console.error' });
     }
   }
 
@@ -466,7 +467,7 @@ export class LANSyncTransport extends EventEmitter implements BaseSyncTransport 
     const messageBuffer = Buffer.from(JSON.stringify(message));
     this.syncSocket.send(messageBuffer, 0, messageBuffer.length, port, address, (error) => {
       if (error) {
-        console.error('Failed to send sync message:', error);
+        logger.error('Console error', undefined, { originalArgs: ['Failed to send sync message:', error], method: 'console.error' });
       }
     });
   }

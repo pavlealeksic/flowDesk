@@ -26,12 +26,17 @@
     "src/main/database-initialization-service.ts",
     "src/main/main.ts",
     "src/main/**/*.ts",
+    "src/main/config/**/*.ts",
+    "src/main/error-handling/**/*.ts",
+    "src/main/plugin-runtime/**/*.ts",
+    "src/main/plugin-integration.ts",
     "src/preload/preload.ts",
     "src/preload/PreloadLogger.ts",
+    "src/shared/**/*.ts",
     "src/types/**/*",
     "../shared/src/**/*"
   ],
-  "exclude": [
+"exclude": [
     "src/renderer/**/*", 
     "**/*.test.*", 
     "**/*.spec.*",
@@ -40,8 +45,6 @@
     "src/main/main-old.ts", 
     "src/main/main-backup.ts",
     "src/main/automation/**/*",
-    "src/main/plugin-runtime/**/*",
-    "src/main/plugin-integration.ts",
     "src/main/integration-test.js",
     "src/lib/rust-engine/**/*",
     "!src/lib/rust-integration/**/*",

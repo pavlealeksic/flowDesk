@@ -21,6 +21,9 @@ import {
   Archive
 } from '../ui'
 import { type BaseComponentProps, type NotificationData } from '../ui/types'
+import { useLogger } from '../../logging/RendererLoggingService';
+
+const logger = useLogger('NotificationsHub');
 
 // Mock notification data
 const mockNotifications: NotificationData[] = [
@@ -34,7 +37,7 @@ const mockNotifications: NotificationData[] = [
     icon: <Mail className="h-4 w-4" />,
     action: {
       label: 'Reply',
-      onClick: () => console.log('Reply clicked')
+      onClick: () => logger.debug('Console log', undefined, { originalArgs: ['Reply clicked'], method: 'console.log' })
     }
   },
   {
@@ -56,7 +59,7 @@ const mockNotifications: NotificationData[] = [
     persistent: true,
     action: {
       label: 'Manage Storage',
-      onClick: () => console.log('Manage storage clicked')
+      onClick: () => logger.debug('Console log', undefined, { originalArgs: ['Manage storage clicked'], method: 'console.log' })
     }
   },
   {
@@ -69,7 +72,7 @@ const mockNotifications: NotificationData[] = [
     persistent: true,
     action: {
       label: 'Retry',
-      onClick: () => console.log('Retry clicked')
+      onClick: () => logger.debug('Console log', undefined, { originalArgs: ['Retry clicked'], method: 'console.log' })
     }
   },
   {
@@ -82,7 +85,7 @@ const mockNotifications: NotificationData[] = [
     icon: <Users className="h-4 w-4" />,
     action: {
       label: 'Accept',
-      onClick: () => console.log('Accept invitation clicked')
+      onClick: () => logger.debug('Console log', undefined, { originalArgs: ['Accept invitation clicked'], method: 'console.log' })
     }
   }
 ]

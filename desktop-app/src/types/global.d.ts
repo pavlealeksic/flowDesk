@@ -1,8 +1,7 @@
 declare global {
   interface Window {
-    flowDesk: import('../preload/preload').FlowDeskAPI;
-    searchAPI: import('../preload/preload').FlowDeskAPI['searchAPI'];
-    electronAPI: import('../preload/preload').FlowDeskAPI;
+    flowDesk: typeof import('../preload/preload').flowDeskAPI;
+    electronAPI: any;
     Electron: any;
   }
 

@@ -156,7 +156,7 @@ export class PluginLogger {
       const duration = Date.now() - startTime;
       
       logger.error(`Operation failed: ${operation}`, { 
-        error: error.message,
+        error: (error as Error).message,
         duration 
       });
       
@@ -320,7 +320,7 @@ export class PluginLogger {
     // - Event bus for real-time monitoring
 
     // For now, we'll just emit a Node.js event
-    process.emit('plugin-log', logEntry);
+    (process as any).emit('plugin-log', logEntry);
   }
 
   /**

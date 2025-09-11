@@ -5,6 +5,9 @@
 
 import Store from 'electron-store';
 import log from 'electron-log';
+import { createLogger } from '../../shared/logging/LoggerFactory';
+
+const logger = createLogger('PluginManager');
 
 export interface Plugin {
   id: string;
@@ -81,7 +84,7 @@ export class PluginManager {
   }
 
   async initialize(): Promise<void> {
-    console.log('Plugin manager initialized');
+    logger.debug('Console log', undefined, { originalArgs: ['Plugin manager initialized'], method: 'console.log' });
   }
 
   async loadPlugin(manifest: PluginManifest): Promise<void> {
@@ -99,9 +102,9 @@ export class PluginManager {
       plugin.isLoaded = true;
       plugin.isEnabled = true;
       
-      console.log(`Loaded plugin: ${plugin.name} v${plugin.version}`);
+      logger.debug('Console log', undefined, { originalArgs: [`Loaded plugin: ${plugin.name} v${plugin.version}`], method: 'console.log' });
     } catch (error) {
-      console.error(`Failed to load plugin ${plugin.id}:`, error);
+      logger.error('Console error', undefined, { originalArgs: [`Failed to load plugin ${plugin.id}:`, error], method: 'console.error' });
       throw error;
     }
   }
@@ -118,7 +121,7 @@ export class PluginManager {
       plugin.isLoaded = false;
       plugin.isEnabled = false;
       
-      console.log(`Unloaded plugin: ${plugin.name}`);
+      logger.debug('Console log', undefined, { originalArgs: [`Unloaded plugin: ${plugin.name}`], method: 'console.log' });
     }
   }
 
@@ -133,7 +136,7 @@ export class PluginManager {
     }
 
     plugin.isEnabled = true;
-    console.log(`Enabled plugin: ${plugin.name}`);
+    logger.debug('Console log', undefined, { originalArgs: [`Enabled plugin: ${plugin.name}`], method: 'console.log' });
   }
 
   async disablePlugin(pluginId: string): Promise<void> {
@@ -143,7 +146,7 @@ export class PluginManager {
     }
 
     plugin.isEnabled = false;
-    console.log(`Disabled plugin: ${plugin.name}`);
+    logger.debug('Console log', undefined, { originalArgs: [`Disabled plugin: ${plugin.name}`], method: 'console.log' });
   }
 
   async callPluginMethod(pluginId: string, methodName: string, ...args: any[]): Promise<any> {
@@ -176,7 +179,7 @@ export class PluginManager {
     try {
       return await loadedPlugin[method](...args);
     } catch (error) {
-      console.error(`Error executing ${method} on plugin ${pluginId}:`, error);
+      logger.error('Console error', undefined, { originalArgs: [`Error executing ${method} on plugin ${pluginId}:`, error], method: 'console.error' });
       throw error;
     }
   }
@@ -185,10 +188,10 @@ export class PluginManager {
     return {
       api: {
         showNotification: (title: string, body: string) => {
-          console.log(`Plugin ${pluginId} notification: ${title} - ${body}`);
+          logger.debug('Console log', undefined, { originalArgs: [`Plugin ${pluginId} notification: ${title} - ${body}`], method: 'console.log' });
         },
         registerCommand: (name: string, handler: Function) => {
-          console.log(`Plugin ${pluginId} registered command: ${name}`);
+          logger.debug('Console log', undefined, { originalArgs: [`Plugin ${pluginId} registered command: ${name}`], method: 'console.log' });
         },
         getConfig: (key: string) => {
           const pluginConfig = this.pluginConfigs.get(pluginId);
@@ -222,7 +225,7 @@ export class PluginManager {
               try {
                 handler(data);
               } catch (error) {
-                console.error(`Error in event handler for ${event}:`, error);
+                logger.error('Console error', undefined, { originalArgs: [`Error in event handler for ${event}:`, error], method: 'console.error' });
               }
             });
           }
@@ -238,7 +241,7 @@ export class PluginManager {
         try {
           return handler(data);
         } catch (error) {
-          console.error(`Error in event handler for ${event}:`, error);
+          logger.error('Console error', undefined, { originalArgs: [`Error in event handler for ${event}:`, error], method: 'console.error' });
           return null;
         }
       }));

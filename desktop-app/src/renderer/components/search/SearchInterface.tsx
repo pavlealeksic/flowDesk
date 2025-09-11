@@ -22,6 +22,9 @@ import {
   ChevronDown
 } from '../ui'
 import { type BaseComponentProps, type SearchResult, type SearchFilter } from '../ui/types'
+import { useLogger } from '../../logging/RendererLoggingService';
+
+const logger = useLogger('SearchInterface');
 
 // Mock search data
 const mockResults: SearchResult[] = [
@@ -416,7 +419,7 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
         setResults(sortedResults)
       }
     } catch (error) {
-      console.error('Search error:', error)
+      logger.error('Console error', undefined, { originalArgs: ['Search error:', error], method: 'console.error' })
       setResults([])
     } finally {
       setIsSearching(false)

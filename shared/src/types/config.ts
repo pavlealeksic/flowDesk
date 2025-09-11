@@ -892,8 +892,12 @@ export interface SyncDevice {
   lastSeen: Date;
   /** Whether device is trusted */
   trusted: boolean;
+  /** Device status */
+  status?: 'paired' | 'disconnected' | 'syncing' | 'error';
   /** Device capabilities */
   capabilities: string[];
+  /** Encryption key for secure communication */
+  encryptionKey?: string;
 }
 
 /**
@@ -1202,4 +1206,138 @@ export interface SyncResult {
     merged: number;
     deleted: number;
   };
+}
+
+/**
+ * Configuration backup information
+ */
+export interface ConfigBackup {
+  /** Backup ID */
+  id: string;
+  /** Backup timestamp */
+  timestamp: Date;
+  /** Backup size in bytes */
+  size: number;
+  /** Backup description */
+  description?: string;
+  /** Backup type */
+  type: 'manual' | 'auto';
+  /** Backup source */
+  source: 'local' | 'remote';
+  /** Whether backup is encrypted */
+  encrypted: boolean;
+  /** Backup location */
+  location: string;
+  /** Backup metadata */
+  metadata: Record<string, any>;
+}
+
+/**
+ * Application settings (legacy compatibility)
+ */
+export interface AppSettings {
+  /** Application preferences */
+  preferences: {
+    /** Theme settings */
+    theme: ThemeSettings;
+    /** Language settings */
+    language: LanguageSettings;
+    /** Privacy settings */
+    privacy: PrivacySettings;
+    /** Accessibility settings */
+    accessibility: AccessibilitySettings;
+    /** Notification preferences */
+    notifications: NotificationPreferences;
+    /** Startup preferences */
+    startup: StartupPreferences;
+  };
+  /** Application configuration */
+  config: {
+    /** Auto-start settings */
+    autoStart: boolean;
+    /** Auto-update settings */
+    autoUpdate: boolean;
+    /** Development mode */
+    development: boolean;
+    /** Logging level */
+    logLevel: 'error' | 'warn' | 'info' | 'debug';
+    /** Crash reporting */
+    crashReporting: boolean;
+    /** Analytics */
+    analytics: boolean;
+  };
+  /** Application state */
+  state: {
+    /** Last workspace */
+    lastWorkspace?: string;
+    /** Window bounds */
+    windowBounds?: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    };
+    /** Window state */
+    windowState: 'normal' | 'maximized' | 'minimized' | 'fullscreen';
+    /** Last used view */
+    lastView: string;
+  };
+}
+
+/**
+ * Search options (legacy compatibility)
+ */
+export interface SearchOptions {
+  /** Search query */
+  query: string;
+  /** Search filters */
+  filters?: Record<string, any>;
+  /** Search sources */
+  sources?: string[];
+  /** Maximum results */
+  limit?: number;
+  /** Offset for pagination */
+  offset?: number;
+  /** Search sort options */
+  sortBy?: string;
+  /** Search sort direction */
+  sortOrder?: 'asc' | 'desc';
+  /** Whether to include content preview */
+  includePreview?: boolean;
+  /** Whether to use fuzzy search */
+  fuzzySearch?: boolean;
+  /** Whether to match case */
+  caseSensitive?: boolean;
+  /** Whether to match whole words */
+  wholeWords?: boolean;
+}
+
+/**
+ * Search result (legacy compatibility)
+ */
+export interface SearchResult {
+  /** Result ID */
+  id: string;
+  /** Result title */
+  title: string;
+  /** Result content */
+  content: string;
+  /** Result type */
+  type: string;
+  /** Result source */
+  source: string;
+  /** Result relevance score */
+  score?: number;
+  /** Result metadata */
+  metadata?: Record<string, any>;
+  /** Result URL */
+  url?: string;
+  /** Result creation date */
+  created?: Date;
+  /** Result modification date */
+  modified?: Date;
+  /** Result snippet */
+  snippet?: string;
+  /** Result highlights */
+  highlights?: string[];
 }

@@ -311,7 +311,9 @@ export class PluginMarketplaceManager extends EventEmitter {
       // Verify package integrity and signature
       if (!options.skipVerification) {
         await this.verifyPackageIntegrity(packagePath, downloadInfo);
-        await this.securityManager.verifyPluginSignature(packagePath, pluginDetails.manifest);
+        if (pluginDetails.manifest) {
+          await this.securityManager.verifyPluginSignature(packagePath, pluginDetails.manifest);
+        }
       }
 
       // Update progress
@@ -369,14 +371,14 @@ export class PluginMarketplaceManager extends EventEmitter {
       // Update progress with error
       const progress = this.installationProgress.get(installationId);
       if (progress) {
-        progress.error = error.message;
+        progress.error = (error as Error).message;
         this.emit('installationProgress', progress);
       }
 
       // Cleanup on failure
       await this.cleanupFailedInstallation(installationId);
       
-      this.emit('installationFailed', { pluginId, installationId, error: error.message });
+      this.emit('installationFailed', { pluginId, installationId, error: (error as Error).message });
       throw error;
     } finally {
       // Remove from active installations
@@ -644,7 +646,7 @@ export class PluginMarketplaceManager extends EventEmitter {
 
       return manifest;
     } catch (error) {
-      throw new Error(`Failed to load plugin manifest: ${error.message}`);
+      throw new Error(`Failed to load plugin manifest: ${(error as Error).message}`);
     }
   }
 
@@ -686,7 +688,11 @@ export class PluginMarketplaceManager extends EventEmitter {
         enabled: false,
         autoUpdate: true,
         visible: true,
-        order: 0
+        order: 0,
+        notifications: {
+          enabled: true,
+          types: []
+        }
       },
       grantedPermissions: [],
       grantedScopes: [],
@@ -708,7 +714,7 @@ export class PluginMarketplaceManager extends EventEmitter {
       await fs.unlink(packagePath);
       this.logger.debug(`Cleaned up package file: ${packagePath}`);
     } catch (error) {
-      this.logger.warn(`Failed to cleanup package file: ${error.message}`);
+      this.logger.warn(`Failed to cleanup package file: ${(error as Error).message}`);
     }
   }
 

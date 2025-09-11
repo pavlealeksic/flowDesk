@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
-import type { ThemeSettings as ThemeConfig } from '../../../types/preload'
+import type { ThemeSettings as ThemeConfig } from '@flow-desk/shared'
 
-type ThemeMode = 'light' | 'dark' | 'system'
+type ThemeMode = 'light' | 'dark' | 'auto'
 
 interface ThemeState {
   mode: ThemeMode
@@ -33,8 +33,8 @@ const initialState: ThemeState = {
 export const loadThemeSettings = createAsyncThunk(
   'theme/loadThemeSettings',
   async () => {
-    const themeInfo = await window.flowDesk.theme.get()
-    const settings = await window.flowDesk.settings.get()
+    const themeInfo = await (window.flowDesk as any)?.theme?.get()
+    const settings = await (window.flowDesk as any)?.settings?.get()
     
     return {
       ...themeInfo,
@@ -53,12 +53,14 @@ export const setThemeMode = createAsyncThunk(
   'theme/setThemeMode',
   async (mode: ThemeMode) => {
     const themeConfig: ThemeConfig = {
-      theme: mode,
-      name: mode,
+      mode: mode,
       accentColor: '#007acc',
-      fontSize: 14
+      fontSize: 'medium' as const,
+      fontFamily: 'system',
+      highContrast: false,
+      colorBlindFriendly: false
     };
-    await window.flowDesk.theme.set(themeConfig)
+    await (window.flowDesk as any)?.theme?.set(themeConfig)
     return mode
   }
 )
@@ -66,7 +68,7 @@ export const setThemeMode = createAsyncThunk(
 export const updateThemeSetting = createAsyncThunk(
   'theme/updateThemeSetting',
   async ({ key, value }: { key: string; value: unknown }) => {
-    const success = await window.flowDesk.settings.set(`theme.${key}`, value)
+    const success = await (window.flowDesk as any)?.settings?.set(`theme.${key}`, value)
     if (!success) {
       throw new Error(`Failed to update theme setting: ${key}`)
     }
@@ -155,7 +157,7 @@ const themeSlice = createSlice({
       shouldUseDarkColors: boolean
       shouldUseHighContrastColors: boolean
     }>) => {
-      if (state.mode === 'system') {
+      if (state.mode === 'auto') {
         state.isDarkMode = action.payload.shouldUseDarkColors
         document.documentElement.classList.toggle('dark', action.payload.shouldUseDarkColors)
       }
@@ -192,4 +194,5 @@ export const {
   handleSystemThemeChange
 } = themeSlice.actions
 
+export { type ThemeState }
 export default themeSlice.reducer

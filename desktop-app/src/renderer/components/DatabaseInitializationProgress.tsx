@@ -88,13 +88,19 @@ export const DatabaseInitializationProgress: React.FC<DatabaseInitializationProg
     };
 
     // Register event listeners
-    window.flowDesk?.on('database-initialization-progress', handleProgress);
-    window.flowDesk?.on('database-initialization-complete', handleComplete);
+    if (window.flowDesk) {
+      (window.flowDesk as any).on('database-initialization-progress', handleProgress);
+      (window.flowDesk as any).on('database-initialization-complete', handleComplete);
+
+      return () => {
+        // Clean up listeners
+        (window.flowDesk as any)?.off('database-initialization-progress', handleProgress);
+        (window.flowDesk as any)?.off('database-initialization-complete', handleComplete);
+      };
+    }
 
     return () => {
-      // Clean up listeners
-      window.flowDesk?.off('database-initialization-progress', handleProgress);
-      window.flowDesk?.off('database-initialization-complete', handleComplete);
+      // No cleanup needed if window.flowDesk is not available
     };
   }, [show, onComplete]);
 

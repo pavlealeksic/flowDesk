@@ -4,8 +4,6 @@
  */
 
 import { describe, beforeEach, afterEach, test, expect, jest } from '@jest/globals';
-import { EventEmitter } from 'events';
-import { WorkspaceManager, type Workspace, type WorkspaceService } from '../../main/workspace';
 
 // Mock the filesystem operations
 const mockFs = {
@@ -53,6 +51,7 @@ const mockBrowserView = {
       clearStorageData: jest.fn().mockResolvedValue(undefined)
     },
     setWindowOpenHandler: jest.fn(),
+    stop: jest.fn(),
     destroy: jest.fn()
   },
   setBounds: jest.fn()
@@ -78,16 +77,143 @@ const mockLog = {
   debug: jest.fn()
 };
 
+const mockConfigManager = {
+  getConfig: jest.fn().mockReturnValue({
+    environment: 'development',
+    memory: {
+      maxWebContentsViews: 10,
+      memoryThresholdMB: 500,
+      memoryMonitorInterval: 30000,
+      inactiveCleanupDelay: 1800000,
+      enableAutoCleanup: true,
+      enableMemoryMonitoring: true
+    },
+    performance: {
+      enabled: true,
+      samplingRate: 0.1,
+      metricsInterval: 10000,
+      enableReactProfiler: false,
+      enableBundleAnalysis: false,
+      maxPerformanceEntries: 1000
+    },
+    errorHandling: {
+      enableAutoRecovery: true,
+      maxRetryAttempts: 3,
+      retryBaseDelay: 1000,
+      retryMaxDelay: 30000,
+      enableErrorReporting: false
+    },
+    workspace: {
+      maxWorkspaces: 20,
+      maxServicesPerWorkspace: 15,
+      defaultBrowserIsolation: 'shared',
+      enablePreloading: true,
+      maxPreloadServices: 5,
+      autoSaveInterval: 30000
+    },
+    security: {
+      httpsOnly: false,
+      maxUrlLength: 2000,
+      allowedProtocols: ['https:', 'http:'],
+      enableCSP: true,
+      enableIframeSandbox: true,
+      rateLimiting: {
+        enabled: true,
+        maxRequestsPerMinute: 100,
+        windowSizeMs: 60000
+      }
+    },
+    development: {
+      enableDevTools: false,
+      enableHotReload: false,
+      enableDebugLogging: false,
+      mockExternalServices: false,
+      devServerPort: 5173
+    },
+    dataDirectory: 'data',
+    logging: {
+      level: 'info',
+      enableFileLogging: true,
+      maxLogFiles: 5,
+      maxLogSizeMB: 10
+    }
+  }),
+  validateConfig: jest.fn().mockReturnValue({ isValid: true }),
+  getMemoryConfig: jest.fn().mockReturnValue({
+    maxWebContentsViews: 10,
+    memoryThresholdMB: 500,
+    memoryMonitorInterval: 30000,
+    inactiveCleanupDelay: 1800000,
+    enableAutoCleanup: true,
+    enableMemoryMonitoring: true
+  }),
+  getWorkspaceConfig: jest.fn().mockReturnValue({
+    maxWorkspaces: 20,
+    maxServicesPerWorkspace: 15,
+    defaultBrowserIsolation: 'shared',
+    enablePreloading: true,
+    maxPreloadServices: 5,
+    autoSaveInterval: 30000
+  }),
+  getSecurityConfig: jest.fn().mockReturnValue({
+    httpsOnly: false,
+    maxUrlLength: 2000,
+    allowedProtocols: ['https:', 'http:'],
+    enableCSP: true,
+    enableIframeSandbox: true,
+    rateLimiting: {
+      enabled: true,
+      maxRequestsPerMinute: 100,
+      windowSizeMs: 60000
+    }
+  }),
+  getDevelopmentConfig: jest.fn().mockReturnValue({
+    enableDevTools: false,
+    enableHotReload: false,
+    enableDebugLogging: false,
+    mockExternalServices: false,
+    devServerPort: 5173
+  }),
+  getPerformanceConfig: jest.fn().mockReturnValue({
+    enabled: true,
+    samplingRate: 0.1,
+    metricsInterval: 10000,
+    enableReactProfiler: false,
+    enableBundleAnalysis: false,
+    maxPerformanceEntries: 1000
+  }),
+  getErrorHandlingConfig: jest.fn().mockReturnValue({
+    enableAutoRecovery: true,
+    maxRetryAttempts: 3,
+    retryBaseDelay: 1000,
+    retryMaxDelay: 30000,
+    enableErrorReporting: false
+  }),
+  updateConfig: jest.fn().mockReturnValue(true),
+  reloadConfig: jest.fn().mockReturnValue(true)
+};
+
 // Mock modules before importing the class
 jest.mock('fs', () => mockFs);
 jest.mock('path', () => mockPath);
 jest.mock('crypto', () => mockCrypto);
-jest.mock('electron-log', () => mockLog);
 jest.mock('electron', () => ({
   BrowserView: jest.fn().mockImplementation(() => mockBrowserView),
   session: mockSession,
   shell: mockShell
 }));
+
+jest.mock('../../main/config/AppConfig', () => ({
+  configManager: mockConfigManager
+}));
+
+// Mock electron-log with default export
+jest.mock('electron-log', () => mockLog);
+jest.mock('electron-log/default', () => mockLog);
+
+// Now import after mocking
+import { EventEmitter } from 'events';
+import { WorkspaceManager, type Workspace, type WorkspaceService, setTestConfigManager } from '../../main/workspace';
 
 describe('WorkspaceManager', () => {
   let workspaceManager: WorkspaceManager;
@@ -96,6 +222,9 @@ describe('WorkspaceManager', () => {
   beforeEach(() => {
     // Clear all mocks
     jest.clearAllMocks();
+    
+    // Set up test config manager
+    setTestConfigManager(mockConfigManager);
     
     // Setup mock data
     mockWorkspaceData = [

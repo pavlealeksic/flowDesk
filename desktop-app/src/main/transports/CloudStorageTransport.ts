@@ -11,6 +11,7 @@ import { execSync } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { app } from 'electron';
+import { createLogger } from '../shared/logging/LoggerFactory';
 
 export type CloudProvider = 'icloud' | 'onedrive' | 'googledrive' | 'dropbox';
 
@@ -64,7 +65,7 @@ export class CloudStorageTransport implements BaseSyncTransport {
       
       return JSON.parse(decryptedData);
     } catch (error) {
-      console.error(`Failed to download configuration from ${this.provider}:`, error);
+      logger.error('Console error', undefined, { originalArgs: [`Failed to download configuration from ${this.provider}:`, error], method: 'console.error' });
       throw new Error(`Download failed: ${error.message}`);
     }
   }
@@ -96,7 +97,7 @@ export class CloudStorageTransport implements BaseSyncTransport {
       await this.releaseLock();
     } catch (error) {
       await this.releaseLock(); // Ensure lock is released on error
-      console.error(`Failed to upload configuration to ${this.provider}:`, error);
+      logger.error('Console error', undefined, { originalArgs: [`Failed to upload configuration to ${this.provider}:`, error], method: 'console.error' });
       throw new Error(`Upload failed: ${error.message}`);
     }
   }

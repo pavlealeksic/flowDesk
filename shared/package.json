@@ -1,29 +1,23 @@
 {
   "name": "@flow-desk/shared",
   "version": "0.1.0",
-  "description": "Shared services, types, and SDKs for Flow Desk (Rust + TypeScript)",
+  "description": "Shared services, types, and SDKs for Flow Desk (TypeScript only)",
   "private": true,
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
   "files": [
-    "dist/**/*",
-    "rust-lib/target/release/*"
+    "dist/**/*"
   ],
   "scripts": {
-    "build": "npm run build:rust && npm run build:ts",
-    "build:rust": "cd rust-lib && npm run build",
-    "build:rust:debug": "cd rust-lib && npm run build:debug",
+    "build": "npm run build:ts",
     "build:ts": "tsup",
     "dev": "tsup --watch",
     "lint": "eslint . --ext .ts,.tsx --fix",
     "type-check": "tsc --noEmit",
     "test": "vitest",
     "test:watch": "vitest --watch",
-    "test:rust": "cd rust-lib && cargo test --features=napi --no-default-features",
-    "clean": "rm -rf dist rust-lib/target rust-lib/*.node node_modules/.cache",
-    "format:rust": "cd rust-lib && cargo fmt",
-    "clippy": "cd rust-lib && cargo clippy --features=napi --no-default-features -- -D warnings"
+    "clean": "rm -rf dist node_modules/.cache"
   },
   "dependencies": {
     "zod": "^3.24.1"

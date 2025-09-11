@@ -1,12 +1,8 @@
 import { createSlice, createAsyncThunk, PayloadAction, createSelector } from '@reduxjs/toolkit'
-import type { WorkspacePartitionConfig } from '@flow-desk/shared'
+import type { WorkspaceMetadata, WorkspacePartitionConfig } from '@flow-desk/shared'
+import { WorkspaceData } from '../../types/global'
 
-interface WorkspaceData {
-  id: string
-  name: string
-  abbreviation: string
-  color: string
-  icon?: string
+interface WorkspaceDataExtended extends WorkspaceData {
   browserIsolation?: 'shared' | 'isolated'
   services: Array<{
     id: string
@@ -16,21 +12,20 @@ interface WorkspaceData {
     iconUrl?: string
     isEnabled: boolean
     config: Record<string, any>
+    createdAt: Date
+    updatedAt: Date
   }>
-  members?: string[]
-  created: string // ISO string for serialization
-  lastAccessed: string // ISO string for serialization
+  created: Date // ISO string for serialization
+  lastAccessed: Date // ISO string for serialization
   isActive: boolean
-  // Legacy fields for compatibility
-  type?: 'personal' | 'team' | 'organization'
+  type?: string
+  ownerId?: string
+  tags?: string[]
+  icon?: string
+  members?: string[]
   description?: string
   organizationId?: string
   teamId?: string
-  ownerId?: string
-  createdAt?: string
-  updatedAt?: string
-  tags?: string[]
-  apps?: string[]
   settings?: Record<string, any>
 }
 
@@ -43,7 +38,7 @@ interface WorkspaceWindow {
 }
 
 interface WorkspaceState {
-  workspaces: Record<string, WorkspaceData>
+  workspaces: Record<string, WorkspaceDataExtended>
   currentWorkspaceId: string | null
   partitions: Record<string, WorkspacePartitionConfig>
   windows: Record<string, WorkspaceWindow[]>
@@ -74,10 +69,9 @@ const initialState: WorkspaceState = {
 export const loadWorkspaces = createAsyncThunk(
   'workspace/loadWorkspaces',
   async () => {
-    const [workspaces, currentWorkspace, partitions] = await Promise.all([
-      window.flowDesk.workspace.list(),
-      window.flowDesk.workspace.getCurrent(),
-      window.flowDesk.workspace.listPartitions()
+    const [workspaces, partitions] = await Promise.all([
+      window.flowDesk!.workspace.list(),
+      window.flowDesk!.workspace.listPartitions()
     ])
     
     const partitionsMap = partitions.reduce((acc: Record<string, WorkspacePartitionConfig>, partition: any) => {
@@ -87,7 +81,7 @@ export const loadWorkspaces = createAsyncThunk(
     
     return {
       workspaces,
-      currentWorkspaceId: currentWorkspace?.id || null,
+      currentWorkspaceId: workspaces[0]?.id || null,
       partitions: partitionsMap
     }
   }
@@ -96,22 +90,24 @@ export const loadWorkspaces = createAsyncThunk(
 export const switchWorkspace = createAsyncThunk(
   'workspace/switchWorkspace',
   async (workspaceId: string) => {
-    await window.flowDesk.workspace.switch(workspaceId)
+    await window.flowDesk!.workspace.switch(workspaceId)
     return workspaceId
   }
 )
 
 export const createWorkspace = createAsyncThunk(
   'workspace/createWorkspace',
-  async (workspace: Omit<WorkspaceData, 'createdAt' | 'updatedAt'>) => {
-    const workspaceId = await window.flowDesk.workspace.create(workspace)
+  async (workspace: Omit<WorkspaceDataExtended, 'createdAt' | 'updatedAt'>) => {
+    const workspaceId = await window.flowDesk!.workspace.create(workspace.name, workspace.color)
     
     // Create the full workspace object
-    const workspaceData: WorkspaceData = {
+    const workspaceData: WorkspaceDataExtended = {
       ...workspace,
       id: workspaceId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      created: new Date(),
+      lastAccessed: new Date(),
+      updated: new Date(),
+      isActive: true
     }
     
     // Create corresponding partition
@@ -140,7 +136,7 @@ export const createWorkspace = createAsyncThunk(
       }
     }
     
-    await window.flowDesk.workspace.createPartition(partitionConfig)
+    await window.flowDesk!.workspace.createPartition(partitionConfig)
     
     return { workspace: workspaceData, partition: partitionConfig }
   }
@@ -149,7 +145,7 @@ export const createWorkspace = createAsyncThunk(
 export const updateWorkspace = createAsyncThunk(
   'workspace/updateWorkspace',
   async ({ workspaceId, updates }: { workspaceId: string; updates: Partial<WorkspaceData> }) => {
-    await window.flowDesk.workspace.update(workspaceId, updates as any)
+    await window.flowDesk!.workspace.update(workspaceId, updates as any)
     return { workspaceId, updates }
   }
 )
@@ -157,7 +153,7 @@ export const updateWorkspace = createAsyncThunk(
 export const deleteWorkspace = createAsyncThunk(
   'workspace/deleteWorkspace',
   async (workspaceId: string) => {
-    await window.flowDesk.workspace.delete(workspaceId)
+    await window.flowDesk!.workspace.delete(workspaceId)
     return workspaceId
   }
 )
@@ -165,7 +161,7 @@ export const deleteWorkspace = createAsyncThunk(
 export const updatePartition = createAsyncThunk(
   'workspace/updatePartition',
   async ({ workspaceId, updates }: { workspaceId: string; updates: Partial<WorkspacePartitionConfig> }) => {
-    await window.flowDesk.workspace.updatePartition(workspaceId, updates)
+    await window.flowDesk!.workspace.updatePartition(workspaceId, updates)
     return { workspaceId, updates }
   }
 )
@@ -173,7 +169,7 @@ export const updatePartition = createAsyncThunk(
 export const clearWorkspaceData = createAsyncThunk(
   'workspace/clearData',
   async (workspaceId: string) => {
-    await window.flowDesk.workspace.clearData(workspaceId)
+    await window.flowDesk!.workspace.clearData(workspaceId)
     return workspaceId
   }
 )
@@ -181,15 +177,15 @@ export const clearWorkspaceData = createAsyncThunk(
 export const loadWorkspaceWindows = createAsyncThunk(
   'workspace/loadWindows',
   async (workspaceId: string) => {
-    const windows = await window.flowDesk.workspace.getWindows(workspaceId)
+    const windows = await window.flowDesk!.workspace.getWindows(workspaceId)
     return { workspaceId, windows }
   }
 )
 
 export const createWorkspaceWindow = createAsyncThunk(
   'workspace/createWindow',
-  async ({ workspaceId, options }: { workspaceId: string; options: Electron.BrowserWindowConstructorOptions }) => {
-    const result = await window.flowDesk.workspace.createWindow(options as any)
+  async ({ workspaceId, options }: { workspaceId: string; options: any }) => {
+    const result = await window.flowDesk!.workspace.createWindow(options)
     // Return both workspaceId and result for reducer
     return { workspaceId, windowId: result }
   }
@@ -228,21 +224,25 @@ const workspaceSlice = createSlice({
       .addCase(loadWorkspaces.fulfilled, (state, action) => {
         state.isLoading = false
         // Convert workspace array to Record and ensure proper data structure
-        const workspacesMap: Record<string, WorkspaceData> = {};
+        const workspacesMap: Record<string, WorkspaceDataExtended> = {};
         if (action.payload.workspaces && Array.isArray(action.payload.workspaces)) {
           action.payload.workspaces.forEach((workspace: any) => {
             // Ensure workspace has all required fields with fallbacks
-            const workspaceData: WorkspaceData = {
+            const workspaceData: WorkspaceDataExtended = {
               id: workspace.id || `ws_${Date.now()}`,
               name: workspace.name || 'Unnamed Workspace',
               abbreviation: workspace.abbreviation || workspace.name?.substring(0, 2).toUpperCase() || 'UW',
               color: workspace.color || '#4285f4',
               icon: workspace.icon,
               browserIsolation: workspace.browserIsolation || 'shared',
-              services: workspace.services || [],
+              services: (workspace.services || []).map((service: any) => ({
+                ...service,
+                createdAt: service.createdAt ? new Date(service.createdAt) : new Date(),
+                updatedAt: service.updatedAt ? new Date(service.updatedAt) : new Date()
+              })),
               members: workspace.members || [],
-              created: workspace.created ? new Date(workspace.created).toISOString() : new Date().toISOString(),
-              lastAccessed: workspace.lastAccessed ? new Date(workspace.lastAccessed).toISOString() : new Date().toISOString(),
+              created: workspace.created ? new Date(workspace.created) : new Date(),
+              lastAccessed: workspace.lastAccessed ? new Date(workspace.lastAccessed) : new Date(),
               isActive: workspace.isActive || false,
               // Legacy compatibility
               type: workspace.type,
@@ -250,11 +250,10 @@ const workspaceSlice = createSlice({
               organizationId: workspace.organizationId,
               teamId: workspace.teamId,
               ownerId: workspace.ownerId,
-              createdAt: workspace.createdAt,
-              updatedAt: workspace.updatedAt,
               tags: workspace.tags,
-              apps: workspace.apps,
-              settings: workspace.settings
+              settings: workspace.settings,
+              // Required fields
+              updated: workspace.updated ? new Date(workspace.updated) : new Date(),
             };
             workspacesMap[workspace.id] = workspaceData;
           });
@@ -333,7 +332,7 @@ const workspaceSlice = createSlice({
       
       // Create workspace window
       .addCase(createWorkspaceWindow.fulfilled, (state, action) => {
-        const result = action.payload as { workspaceId: string; windowId: number }
+        const result = action.payload as { workspaceId: string; windowId: string | number }
         // Window will be loaded in the next loadWorkspaceWindows call
       })
   }
@@ -402,7 +401,7 @@ export const selectWorkspacesByType = createSelector(
     if (!acc[type]) acc[type] = []
     acc[type].push(workspace)
     return acc
-  }, {} as Record<string, WorkspaceData[]>)
+  }, {} as Record<string, WorkspaceDataExtended[]>)
 )
 
 export const selectSortedWorkspaces = createSelector(
@@ -417,4 +416,5 @@ export const selectWorkspaceLoading = (state: { workspace: WorkspaceState }) => 
 export const selectWorkspaceError = (state: { workspace: WorkspaceState }) => state.workspace.error
 export const selectWorkspaceSyncStatus = (state: { workspace: WorkspaceState }) => state.workspace.syncStatus
 
+export { type WorkspaceState }
 export default workspaceSlice.reducer

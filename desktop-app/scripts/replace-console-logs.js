@@ -39,32 +39,32 @@ const EXCLUDE_PATTERNS = [
 const REPLACEMENTS = {
   // Main process files
   main: {
-    import: "import { mainLoggingService } from '../logging/LoggingService';",
-    loggerInit: "private readonly logger = mainLoggingService.createLogger('ComponentName');",
+    import: "import { createLogger } from '../shared/logging/LoggerFactory';",
+    loggerInit: "const logger = createLogger('ComponentName');",
     patterns: [
       {
-        regex: /console\.error\(['"`]([^'"`]+)['"`],?\s*([^)]*)\)/g,
-        replacement: "this.logger.error('$1', $2)"
+        regex: /console\.error\(([^)]+)\)/g,
+        replacement: "logger.error('Console error', undefined, { originalArgs: [$1], method: 'console.error' })"
       },
       {
-        regex: /console\.warn\(['"`]([^'"`]+)['"`],?\s*([^)]*)\)/g,
-        replacement: "this.logger.warn('$1', undefined, { data: $2 })"
+        regex: /console\.warn\(([^)]+)\)/g,
+        replacement: "logger.warn('Console warning', undefined, { originalArgs: [$1], method: 'console.warn' })"
       },
       {
-        regex: /console\.info\(['"`]([^'"`]+)['"`],?\s*([^)]*)\)/g,
-        replacement: "this.logger.info('$1', undefined, { data: $2 })"
+        regex: /console\.info\(([^)]+)\)/g,
+        replacement: "logger.info('Console info', undefined, { originalArgs: [$1], method: 'console.info' })"
       },
       {
-        regex: /console\.log\(['"`]([^'"`]+)['"`],?\s*([^)]*)\)/g,
-        replacement: "this.logger.debug('$1', undefined, { data: $2 })"
+        regex: /console\.log\(([^)]+)\)/g,
+        replacement: "logger.debug('Console log', undefined, { originalArgs: [$1], method: 'console.log' })"
       },
       {
-        regex: /console\.debug\(['"`]([^'"`]+)['"`],?\s*([^)]*)\)/g,
-        replacement: "this.logger.debug('$1', undefined, { data: $2 })"
+        regex: /console\.debug\(([^)]+)\)/g,
+        replacement: "logger.debug('Console debug', undefined, { originalArgs: [$1], method: 'console.debug' })"
       },
       {
-        regex: /console\.trace\(['"`]([^'"`]+)['"`],?\s*([^)]*)\)/g,
-        replacement: "this.logger.trace('$1', undefined, { data: $2 })"
+        regex: /console\.trace\(([^)]+)\)/g,
+        replacement: "logger.trace('Console trace', undefined, { originalArgs: [$1], method: 'console.trace' })"
       }
     ]
   },
@@ -75,59 +75,60 @@ const REPLACEMENTS = {
     hookUsage: "const logger = useLogger('ComponentName');",
     patterns: [
       {
-        regex: /console\.error\(['"`]([^'"`]+)['"`],?\s*([^)]*)\)/g,
-        replacement: "logger.error('$1', $2)"
+        regex: /console\.error\(([^)]+)\)/g,
+        replacement: "logger.error('Console error', undefined, { originalArgs: [$1], method: 'console.error' })"
       },
       {
-        regex: /console\.warn\(['"`]([^'"`]+)['"`],?\s*([^)]*)\)/g,
-        replacement: "logger.warn('$1', undefined, { data: $2 })"
+        regex: /console\.warn\(([^)]+)\)/g,
+        replacement: "logger.warn('Console warning', undefined, { originalArgs: [$1], method: 'console.warn' })"
       },
       {
-        regex: /console\.info\(['"`]([^'"`]+)['"`],?\s*([^)]*)\)/g,
-        replacement: "logger.info('$1', undefined, { data: $2 })"
+        regex: /console\.info\(([^)]+)\)/g,
+        replacement: "logger.info('Console info', undefined, { originalArgs: [$1], method: 'console.info' })"
       },
       {
-        regex: /console\.log\(['"`]([^'"`]+)['"`],?\s*([^)]*)\)/g,
-        replacement: "logger.debug('$1', undefined, { data: $2 })"
+        regex: /console\.log\(([^)]+)\)/g,
+        replacement: "logger.debug('Console log', undefined, { originalArgs: [$1], method: 'console.log' })"
       },
       {
-        regex: /console\.debug\(['"`]([^'"`]+)['"`],?\s*([^)]*)\)/g,
-        replacement: "logger.debug('$1', undefined, { data: $2 })"
+        regex: /console\.debug\(([^)]+)\)/g,
+        replacement: "logger.debug('Console debug', undefined, { originalArgs: [$1], method: 'console.debug' })"
       },
       {
-        regex: /console\.trace\(['"`]([^'"`]+)['"`],?\s*([^)]*)\)/g,
-        replacement: "logger.trace('$1', undefined, { data: $2 })"
+        regex: /console\.trace\(([^)]+)\)/g,
+        replacement: "logger.trace('Console trace', undefined, { originalArgs: [$1], method: 'console.trace' })"
       }
     ]
   },
   
   // Preload process files
   preload: {
-    import: "import { preloadLogger } from './PreloadLogger';",
+    import: "import { createLogger } from '../shared/logging/LoggerFactory';",
+    loggerInit: "const logger = createLogger('ComponentName');",
     patterns: [
       {
-        regex: /console\.error\(['"`]([^'"`]+)['"`],?\s*([^)]*)\)/g,
-        replacement: "preloadLogger.error('$1', $2)"
+        regex: /console\.error\(([^)]+)\)/g,
+        replacement: "logger.error('Console error', undefined, { originalArgs: [$1], method: 'console.error' })"
       },
       {
-        regex: /console\.warn\(['"`]([^'"`]+)['"`],?\s*([^)]*)\)/g,
-        replacement: "preloadLogger.warn('$1', undefined, { data: $2 })"
+        regex: /console\.warn\(([^)]+)\)/g,
+        replacement: "logger.warn('Console warning', undefined, { originalArgs: [$1], method: 'console.warn' })"
       },
       {
-        regex: /console\.info\(['"`]([^'"`]+)['"`],?\s*([^)]*)\)/g,
-        replacement: "preloadLogger.info('$1', undefined, { data: $2 })"
+        regex: /console\.info\(([^)]+)\)/g,
+        replacement: "logger.info('Console info', undefined, { originalArgs: [$1], method: 'console.info' })"
       },
       {
-        regex: /console\.log\(['"`]([^'"`]+)['"`],?\s*([^)]*)\)/g,
-        replacement: "preloadLogger.debug('$1', undefined, { data: $2 })"
+        regex: /console\.log\(([^)]+)\)/g,
+        replacement: "logger.debug('Console log', undefined, { originalArgs: [$1], method: 'console.log' })"
       },
       {
-        regex: /console\.debug\(['"`]([^'"`]+)['"`],?\s*([^)]*)\)/g,
-        replacement: "preloadLogger.debug('$1', undefined, { data: $2 })"
+        regex: /console\.debug\(([^)]+)\)/g,
+        replacement: "logger.debug('Console debug', undefined, { originalArgs: [$1], method: 'console.debug' })"
       },
       {
-        regex: /console\.trace\(['"`]([^'"`]+)['"`],?\s*([^)]*)\)/g,
-        replacement: "preloadLogger.trace('$1', undefined, { data: $2 })"
+        regex: /console\.trace\(([^)]+)\)/g,
+        replacement: "logger.trace('Console trace', undefined, { originalArgs: [$1], method: 'console.trace' })"
       }
     ]
   }

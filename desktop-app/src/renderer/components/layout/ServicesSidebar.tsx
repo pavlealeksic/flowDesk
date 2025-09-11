@@ -16,6 +16,7 @@ import {
   UserPlus,
   Download
 } from '../ui';
+import { useLogger } from '../../logging/RendererLoggingService';
 
 interface Service {
   id: string;
@@ -35,6 +36,7 @@ interface ServicesSidebarProps {
   onAddService: () => void;
   onEditService?: (serviceId: string) => void;
   onDeleteService?: (serviceId: string) => void;
+  onRetryService?: (serviceId: string) => void;
   onEditWorkspace?: (workspaceId: string) => void;
   onWorkspaceSettings?: (workspaceId: string) => void;
   className?: string;
@@ -49,6 +51,7 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
   onAddService,
   onEditService,
   onDeleteService,
+  onRetryService,
   onEditWorkspace,
   onWorkspaceSettings,
   className
@@ -56,6 +59,7 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
   const [contextMenuService, setContextMenuService] = useState<string | null>(null);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   const [showWorkspaceActions, setShowWorkspaceActions] = useState(false);
+  const logger = useLogger('ServicesSidebar');
 
   // Close context menu when clicking outside
   useEffect(() => {
@@ -73,31 +77,40 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
   }, [contextMenuService, showWorkspaceActions]);
   
   const getServiceIcon = useCallback((type: string) => {
-    const iconMap: Record<string, string> = {
-      slack: './assets/service-icons/slack.svg',
-      notion: './assets/service-icons/notion.svg',
-      github: './assets/service-icons/github.svg',
-      jira: './assets/service-icons/jira.svg',
-      teams: './assets/service-icons/teams.svg',
-      discord: './assets/service-icons/discord.svg',
-      trello: './assets/service-icons/trello.svg',
-      asana: './assets/service-icons/asana.svg',
-      linear: './assets/service-icons/linear.ico',
-      clickup: './assets/service-icons/clickup.svg',
-      monday: './assets/service-icons/monday.svg',
-      gitlab: './assets/service-icons/gitlab.svg',
-      bitbucket: './assets/service-icons/bitbucket.svg',
-      googledrive: './assets/service-icons/googledrive.svg',
-      onedrive: './assets/service-icons/onedrive.svg',
-      dropbox: './assets/service-icons/dropbox.svg',
-      figma: './assets/service-icons/figma.svg',
-      miro: './assets/service-icons/miro.ico',
-      salesforce: './assets/service-icons/salesforce.svg',
-      hubspot: './assets/service-icons/hubspot.ico',
-      zendesk: './assets/service-icons/zendesk.svg',
-      intercom: './assets/service-icons/intercom.svg'
+    // Default icon mapping - will be replaced with configuration from main process
+    const defaultIconMap: Record<string, string> = {
+      slack: '/service-icons/slack.svg',
+      notion: '/service-icons/notion.svg', 
+      github: '/service-icons/github.svg',
+      jira: '/service-icons/jira.svg',
+      teams: '/service-icons/teams.svg',
+      discord: '/service-icons/discord.svg',
+      trello: '/service-icons/trello.svg',
+      asana: '/service-icons/asana.svg',
+      linear: '/service-icons/linear.svg',
+      clickup: '/service-icons/clickup.png',
+      monday: '/service-icons/monday.svg',
+      gitlab: '/service-icons/gitlab.svg',
+      bitbucket: '/service-icons/bitbucket.png',
+      googledrive: '/service-icons/googledrive.svg',
+      onedrive: '/service-icons/onedrive.svg',
+      dropbox: '/service-icons/dropbox.png',
+      figma: '/service-icons/figma.ico',
+      miro: '/service-icons/miro.svg',
+      salesforce: '/service-icons/salesforce.svg',
+      hubspot: '/service-icons/hubspot.svg',
+      zendesk: '/service-icons/zendesk.svg',
+      intercom: '/service-icons/intercom.svg',
+      evernote: '/service-icons/evernote.svg',
+      canva: '/service-icons/canva.svg',
+      adobe: '/service-icons/adobe.svg',
+      analytics: '/service-icons/analytics.svg',
+      confluence: '/service-icons/confluence.svg'
     };
-    return iconMap[type] || './assets/service-icons/default.svg';
+    
+    // TODO: Get icon mapping from configuration via IPC
+    // For now, use the default mapping
+    return defaultIconMap[type] || '/service-icons/default.svg';
   }, []);
 
   if (!workspaceId) {
@@ -193,13 +206,13 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
                   className="w-full px-3 py-2 text-left text-sm hover:bg-accent focus:bg-accent flex items-center space-x-2 cursor-pointer"
                   tabIndex={0}
                   onClick={() => {
-                    console.log('Invite users to workspace:', workspaceId);
+                    logger.debug('Console log', undefined, { originalArgs: ['Invite users to workspace:', workspaceId], method: 'console.log' });
                     setShowWorkspaceActions(false);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      console.log('Invite users to workspace:', workspaceId);
+                      logger.debug('Console log', undefined, { originalArgs: ['Invite users to workspace:', workspaceId], method: 'console.log' });
                       setShowWorkspaceActions(false);
                     }
                   }}
@@ -212,13 +225,13 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
                   className="w-full px-3 py-2 text-left text-sm hover:bg-accent focus:bg-accent flex items-center space-x-2 cursor-pointer"
                   tabIndex={0}
                   onClick={() => {
-                    console.log('Export workspace:', workspaceId);
+                    logger.debug('Console log', undefined, { originalArgs: ['Export workspace:', workspaceId], method: 'console.log' });
                     setShowWorkspaceActions(false);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      console.log('Export workspace:', workspaceId);
+                      logger.debug('Console log', undefined, { originalArgs: ['Export workspace:', workspaceId], method: 'console.log' });
                       setShowWorkspaceActions(false);
                     }
                   }}
@@ -301,7 +314,7 @@ export const ServicesSidebar: React.FC<ServicesSidebarProps> = ({
                     style={{ 
                       left: `${contextMenuPosition.x}px`, 
                       top: `${contextMenuPosition.y}px`, 
-                      zIndex: 1000 
+                      zIndex: 1000 // TODO: Get from configuration
                     }}
                     role="menu"
                     aria-orientation="vertical"

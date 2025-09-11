@@ -7,11 +7,12 @@ import { FullConfig } from '@playwright/test';
 import { spawn, ChildProcess } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { useLogger } from '../logging/RendererLoggingService';
 
 let buildProcess: ChildProcess | null = null;
 
 async function globalSetup(config: FullConfig): Promise<void> {
-  console.log('🔧 Setting up E2E test environment...');
+  logger.debug('Console log', undefined, { originalArgs: ['🔧 Setting up E2E test environment...'], method: 'console.log' });
 
   try {
     // Clean up any existing test data
@@ -23,9 +24,9 @@ async function globalSetup(config: FullConfig): Promise<void> {
     // Wait for build to complete
     await waitForBuild();
 
-    console.log('✅ E2E test environment ready');
+    logger.debug('Console log', undefined, { originalArgs: ['✅ E2E test environment ready'], method: 'console.log' });
   } catch (error) {
-    console.error('❌ Failed to setup E2E test environment:', error);
+    logger.error('Console error', undefined, { originalArgs: ['❌ Failed to setup E2E test environment:', error], method: 'console.error' });
     throw error;
   }
 }
@@ -40,16 +41,16 @@ async function cleanupTestData(): Promise<void> {
   for (const dir of testDataDirs) {
     try {
       await fs.rm(dir, { recursive: true, force: true });
-      console.log(`🧹 Cleaned up test directory: ${dir}`);
+      logger.debug('Console log', undefined, { originalArgs: [`🧹 Cleaned up test directory: ${dir}`], method: 'console.log' });
     } catch (error) {
       // Directory might not exist, which is fine
-      console.log(`ℹ️  Test directory doesn't exist or already clean: ${dir}`);
+      logger.debug('Console log', undefined, { originalArgs: [`ℹ️  Test directory doesn't exist or already clean: ${dir}`], method: 'console.log' });
     }
   }
 }
 
 async function buildElectronApp(): Promise<void> {
-  console.log('🔨 Building Electron application...');
+  logger.debug('Console log', undefined, { originalArgs: ['🔨 Building Electron application...'], method: 'console.log' });
 
   return new Promise((resolve, reject) => {
     // Build the main and renderer processes
@@ -71,18 +72,18 @@ async function buildElectronApp(): Promise<void> {
 
     buildProcess.on('close', (code) => {
       if (code === 0) {
-        console.log('✅ Electron application built successfully');
+        logger.debug('Console log', undefined, { originalArgs: ['✅ Electron application built successfully'], method: 'console.log' });
         resolve();
       } else {
-        console.error('❌ Electron build failed with code:', code);
-        console.error('Build stdout:', stdout);
-        console.error('Build stderr:', stderr);
+        logger.error('Console error', undefined, { originalArgs: ['❌ Electron build failed with code:', code], method: 'console.error' });
+        logger.error('Console error', undefined, { originalArgs: ['Build stdout:', stdout], method: 'console.error' });
+        logger.error('Console error', undefined, { originalArgs: ['Build stderr:', stderr], method: 'console.error' });
         reject(new Error(`Build process exited with code ${code}`));
       }
     });
 
     buildProcess.on('error', (error) => {
-      console.error('❌ Failed to start build process:', error);
+      logger.error('Console error', undefined, { originalArgs: ['❌ Failed to start build process:', error], method: 'console.error' });
       reject(error);
     });
   });
@@ -98,7 +99,7 @@ async function waitForBuild(): Promise<void> {
     'dist/desktop-app/src/preload/preload.js'
   ];
 
-  console.log('⏳ Waiting for build artifacts...');
+  logger.debug('Console log', undefined, { originalArgs: ['⏳ Waiting for build artifacts...'], method: 'console.log' });
 
   while (Date.now() - startTime < maxWaitTime) {
     try {
@@ -114,11 +115,11 @@ async function waitForBuild(): Promise<void> {
       );
 
       if (allFilesExist.every(exists => exists)) {
-        console.log('✅ All required build artifacts found');
+        logger.debug('Console log', undefined, { originalArgs: ['✅ All required build artifacts found'], method: 'console.log' });
         return;
       }
     } catch (error) {
-      console.log('⏳ Still waiting for build artifacts...');
+      logger.debug('Console log', undefined, { originalArgs: ['⏳ Still waiting for build artifacts...'], method: 'console.log' });
     }
 
     await new Promise(resolve => setTimeout(resolve, checkInterval));

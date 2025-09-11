@@ -31,7 +31,8 @@ export async function initializePluginSystem(mainWindow: BrowserWindow): Promise
       security: {
         strictCSP: true,
         allowedOrigins: ['https://api.slack.com', 'https://api.notion.com'],
-        verifySignatures: process.env.NODE_ENV !== 'development'
+        verifySignatures: process.env.NODE_ENV !== 'development',
+        auditLogging: true
       }
     };
 
@@ -81,11 +82,11 @@ function setupPluginIPCHandlers(): void {
       logger.info(`Installing plugin: ${pluginId}`, options);
       
       // Get current user context (would come from session/auth)
-      const userId = await this.getCurrentUserId();
+      const userId = 'default-user'; // Simplified user management
       const workspaceId = options.workspaceId;
       
       // Use marketplace manager to install the plugin
-      const marketplaceManager = pluginRuntimeManager.getMarketplaceManager();
+      const marketplaceManager = pluginRuntimeManager?.getMarketplaceManager();
       const installationId = await marketplaceManager.installPlugin(
         pluginId,
         userId,
@@ -299,7 +300,7 @@ function setupPluginIPCHandlers(): void {
       // Handle notification events
       notification.on('click', () => {
         // Notify the plugin about notification click
-        const mainWindow = pluginRuntimeManager.getMainWindow();
+        const mainWindow = pluginRuntimeManager?.getMainWindow();
         if (mainWindow) {
           mainWindow.webContents.send('plugin:notification:clicked', {
             pluginId,

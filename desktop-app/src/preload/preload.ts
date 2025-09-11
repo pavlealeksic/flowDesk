@@ -11,7 +11,11 @@
  */
 
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
-import type { FlowDeskAPI as FlowDeskAPIType, LogEntry, LoggerConfig } from '../types/preload';
+import type { LogEntry, LoggerConfig } from '../types/preload';
+import { createLogger } from '../shared/logging/LoggerFactory';
+
+// Create logger instance for preload script
+const logger = createLogger('Preload');
 
 // Define workspace interfaces for preload
 interface Workspace {
@@ -174,6 +178,84 @@ const flowDeskAPI = {
     
     show: (): Promise<void> =>
       ipcRenderer.invoke('browser-view:show'),
+    
+    hideBrowserViews: (): Promise<void> =>
+      ipcRenderer.invoke('browser-view:hide'),
+    
+    showBrowserViews: (): Promise<void> =>
+      ipcRenderer.invoke('browser-view:show'),
+  },
+
+  // Mail API (placeholder implementation)
+  mail: {
+    sendMail: (options: any): Promise<void> =>
+      ipcRenderer.invoke('mail:sendMail', options),
+    
+    getMailboxes: (): Promise<any[]> =>
+      ipcRenderer.invoke('mail:getMailboxes'),
+    
+    getCurrentMailbox: (): Promise<any> =>
+      ipcRenderer.invoke('mail:getCurrentMailbox'),
+    
+    listMessages: (mailboxId: string, options?: any): Promise<any[]> =>
+      ipcRenderer.invoke('mail:listMessages', mailboxId, options),
+    
+    getMessage: (messageId: string): Promise<any> =>
+      ipcRenderer.invoke('mail:getMessage', messageId),
+    
+    deleteMessage: (messageId: string): Promise<void> =>
+      ipcRenderer.invoke('mail:deleteMessage', messageId),
+    
+    markAsRead: (messageId: string): Promise<void> =>
+      ipcRenderer.invoke('mail:markAsRead', messageId),
+    
+    markAsUnread: (messageId: string): Promise<void> =>
+      ipcRenderer.invoke('mail:markAsUnread', messageId),
+    
+    moveMessage: (messageId: string, mailboxId: string): Promise<void> =>
+      ipcRenderer.invoke('mail:moveMessage', messageId, mailboxId),
+    
+    getAccounts: (): Promise<any[]> =>
+      ipcRenderer.invoke('mail:getAccounts'),
+    
+    getMessages: (): Promise<any[]> =>
+      ipcRenderer.invoke('mail:getMessages'),
+    
+    sendMessage: (data: any): Promise<void> =>
+      ipcRenderer.invoke('mail:sendMessage', data),
+    
+    getAllSnippets: (): Promise<any[]> =>
+      ipcRenderer.invoke('mail:getAllSnippets'),
+    
+    saveSnippet: (data: any): Promise<any> =>
+      ipcRenderer.invoke('mail:saveSnippet', data),
+    
+    updateSnippet: (id: string, data: any): Promise<any> =>
+      ipcRenderer.invoke('mail:updateSnippet', id, data),
+    
+    deleteSnippet: (id: string): Promise<void> =>
+      ipcRenderer.invoke('mail:deleteSnippet', id),
+    
+    useSnippet: (id: string): Promise<any> =>
+      ipcRenderer.invoke('mail:useSnippet', id),
+    
+    getTemplates: (): Promise<any[]> =>
+      ipcRenderer.invoke('mail:getTemplates'),
+    
+    getAllTemplates: (): Promise<any[]> =>
+      ipcRenderer.invoke('mail:getAllTemplates'),
+    
+    saveTemplate: (data: any): Promise<any> =>
+      ipcRenderer.invoke('mail:saveTemplate', data),
+    
+    getTemplate: (id: string): Promise<any> =>
+      ipcRenderer.invoke('mail:getTemplate', id),
+    
+    updateTemplate: (id: string, data: any): Promise<any> =>
+      ipcRenderer.invoke('mail:updateTemplate', id, data),
+    
+    deleteTemplate: (id: string): Promise<void> =>
+      ipcRenderer.invoke('mail:deleteTemplate', id),
   },
 
   // Logging API
@@ -196,13 +278,6 @@ const flowDeskAPI = {
 contextBridge.exposeInMainWorld('flowDesk', flowDeskAPI);
 
 // Log successful preload initialization
-console.log('🚀 Flow Desk preload script initialized (workspace-only mode)');
-
-// Type declaration for TypeScript
-declare global {
-  interface Window {
-    flowDesk: FlowDeskAPIType;
-  }
-}
+logger.debug('Console log', undefined, { originalArgs: ['🚀 Flow Desk preload script initialized (workspace-only mode)'], method: 'console.log' });
 
 export type FlowDeskAPI = typeof flowDeskAPI;

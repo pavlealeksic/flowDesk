@@ -47,6 +47,8 @@ export interface PluginSecurityContext {
   tokenExpiry: Date;
   /** Security level */
   securityLevel: 'low' | 'medium' | 'high';
+  /** Allowed domains for network requests */
+  allowedDomains: string[];
 }
 
 export interface SecurityViolation {
@@ -178,7 +180,7 @@ export class PluginSecurityManager extends EventEmitter {
         type: 'signature_invalid',
         installationId: 'unknown',
         description: 'Signature verification error',
-        data: { error: error.message, packagePath },
+        data: { error: (error as Error).message, packagePath },
         timestamp: new Date(),
         severity: 'high'
       });
@@ -241,7 +243,8 @@ export class PluginSecurityManager extends EventEmitter {
         grantedScopes: installation.grantedScopes,
         accessToken,
         tokenExpiry,
-        securityLevel
+        securityLevel,
+        allowedDomains: this.config.allowedOrigins
       };
 
       // Store context and token
@@ -492,5 +495,12 @@ export class PluginSecurityManager extends EventEmitter {
     }
 
     this.logger.debug(`Added ${officialKeys.length} default trusted keys`);
+  }
+
+  /**
+   * Get allowed domains for a plugin
+   */
+  getAllowedDomains(installationId: string): string[] {
+    return this.securityContexts.get(installationId)?.allowedDomains || [];
   }
 }

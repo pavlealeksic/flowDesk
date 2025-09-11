@@ -12,7 +12,7 @@ import { spawn } from 'child_process';
 import { promisify } from 'util';
 import { pipeline } from 'stream';
 import { createReadStream, createWriteStream } from 'fs';
-import { Extract } from 'tar';
+import { extract } from 'tar';
 import { PluginLogger } from '../utils/PluginLogger';
 
 const streamPipeline = promisify(pipeline);
@@ -134,7 +134,7 @@ export class PluginPackageExtractor {
       await fs.rm(extractionPath, { recursive: true, force: true });
       
       // Remove from tracking
-      for (const [id, path] of this.tempExtractions.entries()) {
+      for (const [id, path] of Array.from(this.tempExtractions.entries())) {
         if (path === extractionPath) {
           this.tempExtractions.delete(id);
           break;
@@ -321,8 +321,8 @@ export class PluginPackageExtractor {
     const files: string[] = [];
     
     return new Promise((resolve, reject) => {
-      const extract = new Extract({
-        path: extractionPath,
+      const extractor = extract({
+        cwd: extractionPath,
         filter: (path: string) => {
           // Security check for path traversal
           if (path.includes('..') || path.startsWith('/')) {
@@ -341,16 +341,16 @@ export class PluginPackageExtractor {
         }
       });
       
-      extract.on('error', reject);
-      extract.on('end', () => resolve(files));
+      extractor.on('error', reject);
+      extractor.on('end', () => resolve(files));
       
       const stream = createReadStream(packagePath);
       
       if (packagePath.endsWith('.gz') || packagePath.endsWith('.tgz')) {
         const zlib = require('zlib');
-        stream.pipe(zlib.createGunzip()).pipe(extract);
+        stream.pipe(zlib.createGunzip()).pipe(extractor);
       } else {
-        stream.pipe(extract);
+        stream.pipe(extractor);
       }
     });
   }
@@ -444,7 +444,7 @@ export class PluginPackageExtractor {
           await this.validateScriptFile(filePath);
         }
       } catch (error) {
-        if (error.code === 'ENOENT') continue; // File doesn't exist
+        if ((error as any).code === 'ENOENT') continue; // File doesn't exist
         throw error;
       }
     }
@@ -483,7 +483,7 @@ export class PluginPackageExtractor {
         throw new Error(`Script file too large: ${filePath}`);
       }
     } catch (error) {
-      if (error.code === 'ENOENT') return; // File doesn't exist
+      if ((error as any).code === 'ENOENT') return; // File doesn't exist
       throw error;
     }
   }

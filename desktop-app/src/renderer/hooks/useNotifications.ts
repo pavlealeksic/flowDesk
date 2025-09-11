@@ -7,6 +7,7 @@
 import { useEffect, useCallback, useState } from 'react'
 import { useAppDispatch, useAppSelector } from '../store'
 import { addNotification } from '../store/slices/notificationSlice'
+import { rendererLogger } from '../logging/RendererLoggingService';
 // Define NotificationData locally since import path issues
 interface PreloadNotificationData {
   id: string;
@@ -30,12 +31,12 @@ interface FlowDeskWithNotifications {
 const log = {
   error: (message: string, ...args: unknown[]) => {
     if (process.env.NODE_ENV !== 'production') {
-      console.error('[Notifications]', message, ...args);
+      rendererLogger.error('Console error', undefined, { originalArgs: ['[Notifications]', message, ...args], method: 'console.error' });
     }
   },
   warn: (message: string, ...args: unknown[]) => {
     if (process.env.NODE_ENV === 'development') {
-      console.warn('[Notifications]', message, ...args);
+      rendererLogger.warn('Console warning', undefined, { originalArgs: ['[Notifications]', message, ...args], method: 'console.warn' });
     }
   },
   info: (_message?: string, ..._args: unknown[]) => {}, // No-op

@@ -445,7 +445,7 @@ export class PluginEventBus extends EventEmitter {
         // Emit error event
         this.emitSystemEvent('eventHandlerError', {
           subscriptionId,
-          error: error.message,
+          error: (error as Error).message,
           event: {
             id: event.id,
             type: event.type,

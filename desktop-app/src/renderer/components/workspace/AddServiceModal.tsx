@@ -6,6 +6,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Button, Card, cn } from '../ui';
+import { useLogger } from '../../logging/RendererLoggingService';
+
+const logger = useLogger('AddServiceModal');
 
 interface Service {
   id: string;
@@ -568,7 +571,7 @@ export const AddServiceModal: React.FC<AddServiceModalProps> = ({
       setCustomUrl('');
       onClose();
     } catch (error) {
-      console.error('Failed to add service:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to add service:', error], method: 'console.error' });
     } finally {
       setIsAdding(false);
     }

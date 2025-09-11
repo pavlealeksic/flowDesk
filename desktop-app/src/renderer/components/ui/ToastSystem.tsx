@@ -30,7 +30,7 @@ interface ToastComponentProps {
   onDismiss: (id: string) => void;
 }
 
-const ToastComponent: React.FC<ToastComponentProps> = ({ toast, onDismiss }) => {
+const ToastComponent: React.FC<ToastComponentProps> = ({ toast, onDismiss }): JSX.Element => {
   const [isVisible, setIsVisible] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
 
@@ -49,6 +49,7 @@ const ToastComponent: React.FC<ToastComponentProps> = ({ toast, onDismiss }) => 
       
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [toast.duration]);
 
   const handleDismiss = useCallback(() => {
@@ -281,7 +282,6 @@ export const useToast = () => {
   }, []);
 
   return {
-    showToast,
     showSuccess,
     showError,
     showWarning,
@@ -290,5 +290,6 @@ export const useToast = () => {
     clearAllToasts
   };
 };
+
 
 export default ToastSystem;

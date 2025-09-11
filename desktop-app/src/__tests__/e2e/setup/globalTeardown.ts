@@ -6,9 +6,10 @@
 import { FullConfig } from '@playwright/test';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { useLogger } from '../logging/RendererLoggingService';
 
 async function globalTeardown(config: FullConfig): Promise<void> {
-  console.log('🧹 Cleaning up E2E test environment...');
+  logger.debug('Console log', undefined, { originalArgs: ['🧹 Cleaning up E2E test environment...'], method: 'console.log' });
 
   try {
     // Clean up test artifacts
@@ -17,9 +18,9 @@ async function globalTeardown(config: FullConfig): Promise<void> {
     // Generate test summary
     await generateTestSummary();
 
-    console.log('✅ E2E test environment cleaned up');
+    logger.debug('Console log', undefined, { originalArgs: ['✅ E2E test environment cleaned up'], method: 'console.log' });
   } catch (error) {
-    console.error('❌ Failed to cleanup E2E test environment:', error);
+    logger.error('Console error', undefined, { originalArgs: ['❌ Failed to cleanup E2E test environment:', error], method: 'console.error' });
     // Don't throw as this shouldn't fail the tests
   }
 }
@@ -33,9 +34,9 @@ async function cleanupTestArtifacts(): Promise<void> {
   for (const dir of artifactDirs) {
     try {
       await fs.rm(dir, { recursive: true, force: true });
-      console.log(`🗑️  Cleaned up: ${dir}`);
+      logger.debug('Console log', undefined, { originalArgs: [`🗑️  Cleaned up: ${dir}`], method: 'console.log' });
     } catch (error) {
-      console.log(`ℹ️  Could not clean up ${dir}:`, error);
+      logger.debug('Console log', undefined, { originalArgs: [`ℹ️  Could not clean up ${dir}:`, error], method: 'console.log' });
     }
   }
 }
@@ -49,7 +50,7 @@ async function generateTestSummary(): Promise<void> {
     try {
       await fs.access(resultsDir);
     } catch {
-      console.log('ℹ️  No test results directory found, skipping summary generation');
+      logger.debug('Console log', undefined, { originalArgs: ['ℹ️  No test results directory found, skipping summary generation'], method: 'console.log' });
       return;
     }
 
@@ -68,9 +69,9 @@ async function generateTestSummary(): Promise<void> {
     };
 
     await fs.writeFile(summaryFile, JSON.stringify(summary, null, 2));
-    console.log(`📊 Test summary generated: ${summaryFile}`);
+    logger.debug('Console log', undefined, { originalArgs: [`📊 Test summary generated: ${summaryFile}`], method: 'console.log' });
   } catch (error) {
-    console.log('ℹ️  Could not generate test summary:', error);
+    logger.debug('Console log', undefined, { originalArgs: ['ℹ️  Could not generate test summary:', error], method: 'console.log' });
   }
 }
 

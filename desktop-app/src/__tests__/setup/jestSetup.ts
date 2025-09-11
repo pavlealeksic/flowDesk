@@ -1,4 +1,5 @@
 import { jest } from '@jest/globals';
+import { useLogger } from '../logging/RendererLoggingService';
 
 // Setup for Node.js (main process) testing with Jest
 
@@ -65,9 +66,9 @@ afterAll(() => {
 
 // Global error handler for tests
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  logger.error('Console error', undefined, { originalArgs: ['Unhandled Rejection at:', promise, 'reason:', reason], method: 'console.error' });
 });
 
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
+  logger.error('Console error', undefined, { originalArgs: ['Uncaught Exception:', error], method: 'console.error' });
 });

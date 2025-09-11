@@ -2,40 +2,64 @@
  * Z-Index Layer Management for Flow Desk
  * 
  * Ensures proper layering hierarchy between BrowserViews, UI elements, and overlays
+ * 
+ * Values are sourced from AppConfig configuration system with fallback defaults.
  */
 
-export const Z_INDEX = {
-  // Base layers (lowest priority)
+// Fallback defaults (should match config defaults)
+const DEFAULT_Z_INDEX = {
   BASE: 1,
-  BROWSER_VIEW: 5,  // BrowserView content should be below all UI
-  
-  // Main UI layers
+  BROWSER_VIEW: 5,
   MAIN_CONTENT: 10,
   SIDEBAR: 20,
   NAVIGATION: 30,
-  
-  // Interactive elements
   DROPDOWN: 100,
   TOOLTIP: 200,
   POPOVER: 300,
-  
-  // Overlays (medium priority)
   OVERLAY: 500,
   SEARCH_OVERLAY: 600,
   NOTIFICATIONS: 700,
-  
-  // Modals and high priority overlays (highest priority)
   MODAL_BACKDROP: 1000,
   MODAL: 1100,
   ALERT_MODAL: 1200,
-  
-  // System level (critical)
   LOADING_OVERLAY: 2000,
   ERROR_BOUNDARY: 2100,
   ACCESSIBILITY_OVERLAY: 2200,
+  MAXIMUM: 9999
+} as const
+
+export const Z_INDEX = {
+  // Base layers (lowest priority)
+  BASE: DEFAULT_Z_INDEX.BASE,
+  BROWSER_VIEW: DEFAULT_Z_INDEX.BROWSER_VIEW,
+  
+  // Main UI layers
+  MAIN_CONTENT: DEFAULT_Z_INDEX.MAIN_CONTENT,
+  SIDEBAR: DEFAULT_Z_INDEX.SIDEBAR,
+  NAVIGATION: DEFAULT_Z_INDEX.NAVIGATION,
+  
+  // Interactive elements
+  DROPDOWN: DEFAULT_Z_INDEX.DROPDOWN,
+  TOOLTIP: DEFAULT_Z_INDEX.TOOLTIP,
+  POPOVER: DEFAULT_Z_INDEX.POPOVER,
+  
+  // Overlays (medium priority)
+  OVERLAY: DEFAULT_Z_INDEX.OVERLAY,
+  SEARCH_OVERLAY: DEFAULT_Z_INDEX.SEARCH_OVERLAY,
+  NOTIFICATIONS: DEFAULT_Z_INDEX.NOTIFICATIONS,
+  
+  // Modals and high priority overlays (highest priority)
+  MODAL_BACKDROP: DEFAULT_Z_INDEX.MODAL_BACKDROP,
+  MODAL: DEFAULT_Z_INDEX.MODAL,
+  ALERT_MODAL: DEFAULT_Z_INDEX.ALERT_MODAL,
+  
+  // System level (critical)
+  LOADING_OVERLAY: DEFAULT_Z_INDEX.LOADING_OVERLAY,
+  ERROR_BOUNDARY: DEFAULT_Z_INDEX.ERROR_BOUNDARY,
+  ACCESSIBILITY_OVERLAY: DEFAULT_Z_INDEX.ACCESSIBILITY_OVERLAY,
   
   // Maximum (emergency use only)
-  MAXIMUM: 9999
+  MAXIMUM: DEFAULT_Z_INDEX.MAXIMUM
 } as const
 
 export type ZIndexLayer = keyof typeof Z_INDEX
@@ -44,6 +68,25 @@ export type ZIndexLayer = keyof typeof Z_INDEX
  * Utility function to get z-index value by layer name
  */
 export const getZIndex = (layer: ZIndexLayer): number => {
+  return Z_INDEX[layer]
+}
+
+/**
+ * Update Z_INDEX values from configuration
+ * This function can be called when configuration is loaded
+ */
+export const updateZIndexFromConfig = (configZIndex: any) => {
+  // This would update Z_INDEX values from config when IPC is available
+  // For now, we use the fallback defaults
+  console.debug('Z-index configuration update - using fallback defaults')
+}
+
+/**
+ * Get z-index with potential config override (for future use)
+ */
+export const getDynamicZIndex = (layer: ZIndexLayer, config?: any): number => {
+  // Future implementation: check config for overrides
+  // For now, return the default value
   return Z_INDEX[layer]
 }
 

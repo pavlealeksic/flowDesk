@@ -1,3 +1,4 @@
+import { rendererLogger } from '../logging/RendererLoggingService';
 /**
  * User-Friendly Error Handler for Flow Desk
  * 
@@ -12,12 +13,14 @@ export interface AppError extends Error {
   canRetry: boolean;
   details?: string;
   recoveryActions?: RecoveryAction[];
+  cause?: Error;
 }
 
 export interface RecoveryAction {
   label: string;
   action: () => void | Promise<void>;
   primary?: boolean;
+  destructive?: boolean;
 }
 
 export type ErrorCode = 
@@ -354,6 +357,7 @@ export async function handleError(
     component?: string;
     onRetry?: () => void | Promise<void>;
     onDismiss?: () => void;
+    onError?: (error: any) => void;
   }
 ): Promise<AppError> {
   const appError = classifyError(error);
@@ -387,12 +391,12 @@ export async function handleError(
   appError.recoveryActions = recoveryActions;
   
   // Log the error for debugging
-  console.error(`[${context?.component || 'Unknown'}] ${context?.operation || 'Operation'} failed:`, {
+  rendererLogger.error('Console error', undefined, { originalArgs: [`[${context?.component || 'Unknown'}] ${context?.operation || 'Operation'} failed:`, {
     code: appError.code,
     message: appError.userMessage,
     details: appError.details,
     originalError: appError.cause
-  });
+  }], method: 'console.error' });
   
   return appError;
 }

@@ -39,6 +39,9 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { PluginInstallation, PluginManifest, PluginCategory, PluginType } from '@flow-desk/shared';
+import { useLogger } from '../../logging/RendererLoggingService';
+
+const logger = useLogger('PluginManager');
 
 // Mock data for development
 const mockInstalledPlugins: PluginInstallation[] = [
@@ -110,10 +113,10 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ className }) => {
   const loadInstalledPlugins = useCallback(async () => {
     setIsLoading(true);
     try {
-      const plugins = await window.flowDesk.pluginManager?.getInstalledPlugins?.() || mockInstalledPlugins;
+      const plugins = await (window.flowDesk as any)?.pluginManager?.getInstalledPlugins?.() || mockInstalledPlugins;
       setInstalledPlugins(plugins);
     } catch (error) {
-      console.error('Failed to load installed plugins:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to load installed plugins:', error], method: 'console.error' });
     } finally {
       setIsLoading(false);
     }
@@ -123,13 +126,13 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ className }) => {
   const loadAvailablePlugins = useCallback(async () => {
     setIsLoading(true);
     try {
-      const plugins = await window.flowDesk.pluginManager?.searchPlugins({ 
+      const plugins = await (window.flowDesk as any)?.pluginManager?.searchPlugins({ 
         query: searchQuery,
         category: selectedCategory === 'all' ? undefined : selectedCategory
       }) || mockAvailablePlugins;
       setAvailablePlugins(plugins);
     } catch (error) {
-      console.error('Failed to load available plugins:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to load available plugins:', error], method: 'console.error' });
     } finally {
       setIsLoading(false);
     }
@@ -139,10 +142,10 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ className }) => {
   const installPlugin = useCallback(async (manifest: PluginManifest) => {
     setIsLoading(true);
     try {
-      await window.flowDesk.pluginManager?.installPlugin(manifest.id);
+      await (window.flowDesk as any)?.pluginManager?.installPlugin(manifest.id);
       await loadInstalledPlugins();
     } catch (error) {
-      console.error('Failed to install plugin:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to install plugin:', error], method: 'console.error' });
     } finally {
       setIsLoading(false);
     }
@@ -152,10 +155,10 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ className }) => {
   const uninstallPlugin = useCallback(async (installation: PluginInstallation) => {
     setIsLoading(true);
     try {
-      await window.flowDesk.pluginManager?.uninstallPlugin(installation.id);
+      await (window.flowDesk as any)?.pluginManager?.uninstallPlugin(installation.id);
       await loadInstalledPlugins();
     } catch (error) {
-      console.error('Failed to uninstall plugin:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to uninstall plugin:', error], method: 'console.error' });
     } finally {
       setIsLoading(false);
     }
@@ -166,13 +169,13 @@ export const PluginManager: React.FC<PluginManagerProps> = ({ className }) => {
     setIsLoading(true);
     try {
       if (installation.settings.enabled) {
-        await window.flowDesk.pluginManager?.disablePlugin(installation.id);
+        await (window.flowDesk as any)?.pluginManager?.disablePlugin(installation.id);
       } else {
-        await window.flowDesk.pluginManager?.enablePlugin(installation.id);
+        await (window.flowDesk as any)?.pluginManager?.enablePlugin(installation.id);
       }
       await loadInstalledPlugins();
     } catch (error) {
-      console.error('Failed to toggle plugin:', error);
+      logger.error('Console error', undefined, { originalArgs: ['Failed to toggle plugin:', error], method: 'console.error' });
     } finally {
       setIsLoading(false);
     }
